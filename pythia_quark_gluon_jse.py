@@ -97,7 +97,6 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 
 
 		self.obs_bins_EEC = np.logspace(np.log10(1E-4), np.log10(1), 51)
-		self.obs_bins_corr_deltajt = np.linspace(0, 5, 51)
 
 		self.observable_list = config['process_observables']
 		self.obs_settings = {}

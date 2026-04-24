@@ -5,9 +5,19 @@ import duckdb
 import pyarrow.parquet as pq
 import pyarrow as pa
 
+# User parameters!
+# =============================================
+generator = "herwig"  # "pythia" or "herwig" 
+# =============================================
+
+if generator == "pythia":
+    jobid = "51384740"
+    base_outputdir = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{jobid}"
+elif generator == "herwig":
+    jobid = "1006458"
+    base_outputdir = f"/rstorage/generators/herwig_alice/tree_gen/{jobid}"
+
 jet_pts = [ 50, 100, 200, 500]
-jobid = "51384740"
-base_outputdir = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{jobid}"
 
 for i, jetpt in enumerate(jet_pts):
     # The **/*.parquet pattern searches all subdirectories
