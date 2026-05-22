@@ -87,7 +87,6 @@ class Run3FileInput(yasp.GenericObject):
         pbar_total.close()
         [bar.close() for bar in pbars]
 
-
 class Run2FileInput(yasp.GenericObject):
     def __init__(self, file_list, yaml_file, **kwargs):
         super(Run2FileInput, self).__init__(**kwargs)
@@ -174,6 +173,53 @@ class Run2FileInput(yasp.GenericObject):
                     pbar_total.close()
                     break
 
+class FlatFileInput(yasp.GenericObject):
+    """Read a single flat ROOT file where each row is a track, grouped by eventID.
+ 
+    Expected tstruct.yaml format:
+        tracks:
+          branches:
+            - eventID
+            - px
+            - py
+            - pz
+            - energy
+            - label
+    """
+ 
+    def __init__(self, file_path, yaml_file, **kwargs):
+        super(FlatFileInput, self).__init__(**kwargs)
+        self.file_path = file_path
+        with open(yaml_file, 'r') as f:
+            tree_structure = yaml.safe_load(f)
+        self.tree_name = list(tree_structure.keys())[0]
+        self.branches  = tree_structure[self.tree_name]['branches']
+        self.event_count = 0
+        self.n_events = kwargs.get('n_events', -1)
+        if self.name is None:
+            self.name = "FlatFileInput"
+ 
+    def add_generic_ebye_info(self, event_id, group):
+        self.event.event_id   = event_id
+        self.event.track_count = len(group)
+        self.event.counter    = self.event_count
+ 
+    def next_event(self, disable_bar=False, smoothing=0.3):
+        df = uproot.open(f"{self.file_path}:{self.tree_name}").arrays(
+            self.branches, library="pd"
+        )
+        grouped = df.groupby("eventID")
+        total = len(grouped) if self.n_events < 0 else min(self.n_events, len(grouped))
+        self.event = yasp.GenericObject()
+        with tqdm(total=total, desc="Events", unit="ev", disable=disable_bar, smoothing=smoothing) as pbar:
+            for event_id, group in grouped:
+                self.event.data = {col: group[col].to_numpy() for col in group.columns}
+                self.add_generic_ebye_info(event_id, group)
+                yield self.event
+                self.event_count += 1
+                pbar.update(1)
+                if self.event_count >= total:
+                    return
 
 def get_default_tree_structure(file_list, lhc_run=3):
     if isinstance(file_list, str):

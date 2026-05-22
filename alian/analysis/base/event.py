@@ -18,7 +18,24 @@ class Event:
         self.trig_sel = TrigSel(ev.data["trig_sel"])
         self.rct = RCTSel(ev.data["rct"])
 
+class FlatEvent:
+    """Lightweight event wrapper for a flat track tree.
 
+    Exposes event-level attributes for the event selector to check against.
+    Currently only track_count is available since the flat tree has no
+    centrality, vertex, or other event-level metadata. Add more attributes
+    here as needed when event-level cuts are defined.
+    """
+    def __init__(self, ev):
+        self.event_id    = ev.event_id
+        self.track_count = ev.track_count
+        self.counter     = ev.counter
+        self._px         = ev.data["px"]
+        self._py         = ev.data["py"]
+        self._pz         = ev.data["pz"]
+        self._energy     = ev.data["energy"]
+        self._label      = ev.data["label"]
+        
 def get_tracks(ev):
     """Get all tracks from an event (no track selections applied)."""
     return alian.numpy_ptetaphi_to_tracks(
@@ -46,6 +63,20 @@ def get_selected_tracks(ev, selector):
         ]
     )
 
+def get_selected_tracks_from_pxpypze(ev, selector):
+    """Get tracks from a flat tree with px/py/pz/energy branches."""
+    tracks = std.vector[fj.PseudoJet](
+        [
+            fj.PseudoJet(float(px), float(py), float(pz), float(e))
+            for px, py, pz, e in zip(
+                ev.data["px"],
+                ev.data["py"],
+                ev.data["pz"],
+                ev.data["energy"],
+            )
+        ]
+    )
+    return std.vector[fj.PseudoJet]([t for t in tracks if selector.selects(t)])
 
 def get_clusters(ev):
     """Get all clusters from an event (no cluster selections applied)."""
