@@ -34,8 +34,8 @@ for i, jetpt in enumerate(jet_pts):
     # The format is a list of tuples: (column, operation, value)
     # Multiple tuples in a list act as an 'AND' operation
     filters = [
-        ('jet_pt', '>=', jetpt-0.5),
-        ('jet_pt', '<=', jetpt+0.5)
+        ('jet_pt', '>=', jetpt),
+        ('jet_pt', '<=', jetpt * 1.2)
     ]
 
     # Read the table with the filter applied
