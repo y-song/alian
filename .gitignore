@@ -7,3 +7,5 @@ __pycache__
 *.log
 *.root
 *.txt
+*.out
+*.err
