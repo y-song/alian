@@ -187,9 +187,15 @@ class FlatFileInput(yasp.GenericObject):
             - label
     """
  
-    def __init__(self, file_path, yaml_file, **kwargs):
+    def __init__(self, file_list, yaml_file, **kwargs):
         super(FlatFileInput, self).__init__(**kwargs)
-        self.file_path = file_path
+        self.file_list = file_list
+        if isinstance(self.file_list, str):
+            if self.file_list.endswith(".txt"):
+                with open(self.file_list, "r") as file:
+                    self.file_list = file.read().splitlines()
+            else:
+                self.file_list = [self.file_list]
         with open(yaml_file, 'r') as f:
             tree_structure = yaml.safe_load(f)
         self.tree_name = list(tree_structure.keys())[0]
@@ -204,22 +210,30 @@ class FlatFileInput(yasp.GenericObject):
         self.event.track_count = len(group)
         self.event.counter    = self.event_count
  
-    def next_event(self, disable_bar=False, smoothing=0.3):
-        df = uproot.open(f"{self.file_path}:{self.tree_name}").arrays(
-            self.branches, library="pd"
-        )
-        grouped = df.groupby("eventID")
-        total = len(grouped) if self.n_events < 0 else min(self.n_events, len(grouped))
+    def next_event(self, disable_bar=False):
+        total = self.n_events
+        pbar_files = tqdm(total=len(self.file_list), desc="Files", position=0)
         self.event = yasp.GenericObject()
-        with tqdm(total=total, desc="Events", unit="ev", disable=disable_bar, smoothing=smoothing) as pbar:
-            for event_id, group in grouped:
-                self.event.data = {col: group[col].to_numpy() for col in group.columns}
-                self.add_generic_ebye_info(event_id, group)
-                yield self.event
-                self.event_count += 1
-                pbar.update(1)
-                if self.event_count >= total:
-                    return
+        for root_file_path in self.file_list:
+            print("Loading file:", root_file_path)
+            df = uproot.open(f"{root_file_path}:{self.tree_name}").arrays(
+                self.branches, library="pd"
+            )
+            grouped = df.groupby("eventID")
+            
+            with tqdm(total=len(grouped), desc="Events", unit="ev", position=1, disable=disable_bar) as pbar:
+                for event_id, group in grouped:
+                    self.event.data = {col: group[col].to_numpy() for col in group.columns}
+                    self.add_generic_ebye_info(event_id, group)
+                    pbar.update(1)
+                    yield self.event
+                    self.event_count += 1
+                    if total > 0 and self.event_count >= total:
+                        pbar_files.close()
+                        return
+
+            pbar_files.update(1)
+        pbar_files.close()
 
 def get_default_tree_structure(file_list, lhc_run=3):
     if isinstance(file_list, str):
