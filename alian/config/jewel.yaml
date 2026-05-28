@@ -9,6 +9,8 @@ jet_finder:
 
 analysis:
   pt_min_eec: 1.0
+  pt_min_jet: 100.0
+  z_cut: 0.2
 
 output:
   bins:

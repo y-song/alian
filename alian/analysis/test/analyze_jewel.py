@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """ Example usage: 
 python analysis/test/analyze_jewel.py -i /rstorage/lbergmann/jewel/pp_100GeV.root -c config/jewel.yaml -o output/pp_100GeV.root
-python analysis/test/analyze_jewel.py -i /rstorage/lbergmann/jewel/pp_500GeV.root -c config/jewel.yaml
-python analysis/test/analyze_jewel.py -i /rstorage/lbergmann/jewel/PbPb_100GeV.root -c config/jewel.yaml
-python analysis/test/analyze_jewel.py -i /rstorage/lbergmann/jewel/PbPb_500GeV.root -c config/jewel.yaml
 """
 
 import argparse
@@ -33,9 +30,11 @@ class AnalyzeJewel(AnalysisBaseFlat):
         [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
         [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]
         for j in self.jets:
+            if (j.pt() < self.pt_min_jet):
+                break
             self.do_eec(j, "eec")
             lund_seq = self.lund_gen.result(j)
-            l = self.select_soft_drop(lund_seq) # class is LundDeclustering
+            l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
             if l is None:
                 self.hists['rg'].Fill(j.pt(), -0.99)
                 self.hists['zg'].Fill(j.pt(), -0.99)
