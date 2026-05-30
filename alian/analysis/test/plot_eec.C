@@ -181,8 +181,8 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     TH1D *h_sdjet_eec = LoadAndProcess(f, "sdjet_eec",pt_lo, pt_hi, njets);
     TH1D *h_aa  = LoadAndProcess(f, "eec_aa", pt_lo, pt_hi, njets);
     TH1D *h_bb  = LoadAndProcess(f, "eec_bb", pt_lo, pt_hi, njets);
-    TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets, 2.0);
-    TH1D *h_rg  = LoadAndProcess(f, "rg", pt_lo, pt_hi, njets);
+    TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets);
+    TH1D *h_rg  = LoadAndProcess(f, "rg_log", pt_lo, pt_hi, njets);
     TH1D *h_zg  = LoadAndProcess(f, "zg", pt_lo, pt_hi, njets);
 
     TH1D *h_sdjet_groomed_eec;
@@ -213,11 +213,12 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     };
     std::vector<HistConfig> configs = {
         // {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
-        {"SD jet EEC", kGray+2, kFullCircle , h_sdjet_eec},
-        {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
-        {"EEC,aa", kBlue,     kFullSquare    , h_aa},
-        {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
-        {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab}
+        // {"SD jet EEC", kGray+2, kFullCircle , h_sdjet_eec},
+        // {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
+        // {"EEC,aa", kBlue,     kFullSquare    , h_aa},
+        // {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
+        {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
+        {"Rg",     kRed,      kFullTriangleUp, h_rg},
     };
 
     // Canvas
@@ -228,9 +229,9 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
 
     // Legend — info block + per-histogram entries
     TLegend *l = new TLegend(0.5, 0.45, 0.9, 0.88);
-    // std::string ptbin = pt_min + " < #it{p}_{T}^{jet} < " + pt_max + " GeV/#it{c}";
-    // addLegendInfo(l, jetR_str, plot_text);
-    // l->AddEntry("NULL", ptbin.c_str(), "h");
+    std::string ptbin = pt_min + " < #it{p}_{T}^{jet} < " + pt_max + " GeV/#it{c}";
+    addLegendInfo(l, jetR_str, plot_text);
+    l->AddEntry("NULL", ptbin.c_str(), "h");
 
     // Draw: first valid histogram uses "L" to set the frame; rest use "L same"
     bool first = true;
@@ -242,21 +243,21 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
         FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
         h->GetXaxis()->SetRangeUser(0.001, 0.4);
         h->GetYaxis()->SetRangeUser(0, 8);
-        h->GetXaxis()->SetTitle("#it{R}_{L}");
-        h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
+        h->GetXaxis()->SetTitle("#it{R}_{L} or #it{R}_{g}");
+        h->GetYaxis()->SetTitle("");
 
         if (first) {
-            h->Draw("L");
+            h->DrawNormalized("L");
             first = false;
         } else {
-            h->Draw("L same");
+            h->DrawNormalized("L same");
         }
     }
     // h_total->Draw("same");
-    // l->Draw("same");
+    l->Draw("same");
 
     // Save canvas
-    std::string fname = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
+    std::string fname = "/home/youqi/alian/alian/output/test_rg_eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
     c->SaveAs(fname.c_str());
     delete c;
     delete l;

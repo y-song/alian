@@ -19,7 +19,6 @@ class AnalyzeJewel(AnalysisBaseFlat):
             setattr(self, setting, value)
         self.eec_trk_selector = fj.SelectorPtMin(self.pt_min_eec)
         self.lund_gen = fj.contrib.LundGenerator()
-        self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
     def analyze_event(self):
         # Analyzes this event that has passed the selection criteria
@@ -42,14 +41,14 @@ class AnalyzeJewel(AnalysisBaseFlat):
                 continue
             subjet_a = l.harder()
             subjet_b = l.softer()
-            sd_j = self.sd(j)
             sd_pt = subjet_a.pt() + subjet_b.pt() # approximate
-            # self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, but this includes stuff removed by SD
-            self.do_eec(sd_j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, and this only includes stuff passes by SD
+            self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, but this includes stuff removed by SD
+            # self.do_eec(sd_j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, and this only includes stuff passes by SD
             self.do_eec(subjet_a, "eec_aa", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.do_eec(subjet_b, "eec_bb", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.do_eec_cross(subjet_a, subjet_b, "eec_ab", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.hists['rg'].Fill(j.pt(), delta_R(subjet_a, subjet_b))
+            self.hists['rg_log'].Fill(j.pt(), delta_R(subjet_a, subjet_b))
             self.hists['zg'].Fill(j.pt(), subjet_b.pt() / sd_pt)
 
     def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None):
@@ -58,10 +57,13 @@ class AnalyzeJewel(AnalysisBaseFlat):
         if jet_pt_bin is None:
             jet_pt_bin = jet.pt()
         tracks = self.eec_trk_selector(jet.constituents())
-        for p1, p2 in itertools.permutations(tracks, 2):
-            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
-            rl = delta_R(p1, p2)
-            self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
+        for itrack1 in range(0, len(tracks)):
+            for itrack2 in range(itrack1+1, len(tracks)):
+                p1 = tracks[itrack1]
+                p2 = tracks[itrack2]
+                ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+                rl = delta_R(p1, p2)
+                self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
 
     def do_eec_cross(self, subjet_a, subjet_b, hist_name, ew_denom, jet_pt_bin):
         tracks_a = self.eec_trk_selector(subjet_a.constituents())

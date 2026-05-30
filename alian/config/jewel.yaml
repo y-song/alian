@@ -10,7 +10,7 @@ jet_finder:
 analysis:
   pt_min_eec: 1.0
   pt_min_jet: 100.0
-  z_cut: 0.2
+  z_cut: 0.1
 
 output:
   bins:
@@ -31,4 +31,5 @@ output:
     eec_bb: [2, "eec_bb", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_ab: [2, "eec_ab", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     rg: [2, "rg", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", jet_pT, Rg]
+    rg_log: [2, "rg_log", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", jet_pT, RL]
     zg: [2, "zg", "#it{z}_{g};jet #it{p}_{T} (GeV);#it{z}_{g}", jet_pT, zg]
