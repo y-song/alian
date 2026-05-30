@@ -19,6 +19,7 @@ class AnalyzeJewel(AnalysisBaseFlat):
             setattr(self, setting, value)
         self.eec_trk_selector = fj.SelectorPtMin(self.pt_min_eec)
         self.lund_gen = fj.contrib.LundGenerator()
+        self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
     def analyze_event(self):
         # Analyzes this event that has passed the selection criteria
@@ -41,8 +42,10 @@ class AnalyzeJewel(AnalysisBaseFlat):
                 continue
             subjet_a = l.harder()
             subjet_b = l.softer()
+            sd_j = self.sd(j)
             sd_pt = subjet_a.pt() + subjet_b.pt() # approximate
-            self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, but this includes stuff removed by SD
+            # self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, but this includes stuff removed by SD
+            self.do_eec(sd_j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, and this only includes stuff passes by SD
             self.do_eec(subjet_a, "eec_aa", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.do_eec(subjet_b, "eec_bb", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.do_eec_cross(subjet_a, subjet_b, "eec_ab", ew_denom=sd_pt, jet_pt_bin=j.pt())
