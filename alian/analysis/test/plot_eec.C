@@ -181,7 +181,7 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     TH1D *h_sdjet_eec = LoadAndProcess(f, "sdjet_eec",pt_lo, pt_hi, njets);
     TH1D *h_aa  = LoadAndProcess(f, "eec_aa", pt_lo, pt_hi, njets);
     TH1D *h_bb  = LoadAndProcess(f, "eec_bb", pt_lo, pt_hi, njets);
-    TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets);
+    TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets, 2.0);
     TH1D *h_rg  = LoadAndProcess(f, "rg_log", pt_lo, pt_hi, njets);
     TH1D *h_zg  = LoadAndProcess(f, "zg", pt_lo, pt_hi, njets);
 
@@ -191,17 +191,17 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
         h_sdjet_groomed_eec->Add(h_bb);
         h_sdjet_groomed_eec->Add(h_ab); // eec_ab was already scaled by 2
         
-        std::cout << "\n--- Closure check: eec_aa + eec_bb + 2*eec_ab vs eec ---" << std::endl;
-        std::cout << Form("%-8s  %-12s  %-12s  %-12s", "bin", "sum", "eec", "ratio") << std::endl;
-        for (int ibin = 1; ibin <= h_sdjet_eec->GetNbinsX(); ibin++) {
-            double sum = h_sdjet_groomed_eec->GetBinContent(ibin);
-            double eec = h_sdjet_eec->GetBinContent(ibin);
-            double ratio = (eec > 0) ? sum / eec : -1.0;
-            std::cout << Form("%-8d  %-12.4f  %-12.4f  %-12.4f", ibin, sum, eec, ratio) << std::endl;
-        }
-        std::cout << "-----------------------------------------------------------\n" << std::endl;
-    } else {
-        std::cout << "one or more histograms missing." << std::endl;
+    //     std::cout << "\n--- Closure check: eec_aa + eec_bb + 2*eec_ab vs eec ---" << std::endl;
+    //     std::cout << Form("%-8s  %-12s  %-12s  %-12s", "bin", "sum", "eec", "ratio") << std::endl;
+    //     for (int ibin = 1; ibin <= h_sdjet_eec->GetNbinsX(); ibin++) {
+    //         double sum = h_sdjet_groomed_eec->GetBinContent(ibin);
+    //         double eec = h_sdjet_eec->GetBinContent(ibin);
+    //         double ratio = (eec > 0) ? sum / eec : -1.0;
+    //         std::cout << Form("%-8d  %-12.4f  %-12.4f  %-12.4f", ibin, sum, eec, ratio) << std::endl;
+    //     }
+    //     std::cout << "-----------------------------------------------------------\n" << std::endl;
+    // } else {
+    //     std::cout << "one or more histograms missing." << std::endl;
     }
 
     // {hist name in file, legend label, color, marker style}
@@ -227,6 +227,12 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     c->cd();
     gPad->SetLogx();
 
+    TH1F *frame = new TH1F("frame", "My Normalized Plot", 100, 0.001, 0.5);
+    frame->SetMaximum(0.1); 
+    frame->SetMinimum(0.0);
+    frame->GetXaxis()->SetTitle("#it{R}_{L} or #it{R}_{g}");
+    frame->Draw();
+
     // Legend — info block + per-histogram entries
     TLegend *l = new TLegend(0.5, 0.45, 0.9, 0.88);
     std::string ptbin = pt_min + " < #it{p}_{T}^{jet} < " + pt_max + " GeV/#it{c}";
@@ -241,23 +247,20 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
 
         TH1D *h = cfg.hist;
         FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
-        h->GetXaxis()->SetRangeUser(0.001, 0.4);
-        h->GetYaxis()->SetRangeUser(0, 8);
-        h->GetXaxis()->SetTitle("#it{R}_{L} or #it{R}_{g}");
-        h->GetYaxis()->SetTitle("");
+        h->GetXaxis()->SetRangeUser(0.001, 0.5);
 
         if (first) {
-            h->DrawNormalized("L");
+            h->DrawNormalized("L same");
             first = false;
         } else {
             h->DrawNormalized("L same");
         }
     }
     // h_total->Draw("same");
-    l->Draw("same");
+    // l->Draw("same");
 
     // Save canvas
-    std::string fname = "/home/youqi/alian/alian/output/test_rg_eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
+    std::string fname = "/home/youqi/alian/alian/output/rg_eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
     c->SaveAs(fname.c_str());
     delete c;
     delete l;
