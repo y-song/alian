@@ -219,15 +219,15 @@ void plot_eec_ratio(std::string pbpb_file, std::string pp_file,
         TH1D *ratio = cfg.ratio_hist;
 
         FormatHist(l, ratio, cfg.label, cfg.color, cfg.marker);
-        ratio->GetXaxis()->SetRangeUser(0.01, 0.4);
-        ratio->GetYaxis()->SetRangeUser(0, 2);
+        ratio->GetXaxis()->SetRangeUser(0.001, 0.4);
+        ratio->GetYaxis()->SetRangeUser(0.5, 2.5);
         ratio->GetXaxis()->SetTitle("#it{R}_{L}");
         ratio->GetYaxis()->SetTitle("PbPb / pp");
 
         if (first) {
             ratio->Draw("L");
             // Draw unity line after frame is established
-            unity = new TLine(0.01, 1.0, 0.4, 1.0);
+            unity = new TLine(0.001, 1.0, 0.4, 1.0);
             unity->SetLineColor(kGray+1);
             unity->SetLineStyle(2);
             unity->SetLineWidth(5);
@@ -240,9 +240,13 @@ void plot_eec_ratio(std::string pbpb_file, std::string pp_file,
     // l->Draw("same");
 
     // Derive output path from PbPb input path
-    std::string outstem = pbpb_file.substr(0, pbpb_file.rfind(".root"));
-    // replace "PbPb" with "ratio"
-    outstem.replace(outstem.find("PbPb"), 4, "ratio");
+    std::string pbpb_base = pbpb_file.substr(pbpb_file.rfind("/") + 1);
+    pbpb_base = pbpb_base.substr(0, pbpb_base.rfind(".root"));
+    std::string pp_base = pp_file.substr(pp_file.rfind("/") + 1);
+    pp_base = pp_base.substr(0, pp_base.rfind(".root"));
+    std::string outdir  = pbpb_file.substr(0, pbpb_file.rfind("/") + 1);
+    std::string outstem = outdir + pbpb_base + "_ratio_" + pp_base;
+
     std::string outpdf  = outstem + ".pdf";
     std::string outroot = outstem + ".root";
     c->SaveAs(outpdf.c_str());
