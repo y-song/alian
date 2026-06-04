@@ -158,8 +158,8 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     SetStyle();
 
     std::string infile  = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    std::string jetR    = "04";
-    std::string jetR_str = "0.4";
+    std::string jetR    = "06";
+    std::string jetR_str = "0.6";
     std::string outfile = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
 
     std::cout << "pt min: " << pt_min << ", pt max: " << pt_max << std::endl;
@@ -190,20 +190,7 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
         h_sdjet_groomed_eec = (TH1D *)h_aa->Clone("h_sdjet_groomed_eec");
         h_sdjet_groomed_eec->Add(h_bb);
         h_sdjet_groomed_eec->Add(h_ab); // eec_ab was already scaled by 2
-        
-    //     std::cout << "\n--- Closure check: eec_aa + eec_bb + 2*eec_ab vs eec ---" << std::endl;
-    //     std::cout << Form("%-8s  %-12s  %-12s  %-12s", "bin", "sum", "eec", "ratio") << std::endl;
-    //     for (int ibin = 1; ibin <= h_sdjet_eec->GetNbinsX(); ibin++) {
-    //         double sum = h_sdjet_groomed_eec->GetBinContent(ibin);
-    //         double eec = h_sdjet_eec->GetBinContent(ibin);
-    //         double ratio = (eec > 0) ? sum / eec : -1.0;
-    //         std::cout << Form("%-8d  %-12.4f  %-12.4f  %-12.4f", ibin, sum, eec, ratio) << std::endl;
-    //     }
-    //     std::cout << "-----------------------------------------------------------\n" << std::endl;
-    // } else {
-    //     std::cout << "one or more histograms missing." << std::endl;
     }
-
     // {hist name in file, legend label, color, marker style}
     struct HistConfig {
         const char *label;
@@ -214,11 +201,11 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     std::vector<HistConfig> configs = {
         // {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
         // {"SD jet EEC", kGray+2, kFullCircle , h_sdjet_eec},
-        // {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
-        // {"EEC,aa", kBlue,     kFullSquare    , h_aa},
-        // {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
+        {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
+        {"EEC,aa", kBlue,     kFullSquare    , h_aa},
+        {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
         {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
-        {"Rg",     kRed,      kFullTriangleUp, h_rg},
+        // {"Rg",     kRed,      kFullTriangleUp, h_rg},
     };
 
     // Canvas
@@ -227,11 +214,11 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     c->cd();
     gPad->SetLogx();
 
-    TH1F *frame = new TH1F("frame", "My Normalized Plot", 100, 0.001, 0.5);
-    frame->SetMaximum(0.1); 
-    frame->SetMinimum(0.0);
-    frame->GetXaxis()->SetTitle("#it{R}_{L} or #it{R}_{g}");
-    frame->Draw();
+    // TH1F *frame = new TH1F("frame", "My Normalized Plot", 100, 0.001, 0.5);
+    // frame->SetMaximum(0.1); 
+    // frame->SetMinimum(0.0);
+    // frame->GetXaxis()->SetTitle("#it{R}_{L}");
+    // frame->Draw();
 
     // Legend — info block + per-histogram entries
     TLegend *l = new TLegend(0.5, 0.45, 0.9, 0.88);
@@ -247,20 +234,22 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
 
         TH1D *h = cfg.hist;
         FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
-        h->GetXaxis()->SetRangeUser(0.001, 0.5);
+        h->GetXaxis()->SetRangeUser(0.001, 0.7);
+        h->GetYaxis()->SetRangeUser(0, 8);
+        h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
 
         if (first) {
-            h->DrawNormalized("L same");
+            h->Draw("L same");
             first = false;
         } else {
-            h->DrawNormalized("L same");
+            h->Draw("L same");
         }
     }
     // h_total->Draw("same");
     // l->Draw("same");
 
     // Save canvas
-    std::string fname = "/home/youqi/alian/alian/output/rg_eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
+    std::string fname = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
     c->SaveAs(fname.c_str());
     delete c;
     delete l;
