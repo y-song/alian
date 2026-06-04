@@ -11,38 +11,51 @@
 
 using namespace std;
 
-// ── hardcode file pairs here ────────────────────────────────────────────
+// ── hardcode file pairs here ──────────────────────────────────────────────────
 struct FilePair {
     std::string pbpb_file;
     std::string pp_file;
     std::string label;
     int         color;
-    int         style;  // line style
+    int         style;
 };
 
+// const std::vector<FilePair> kPairs = {
+//     {"output/eec_R04_100_120_1652502.root",
+//      "output/eec_R04_100_120_1652402.root",
+//      "z_{cut} = 0.1", kRed,     1},
+//     {"output/eec_R04_100_120_1652717.root",
+//      "output/eec_R04_100_120_1652617.root",
+//      "z_{cut} = 0.2", kBlue,    1},
+//     {"output/eec_R04_100_120_1652917.root",
+//      "output/eec_R04_100_120_1652817.root",
+//      "z_{cut} = 0.3", kGreen+2, 1},
+//     {"output/eec_R04_100_120_1656144.root",
+//      "output/eec_R04_100_120_1656044.root",
+//      "z_{cut} = 0.45", kOrange, 1},
+// };
 const std::vector<FilePair> kPairs = {
-    {"output/eec_R04_100_120_1652502.root",
-     "output/eec_R04_100_120_1652402.root",
-     "z_{cut} = 0.1", kRed,   1},
-    {"output/eec_R04_100_120_1652717.root",
-     "output/eec_R04_100_120_1652617.root",
-     "z_{cut} = 0.2", kBlue,  1},
-    {"output/eec_R04_100_120_1652917.root",
-     "output/eec_R04_100_120_1652817.root",
+    {"output/eec_R06_100_120_1698385.root",
+     "output/eec_R06_100_120_1697883.root",
+     "z_{cut} = 0.1", kRed,     1},
+    {"output/eec_R06_100_120_1698585.root",
+     "output/eec_R06_100_120_1698485.root",
+     "z_{cut} = 0.2", kBlue,    1},
+    {"output/eec_R06_100_120_1698785.root",
+     "output/eec_R06_100_120_1698685.root",
      "z_{cut} = 0.3", kGreen+2, 1},
-    {"output/eec_R04_100_120_1656144.root",
-     "output/eec_R04_100_120_1656044.root",
-     "z_{cut} = 0.45", kOrange, 1},
+    // {"output/eec_R06_100_120_1656144.root",
+    //  "output/eec_R06_100_120_1656044.root",
+    //  "z_{cut} = 0.45", kOrange, 1},
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-void SetStyle(Bool_t graypalette = true)
+void SetStyle()
 {
     gStyle->Reset("Plain");
     gStyle->SetOptTitle(0);
     gStyle->SetOptStat(0);
-    if (graypalette) gStyle->SetPalette(8, 0);
-    else             gStyle->SetPalette(1);
+    gStyle->SetPalette(1);
     gStyle->SetCanvasColor(10);
     gStyle->SetCanvasBorderMode(0);
     gStyle->SetFrameLineWidth(1);
@@ -72,22 +85,23 @@ void SetStyle(Bool_t graypalette = true)
     gStyle->SetLegendFont(42);
 }
 
-void ProcessCanvas(TCanvas *Canvas)
+void ProcessCanvas(TCanvas *c)
 {
     gStyle->SetOptStat(0);
-    Canvas->SetHighLightColor(1);
-    Canvas->SetFillColor(0);
-    Canvas->SetBorderMode(0);
-    Canvas->SetBorderSize(2);
-    Canvas->SetTickx(1);
-    Canvas->SetTicky(1);
-    Canvas->SetFrameBorderMode(0);
-    Canvas->SetFrameLineWidth(1);
-    Canvas->SetFrameBorderMode(1);
-    Canvas->SetGridx(1);
-    Canvas->SetGridy(1);
+    c->SetHighLightColor(1);
+    c->SetFillColor(0);
+    c->SetBorderMode(0);
+    c->SetBorderSize(2);
+    c->SetTickx(1);
+    c->SetTicky(1);
+    c->SetFrameBorderMode(0);
+    c->SetFrameLineWidth(1);
+    c->SetFrameBorderMode(1);
+    c->SetGridx(1);
+    c->SetGridy(1);
 }
 
+// Returns h_ab / sqrt(h_aa * h_bb), detached from the file.
 TH1D *GetCab(TFile *f)
 {
     TH1D *h_aa = (TH1D *)f->Get("h_eec_aa_clone");
@@ -102,8 +116,8 @@ TH1D *GetCab(TFile *f)
     h_denom->SetDirectory(0);
     h_denom->Multiply(h_bb);
     for (int i = 1; i <= h_denom->GetNbinsX(); i++) {
-        double val = h_denom->GetBinContent(i);
-        double err = h_denom->GetBinError(i);
+        double val    = h_denom->GetBinContent(i);
+        double err    = h_denom->GetBinError(i);
         double sqrtval = (val > 0) ? sqrt(val) : 0.;
         double sqrterr = (val > 0) ? err / (2. * sqrtval) : 0.;
         h_denom->SetBinContent(i, sqrtval);
@@ -117,33 +131,68 @@ TH1D *GetCab(TFile *f)
     return h_cab;
 }
 
-TH1D *MakeRatio(TH1D *num, TH1D *den, const char *name)
+// Returns h_ab detached from the file.
+TH1D *GetEECab(TFile *f)
 {
-    if (!num || !den) return nullptr;
-    TH1D *ratio = (TH1D *)num->Clone(name);
-    ratio->SetDirectory(0);
-    ratio->Divide(den);
-    return ratio;
+    TH1D *h_ab = (TH1D *)f->Get("h_eec_ab_clone");
+    if (!h_ab) {
+        std::cerr << "ERROR: missing histogram in " << f->GetName() << std::endl;
+        return nullptr;
+    }
+    TH1D *out = (TH1D *)h_ab->Clone("h_eecab_tmp");
+    out->SetDirectory(0);
+    return out;
 }
 
-void plot_cab()
+double FindCrossing(TH1D *h, int half_window = 2, TF1 **fit_out = nullptr)
 {
-    gStyle->SetOptStat(0);
-    SetStyle();
+    int nbins = h->GetNbinsX();
+    int cross_bin = -1;
+    int first_bin = h->FindBin(0.005);
 
-    TCanvas *c = new TCanvas("c", "c", 800, 600);
-    ProcessCanvas(c);
-    c->cd();
-    gPad->SetLogx();
-    gPad->SetLogy(0);
+    for (int i = first_bin; i < nbins; i++) {
+        double v0 = h->GetBinContent(i);
+        double v1 = h->GetBinContent(i + 1);
+        if (v0 <= 0 || v1 <= 0) continue;
+        if ((v0 - 1.) * (v1 - 1.) < 0.) {
+            cross_bin = i;
+            break;
+        }
+    }
+    if (cross_bin < 0) {
+        std::cerr << "WARNING: no y=1 crossing found in " << h->GetName() << std::endl;
+        return -1.;
+    }
 
-    TLegend *l = new TLegend(0.6, 0.65, 0.9, 0.88);
-    l->SetTextSize(0.037);
-    l->SetBorderSize(0);
-    l->SetFillStyle(0);
+    int bin_lo = std::max(1,     cross_bin - half_window);
+    int bin_hi = std::min(nbins, cross_bin + half_window);
+    double x_lo = h->GetBinLowEdge(bin_lo);
+    double x_hi = h->GetBinLowEdge(bin_hi + 1);
 
+    std::string fname = std::string("fline_") + h->GetName();
+    // Fit y = a + b*log(x) in the window, using bin errors as weights
+    TF1 *fline = new TF1(fname.c_str(), "[0] + [1]*log(x)", x_lo, x_hi);
+    h->Fit(fline, "RQN");   // R = use function range, Q = quiet, N = don't draw
+
+    double a = fline->GetParameter(0);
+    double b = fline->GetParameter(1);
+
+    if (fit_out)    *fit_out = fline;  // hand ownership to caller
+    else    delete fline;
+
+    if (fabs(b) < 1e-30) return -1.;
+    return exp((1. - a) / b);
+}
+
+struct OverlayResult {
+    std::vector<TH1D *> ratios;
+    std::vector<TF1  *> fits;
+};
+
+OverlayResult DrawOverlay(TLegend *l, TH1D *(*getter)(TFile *), const char *ytitle, double ymin, double ymax)
+{
+    OverlayResult result;
     bool first = true;
-    std::vector<TH1D *> ratios; // keep alive until SaveAs
 
     for (size_t ip = 0; ip < kPairs.size(); ip++) {
         const FilePair &p = kPairs[ip];
@@ -157,47 +206,96 @@ void plot_cab()
             std::cerr << "ERROR: cannot open " << p.pp_file   << std::endl; continue;
         }
 
-        TH1D *h_pbpb = GetCab(f_pbpb);
-        TH1D *h_pp   = GetCab(f_pp);
-        if (!h_pbpb || !h_pp) continue;
+        TH1D *h_pbpb = getter(f_pbpb);
+        TH1D *h_pp   = getter(f_pp);
+
+        f_pbpb->Close(); delete f_pbpb;
+        f_pp->Close();   delete f_pp;
+
+        if (!h_pbpb || !h_pp) { delete h_pbpb; delete h_pp; continue; }
 
         std::string rname = "ratio_" + std::to_string(ip);
-        TH1D *ratio = MakeRatio(h_pbpb, h_pp, rname.c_str());
-        if (!ratio) continue;
+        TH1D *ratio = (TH1D *)h_pbpb->Clone(rname.c_str());
         ratio->SetDirectory(0);
+        ratio->Divide(h_pp);
+        delete h_pbpb;
+        delete h_pp;
 
         ratio->SetLineColor(p.color);
         ratio->SetMarkerColor(p.color);
         ratio->SetLineStyle(p.style);
         ratio->SetLineWidth(2);
-        ratio->SetMarkerStyle(20 + ip);
+        ratio->SetMarkerStyle(20 + (int)ip);
         ratio->SetMarkerSize(0.5);
-
         ratio->GetXaxis()->SetRangeUser(0.005, 0.4);
-        ratio->GetYaxis()->SetRangeUser(0.5, 2.5);
+        ratio->GetYaxis()->SetRangeUser(ymin, ymax);
         ratio->GetXaxis()->SetTitle("#it{R}_{L}");
-        ratio->GetYaxis()->SetTitle("C_{AB}");
+        ratio->GetYaxis()->SetTitle(ytitle);
 
         ratio->Draw(first ? "E" : "E same");
-        l->AddEntry(ratio, p.label.c_str(), "pl");
-        ratios.push_back(ratio);
 
-        f_pbpb->Close(); delete f_pbpb;
-        f_pp->Close();   delete f_pp;
+        TF1 *fit = nullptr;
+        double x_cross = FindCrossing(ratio, 2, &fit);
+        if (x_cross > 0)
+            std::cout << p.label << ":  crossover = " << x_cross << std::endl;
+        if (fit) {
+            fit->SetLineColor(p.color);
+            fit->SetLineStyle(2);
+            fit->SetLineWidth(2);
+            fit->Draw("same");
+            result.fits.push_back(fit);
+        }
+
+        l->AddEntry(ratio, p.label.c_str(), "pl");
+        result.ratios.push_back(ratio);
         first = false;
     }
+    return result;
+}
 
-    // Unity line
-    TLine *unity = new TLine(0.005, 1.0, 0.4, 1.0);
-    unity->SetLineColor(kGray+1);
-    unity->SetLineStyle(2);
-    unity->SetLineWidth(2);
-    unity->Draw("same");
+void MakePlot(const char *canvas_name, TH1D *(*getter)(TFile *), const char *ytitle, double ymin, double ymax, const char *outpath)
+{
+    TCanvas *c = new TCanvas(canvas_name, canvas_name, 800, 600);
+    ProcessCanvas(c);
+    c->cd();
+    gPad->SetLogx();
+
+    TLegend *l = new TLegend(0.6, 0.65, 0.9, 0.88);
+    l->SetTextSize(0.037);
+    l->SetBorderSize(0);
+    l->SetFillStyle(0);
+
+    auto result = DrawOverlay(l, getter, ytitle, ymin, ymax);
+
+    TLine unity(0.005, 1.0, 0.4, 1.0);
+    unity.SetLineColor(kGray+1);
+    unity.SetLineStyle(2);
+    unity.SetLineWidth(2);
+    unity.Draw("same");
 
     l->Draw("same");
+    c->SaveAs(outpath);
 
-    c->SaveAs("output/cab_overlay.pdf");
     delete c;
     delete l;
-    delete unity;
+    for (auto *h : result.ratios) delete h;
+    for (auto *f : result.fits)   delete f;
+}
+
+void plot_cab()
+{
+    gStyle->SetOptStat(0);
+    SetStyle();
+
+    MakePlot("c_cab",
+             GetCab,
+             "C_{AB}(PbPb/pp)",
+             0.5, 2.5,
+             "output/cab_overlay.pdf");
+
+    MakePlot("c_eecab",
+             GetEECab,
+             "EEC_{AB}(PbPb/pp)",
+             0.5, 2.5,
+             "output/eecab_overlay.pdf");
 }
