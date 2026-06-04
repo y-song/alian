@@ -6,6 +6,7 @@ jet_finder:
   R: 0.4
   alg: antikt
   pT_min: 10
+  eta_max: 0.5
 
 analysis:
   pt_min_eec: 1.0
@@ -18,7 +19,7 @@ output:
     jet_pT: ['lin', 0, 200, 100]
     jet_eta: ['lin', -1., 1., 40]
     RL: ['log', 1.0e-4, 1.0, 51]
-    Rg: ['lin', -1.0, 0.4, 28]
+    Rg: ['lin', -1.0, 0.6, 32]
     zg: ['lin', -1.0, 0.5, 30]
   histograms:
     # define histograms with bins described in `bins`
@@ -30,6 +31,9 @@ output:
     eec_aa: [2, "eec_aa", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_bb: [2, "eec_bb", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_ab: [2, "eec_ab", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_aa_noew: [2, "eec_a_noewa", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_bb_noew: [2, "eec_bb_noew", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_ab_noew: [2, "eec_ab_noew", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     rg: [2, "rg", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", jet_pT, Rg]
     rg_log: [2, "rg_log", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", jet_pT, RL]
     zg: [2, "zg", "#it{z}_{g};jet #it{p}_{T} (GeV);#it{z}_{g}", jet_pT, zg]

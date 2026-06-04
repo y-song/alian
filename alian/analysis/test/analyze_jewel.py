@@ -53,6 +53,9 @@ class AnalyzeJewel(AnalysisBaseFlat):
             # self.hists['rg'].Fill(j.pt(), sd_j.structure_of[fj.contrib.SoftDrop]().delta_R())
             self.hists['rg_log'].Fill(j.pt(), delta_R(subjet_a, subjet_b))
             self.hists['zg'].Fill(j.pt(), subjet_b.pt() / sd_pt)
+            self.do_eec_noew(subjet_a, "eec_aa_noew", jet_pt_bin=j.pt())
+            self.do_eec_noew(subjet_b, "eec_bb_noew", jet_pt_bin=j.pt())
+            self.do_eec_cross_noew(subjet_a, subjet_b, "eec_ab_noew", jet_pt_bin=j.pt())
 
     def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None):
         if ew_denom is None:
@@ -61,9 +64,9 @@ class AnalyzeJewel(AnalysisBaseFlat):
             jet_pt_bin = jet.pt()
         tracks = self.eec_trk_selector(jet.constituents())
         for p1, p2 in itertools.permutations(tracks, 2):
-                ew = p1.pt() * p2.pt() / ew_denom / ew_denom
-                rl = delta_R(p1, p2)
-                self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
+            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+            rl = delta_R(p1, p2)
+            self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
 
     def do_eec_cross(self, subjet_a, subjet_b, hist_name, ew_denom, jet_pt_bin):
         tracks_a = self.eec_trk_selector(subjet_a.constituents())
@@ -73,6 +76,22 @@ class AnalyzeJewel(AnalysisBaseFlat):
                 ew = p1.pt() * p2.pt() / ew_denom / ew_denom
                 rl = delta_R(p1, p2)
                 self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
+
+    def do_eec_noew(self, jet, hist_name, jet_pt_bin=None):
+        if jet_pt_bin is None:
+            jet_pt_bin = jet.pt()
+        tracks = self.eec_trk_selector(jet.constituents())
+        for p1, p2 in itertools.permutations(tracks, 2):
+            rl = delta_R(p1, p2)
+            self.hists[hist_name].Fill(jet_pt_bin, rl)
+
+    def do_eec_cross_noew(self, subjet_a, subjet_b, hist_name, jet_pt_bin):
+        tracks_a = self.eec_trk_selector(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector(subjet_b.constituents())
+        for p1 in tracks_a:
+            for p2 in tracks_b:
+                rl = delta_R(p1, p2)
+                self.hists[hist_name].Fill(jet_pt_bin, rl)
 
     def select_soft_drop(self, lund_seq, z_cut=0.1):
         """
