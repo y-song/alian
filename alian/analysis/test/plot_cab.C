@@ -20,6 +20,32 @@ struct FilePair {
     int         style;
 };
 
+// ── 5.02 TeV ──────────────────────────────────────────────────
+// recoil on:
+const std::vector<FilePair> kPairs = {
+    {"output/eec_R04_100_120_1703291.root",
+     "output/eec_R04_100_120_1707049.root",
+     "z_{cut} = 0.1", kRed,     1},
+    {"output/eec_R04_100_120_1736222.root",
+     "output/eec_R04_100_120_1737222.root",
+     "z_{cut} = 0.2", kBlue,    1},
+    {"output/eec_R04_100_120_1739222.root",
+     "output/eec_R04_100_120_1740222.root",
+     "z_{cut} = 0.3", kGreen+2, 1},
+};
+// recoil off:
+// const std::vector<FilePair> kPairs = {
+//     {"output/eec_R04_100_120_1702207.root",
+//      "output/eec_R04_100_120_1707049.root",
+//      "z_{cut} = 0.1", kRed,     1},
+//     {"output/eec_R04_100_120_1716480.root",
+//      "output/eec_R04_100_120_1737222.root",
+//      "z_{cut} = 0.2", kBlue,    1},
+//     {"output/eec_R04_100_120_1738222.root",
+//      "output/eec_R04_100_120_1740222.root",
+//      "z_{cut} = 0.3", kGreen+2, 1},
+// };
+// ── 2.76 TeV ──────────────────────────────────────────────────
 // const std::vector<FilePair> kPairs = {
 //     {"output/eec_R04_100_120_1652502.root",
 //      "output/eec_R04_100_120_1652402.root",
@@ -34,20 +60,20 @@ struct FilePair {
 //      "output/eec_R04_100_120_1656044.root",
 //      "z_{cut} = 0.45", kOrange, 1},
 // };
-const std::vector<FilePair> kPairs = {
-    {"output/eec_R06_100_120_1698385.root",
-     "output/eec_R06_100_120_1697883.root",
-     "z_{cut} = 0.1", kRed,     1},
-    {"output/eec_R06_100_120_1698585.root",
-     "output/eec_R06_100_120_1698485.root",
-     "z_{cut} = 0.2", kBlue,    1},
-    {"output/eec_R06_100_120_1698785.root",
-     "output/eec_R06_100_120_1698685.root",
-     "z_{cut} = 0.3", kGreen+2, 1},
-    // {"output/eec_R06_100_120_1656144.root",
-    //  "output/eec_R06_100_120_1656044.root",
-    //  "z_{cut} = 0.45", kOrange, 1},
-};
+// const std::vector<FilePair> kPairs = {
+//     {"output/eec_R06_100_120_1698385.root",
+//      "output/eec_R06_100_120_1697883.root",
+//      "z_{cut} = 0.1", kRed,     1},
+//     {"output/eec_R06_100_120_1698585.root",
+//      "output/eec_R06_100_120_1698485.root",
+//      "z_{cut} = 0.2", kBlue,    1},
+//     {"output/eec_R06_100_120_1698785.root",
+//      "output/eec_R06_100_120_1698685.root",
+//      "z_{cut} = 0.3", kGreen+2, 1},
+//     // {"output/eec_R06_100_120_1656144.root",
+//     //  "output/eec_R06_100_120_1656044.root",
+//     //  "z_{cut} = 0.45", kOrange, 1},
+// };
 // ─────────────────────────────────────────────────────────────────────────────
 
 void SetStyle()
