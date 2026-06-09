@@ -27,6 +27,7 @@ class AnalyzeJewel(AnalysisBaseFlat):
         # self.tracks contains selected tracks (i.e. after selection cuts)
         # self.jets contains selected jets (i.e. after selection cuts)
 
+        self.hists['event'].Fill(0.5)
         [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
         [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
         [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]

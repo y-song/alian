@@ -11,10 +11,11 @@ jet_finder:
 analysis:
   pt_min_eec: 1.0
   pt_min_jet: 100.0
-  z_cut: 0.1
+  z_cut: 0.3
 
 output:
   bins:
+    event: ['lin', 0, 1, 1]
     track_pT: ['log', 0.1, 20, 300]
     jet_pT: ['lin', 0, 200, 100]
     jet_eta: ['lin', -1., 1., 40]
@@ -23,6 +24,7 @@ output:
     zg: ['lin', -1.0, 0.5, 30]
   histograms:
     # define histograms with bins described in `bins`
+    event: [1, "event", "Event count;;Counts", event]
     track_pT: [1, "track_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);dN/d#it{p}_{T}", track_pT]
     jet_pT: [1, "jet_pT", "Jet #it{p}_{T} spectrum;jet #it{p}_{T} (GeV);Counts", jet_pT]
     jet_eta: [1, "jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", jet_eta]
@@ -31,7 +33,7 @@ output:
     eec_aa: [2, "eec_aa", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_bb: [2, "eec_bb", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_ab: [2, "eec_ab", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
-    eec_aa_noew: [2, "eec_a_noewa", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_aa_noew: [2, "eec_aa_noew", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_bb_noew: [2, "eec_bb_noew", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_ab_noew: [2, "eec_ab_noew", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     rg: [2, "rg", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", jet_pT, Rg]
