@@ -8,7 +8,7 @@
 #include <TLegend.h>
 #include <TLine.h>
 #include <TFile.h>
-// root -l 'analysis/test/plot_eec_rg_ratio.C("output/eec_R04_100_120_PbPb_100GeV.root", "output/eec_R04_100_120_pp_100GeV.root", "100", "120")'
+// root -l 'plot/plot_eec_rg_ratio.C("output/eec_R04_100_120_PbPb_100GeV.root", "output/eec_R04_100_120_pp_100GeV.root", "100", "120")'
 
 using namespace std;
 
@@ -153,7 +153,7 @@ void plot_eec_rg_ratio(std::string pbpb_file, std::string pp_file,
         // {"h_eec_aa_clone",  "EEC,aa", kBlue,    kFullSquare, nullptr, nullptr, nullptr},
         // {"h_eec_bb_clone",  "EEC,bb", kRed,     kFullTriangleUp, nullptr, nullptr, nullptr},
         {"h_eec_ab_clone",  "EEC,ab", kGreen+2, kFullDiamond, nullptr, nullptr, nullptr},
-        {"h_eec_ab_noew_clone",  "EEC,ab, no weight", kBlack, kFullDiamond, nullptr, nullptr, nullptr},
+        // {"h_eec_ab_noew_clone",  "EEC,ab, no weight", kBlack, kFullDiamond, nullptr, nullptr, nullptr},
     };
 
     for (auto &cfg : configs) {
@@ -184,6 +184,21 @@ void plot_eec_rg_ratio(std::string pbpb_file, std::string pp_file,
         cfg.ratio_hist = ratio;
     }
     // l2->Draw("same");
+    // --- Double ratio: (PbPb/pp of Rg) / (PbPb/pp of EEC,ab) ---
+    TH1D *rg_ratio    = nullptr;
+    TH1D *eecab_ratio = nullptr;
+    for (auto &cfg : configs) {
+        if (std::string(cfg.name) == "h_rg_log_clone")  rg_ratio    = cfg.ratio_hist;
+        if (std::string(cfg.name) == "h_eec_ab_clone")  eecab_ratio = cfg.ratio_hist;
+    }
+
+    TH1D *double_ratio = nullptr;
+    if (rg_ratio && eecab_ratio) {
+        double_ratio = (TH1D *)rg_ratio->Clone("double_ratio_rg_over_eecab");
+        double_ratio->Divide(eecab_ratio);
+    } else {
+        std::cerr << "WARNING: cannot build double ratio, missing rg or eec,ab ratio\n";
+    }
 
     // Canvas
     TCanvas *c = new TCanvas("c", "c", 800, 600);
@@ -204,15 +219,15 @@ void plot_eec_rg_ratio(std::string pbpb_file, std::string pp_file,
         TH1D *ratio = cfg.ratio_hist;
 
         FormatHist(l, ratio, cfg.label, cfg.color, cfg.marker);
-        ratio->GetXaxis()->SetRangeUser(0.001, 0.4);
-        ratio->GetYaxis()->SetRangeUser(0.5, 3.0);
+        ratio->GetXaxis()->SetRangeUser(0.01, 0.4);
+        ratio->GetYaxis()->SetRangeUser(0., 3.0);
         ratio->GetXaxis()->SetTitle("#it{R}_{L}");
         ratio->GetYaxis()->SetTitle("PbPb / pp");
 
         if (first) {
             ratio->Draw("L");
             // Draw unity line after frame is established
-            unity = new TLine(0.001, 1.0, 0.4, 1.0);
+            unity = new TLine(0.01, 1.0, 0.4, 1.0);
             unity->SetLineColor(kGray+1);
             unity->SetLineStyle(2);
             unity->SetLineWidth(5);
@@ -222,7 +237,6 @@ void plot_eec_rg_ratio(std::string pbpb_file, std::string pp_file,
             ratio->Draw("L same");
         }
     }
-    // l->Draw("same");
 
     // Derive output path from PbPb input path
     std::string pbpb_base = pbpb_file.substr(pbpb_file.rfind("/") + 1);
@@ -238,11 +252,41 @@ void plot_eec_rg_ratio(std::string pbpb_file, std::string pp_file,
     delete c;
     delete l;
 
+    if (double_ratio) {
+        TCanvas *c2 = new TCanvas("c2", "c2", 800, 600);
+        ProcessCanvas(c2);
+        c2->cd();
+        gPad->SetLogx();
+        gPad->SetLogy(0);
+
+        TLegend *l2 = new TLegend(0.5, 0.45, 0.9, 0.88);
+        FormatHist(l2, double_ratio, "Rg ratio / EEC,ab ratio", kBlack, kFullCross);
+        double_ratio->GetXaxis()->SetRangeUser(0.01, 0.4);
+        double_ratio->GetYaxis()->SetRangeUser(0., 3.0);
+        double_ratio->GetXaxis()->SetTitle("#it{R}_{L}");
+        double_ratio->GetYaxis()->SetTitle("#it{R}_{g}(PbPb/pp) / EEC(AxB)(PbPb/pp)");
+        double_ratio->Draw("L");
+
+        TLine *unity2 = new TLine(0.01, 1.0, 0.4, 1.0);
+        unity2->SetLineColor(kGray+1);
+        unity2->SetLineStyle(2);
+        unity2->SetLineWidth(5);
+        unity2->Draw("same");
+
+        // l2->Draw("same");
+
+        std::string outpdf2 = outstem + "_doubleratio.pdf";
+        c2->SaveAs(outpdf2.c_str());
+        delete c2;
+        delete l2;
+    }
+
     // Save ratio histograms
     TFile *f_out = new TFile(outroot.c_str(), "RECREATE");
     f_out->cd();
     for (auto &cfg : configs)
         if (cfg.ratio_hist) cfg.ratio_hist->Write();
+    if (double_ratio) double_ratio->Write();
     f_out->Close();
 
     f_pbpb->Close();
