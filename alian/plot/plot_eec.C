@@ -158,8 +158,8 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     SetStyle();
 
     std::string infile  = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    std::string jetR    = "06";
-    std::string jetR_str = "0.6";
+    std::string jetR    = "04";
+    std::string jetR_str = "0.4";
     std::string outfile = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
 
     std::cout << "pt min: " << pt_min << ", pt max: " << pt_max << std::endl;
@@ -234,8 +234,8 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
 
         TH1D *h = cfg.hist;
         FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
-        h->GetXaxis()->SetRangeUser(0.001, 0.7);
-        h->GetYaxis()->SetRangeUser(0, 8);
+        h->GetXaxis()->SetRangeUser(0.01, 0.4);
+        h->GetYaxis()->SetRangeUser(0, 4);
         h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
 
         if (first) {

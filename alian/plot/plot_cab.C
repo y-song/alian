@@ -158,6 +158,19 @@ TH1D *GetCab(TFile *f)
 }
 
 // Returns h_ab detached from the file.
+TH1D *GetEEC(TFile *f)
+{
+    TH1D *h_eec = (TH1D *)f->Get("h_eec_clone");
+    if (!h_eec) {
+        std::cerr << "ERROR: missing histogram in " << f->GetName() << std::endl;
+        return nullptr;
+    }
+    TH1D *out = (TH1D *)h_eec->Clone("h_eec_tmp");
+    out->SetDirectory(0);
+    return out;
+}
+
+// Returns h_ab detached from the file.
 TH1D *GetEECab(TFile *f)
 {
     TH1D *h_ab = (TH1D *)f->Get("h_eec_ab_clone");
@@ -208,6 +221,45 @@ double FindCrossing(TH1D *h, int half_window = 2, TF1 **fit_out = nullptr)
 
     if (fabs(b) < 1e-30) return -1.;
     return exp((1. - a) / b);
+}
+
+double FindMinimum(TH1D *h, int half_window = 2, TF1 **fit_out = nullptr)
+{
+    int nbins = h->GetNbinsX();
+    int min_bin = 1;
+    int first_bin = h->FindBin(0.005);
+    double min_val = h->GetBinContent(first_bin);
+
+    for (int i = first_bin; i <= nbins; i++) {
+        double v = h->GetBinContent(i);
+        if (v > 0 && v < min_val) {
+            min_val = v;
+            min_bin = i;
+        }
+    }
+
+    int bin_lo = std::max(1,     min_bin - half_window);
+    int bin_hi = std::min(nbins, min_bin + half_window);
+    double x_lo = h->GetBinLowEdge(bin_lo);
+    double x_hi = h->GetBinLowEdge(bin_hi + 1);
+
+    // Quadratic in log(x): y = a + b*log(x) + c*log(x)^2
+    // Minimum at log(x) = -b/(2c)  =>  x = exp(-b/(2c))
+    std::string fname = std::string("fquad_") + h->GetName();
+    TF1 *fquad = new TF1(fname.c_str(), "[0] + [1]*log(x) + [2]*log(x)*log(x)", x_lo, x_hi);
+    h->Fit(fquad, "RQN");
+
+    double b = fquad->GetParameter(1);
+    double c = fquad->GetParameter(2);
+
+    if (fit_out) *fit_out = fquad;
+    else         delete fquad;
+
+    if (fabs(c) < 1e-30 || c < 0) {
+        std::cerr << "WARNING: quadratic fit has no minimum in " << h->GetName() << std::endl;
+        return -1.;
+    }
+    return exp(-b / (2. * c));
 }
 
 struct OverlayResult {
@@ -322,6 +374,12 @@ void plot_cab()
     MakePlot("c_eecab",
              GetEECab,
              "EEC_{AB}(PbPb/pp)",
-             0.5, 2.5,
+             0.4, 2.5,
              "output/eecab_overlay.pdf");
+
+    // MakePlot("c_eec",
+    //          GetEEC,
+    //          "EEC(PbPb/pp)",
+    //          0.5, 2.5,
+    //          "output/eec_overlay.pdf");
 }
