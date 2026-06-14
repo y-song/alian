@@ -37,18 +37,25 @@ ROOT.TH1.SetDefaultSumw2()
 ROOT.TH2.SetDefaultSumw2()
 
 class MyAnalysis:
-    def __init__(self):
+    def __init__(self, def_gen):
         # Jet pts
-        self.target_jet_pts = [ 50, 100, 200, 500]
-        self.partontypes = [ "inclusive", "quark", "gluon"]
+        self.target_jet_pts = [ 50, 100, 200, 500 ]
+        self.gen = def_gen
+        
+        if self.gen == "pythia":
+            self.partontypes = [ "inclusive", "quark", "gluon"]
+        elif self.gen == "herwig":
+            self.partontypes = [ "inclusive"]
         # num_files_to_parse = 1 #100
 
         # Jet Definitions
         self.jet_R = 0.4
-        self.jet_def_ca = fj.JetDefinition(fj.cambridge_algorithm, self.jet_R)
+        self.jet_def_ca = fj.JetDefinition(fj.cambridge_algorithm, 1.0) #self.jet_R) # jetR * 2
 
-        # SD definitions
-        self.z_cuts = [ 0.1 ]
+        # Cut definitions
+        # Use soft drop ('sd') with a z cut, or use max kt ('maxkt') selection.
+        self.cut_configs = [ ("sd", 0.1), ("maxkt", None) ]
+        # Example: self.cut_configs = [("sd", 0.1), ("maxkt", None)]
 
         # EEC definitions
         self.trk_thrd = 1
@@ -65,16 +72,27 @@ class MyAnalysis:
         else:
             return "unknown"
 
-    def FormatHist(self, hist, norm_factor, color):
-        hist.Scale(1/norm_factor, "width")
+    def FormatHist(self, hist, norm_factor, color, markerstyle=0, coloralpha=1, pt_rl=False, avg_pt=None):
+        if pt_rl:
+            if avg_pt is None:
+                raise ValueError("avg_pt is required for ptRL histogram scaling")
+            hist.Scale(math.log(avg_pt) / avg_pt)
+        if norm_factor not in (-1, 0):
+            hist.Scale(1/norm_factor, "width")
         hist.SetLineColor(color)
+        if coloralpha != 1:
+            hist.SetLineColorAlpha(color, coloralpha)
         hist.SetLineWidth(2)
+        if markerstyle > 0:
+            hist.SetMarkerStyle(markerstyle)
+            hist.SetMarkerColor(color)
 
     def GetCABHist(self,hist_AA, hist_BB, hist_AB, name="hist_correlation"):
         """
         Calculates AB / sqrt(AA * BB) bin-by-bin.
         """
         # Clone one of the inputs to get the same binning/axes
+        print(name)
         hist_CAB = hist_AB.Clone(name)
         hist_CAB.SetTitle("C_{AB};R_{L};AxB / #sqrt{AxA #times BxB}")
         hist_CAB.Reset() # Clear the counts
@@ -92,6 +110,7 @@ class MyAnalysis:
             if aa > 0 and bb > 0:
                 denom = math.sqrt(aa * bb)
                 result = ab / denom
+                # print("bin", i, "// aa:", aa, "bb:", bb, "ab:", ab, "==> C_AB:", result)
                 
                 # Error propagation (Simplified: assumes AA and BB errors are small 
                 # or you can use standard Taylor expansion for full propagation)
@@ -115,10 +134,37 @@ class MyAnalysis:
             else:
                 hist_CAB.SetBinContent(i, 0)
                 hist_CAB.SetBinError(i, 0)
+                # print("bin", i, "// aa:", aa, "bb:", bb, "ab:", ab, "==> C_AB: n/a")
 
         return hist_CAB
 
-    def FillHists(self, label, sj, hist, weight, sj_B=None):
+    def format_cut_tag(self, cut_mode, cut_value):
+        if cut_mode == "sd":
+            return f"sd{str(cut_value)}" #f"sd{str(cut_value).replace('.', 'p')}"
+        if cut_mode == "maxkt":
+            return "maxkt"
+        return f"{cut_mode}{str(cut_value)}" #f"{cut_mode}{str(cut_value).replace('.', 'p')}"
+
+    def get_cut_label(self, cut_mode, cut_value):
+        if cut_mode == "sd":
+            return f"Soft Drop z > {cut_value}"
+        if cut_mode == "maxkt":
+            return "Max k_{T}"
+        return f"{cut_mode} {cut_value}"
+
+    def select_split(self, lund_plane_elements, cut_mode, cut_value):
+        if cut_mode == "sd":
+            for d in lund_plane_elements:
+                if d.z() > cut_value:
+                    return d
+            return None
+        if cut_mode == "maxkt":
+            # Only select max kt for kt > 1
+            filtered = [d for d in lund_plane_elements if d.kt() > 1.0]
+            return max(filtered, key=lambda d: d.kt(), default=None) if filtered else None
+        return None
+
+    def FillHists(self, label, sj, hist, weight, hist_ptRL=None, avg_pt=None, sj_B=None):
         # Get constituents for this specific prong
         sj_constituents = fj.sorted_by_pt(sj.constituents())
         
@@ -139,77 +185,94 @@ class MyAnalysis:
                 c_select_B.append(c)
 
             eec_result = ecorrel.CorrelatorBuilder( c_select, c_select_B, weight, 2, 1, self.dphi_cut, self.deta_cut )
-            # eec_result_wwjetpt = ecorrel.CorrelatorBuilder( c_select, c_select_B, jet.perp(), 2, 1, self.dphi_cut, self.deta_cut )
-            # eec_result_wwradpt = ecorrel.CorrelatorBuilder( c_select, c_select_B, parent_radiator.perp(), 2, 1, self.dphi_cut, self.deta_cut ) #sj.perp()
         else:
             eec_result = ecorrel.CorrelatorBuilder( c_select, weight, 2, 1, self.dphi_cut, self.deta_cut )
-            # eec_result_wwjetpt = ecorrel.CorrelatorBuilder( c_select, jet.perp(), 2, 1, self.dphi_cut, self.deta_cut )
-            # if label != "full": 
-            #     eec_result_wwradpt = ecorrel.CorrelatorBuilder( c_select, parent_radiator.perp(), 2, 1, self.dphi_cut, self.deta_cut ) #sj.perp()
 
         # Fill the histograms
         for index in range(eec_result.correlator(2).rs().size()):
-            hist.Fill(eec_result.correlator(2).rs()[index], eec_result.correlator(2).weights()[index])
+            rl_value = eec_result.correlator(2).rs()[index]
+            weight_value = eec_result.correlator(2).weights()[index]
+            hist.Fill(rl_value, weight_value)
+            if hist_ptRL is not None and avg_pt is not None:
+                hist_ptRL.Fill(rl_value * avg_pt, weight_value)
             # hist_wwjetpt.Fill(eec_result_wwjetpt.correlator(2).rs()[index], eec_result_wwjetpt.correlator(2).weights()[index])
             # if label != "full":
             #     hist_wwradpt.Fill(eec_result_wwradpt.correlator(2).rs()[index], eec_result_wwradpt.correlator(2).weights()[index])
 
     def run(self):
-        root_outfile = ROOT.TFile("/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/jse_preliminary_curves.root", "RECREATE")
-
+        avg_jet_pts = {}
         for i, target_jetpt in enumerate(self.target_jet_pts):
+            root_outfile = ROOT.TFile(f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/jse_preliminary_curves_{self.gen}_jetpt{target_jetpt}.root", "RECREATE")
 
             # Load the data
             # path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{self.target_jet_pts[i]}gev/JetsForAnalysis.parquet"
-            path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/51506550/{self.target_jet_pts[i]}gev/FilteredJetsForAnalysisCombined.parquet"
             # path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/51506550/{self.target_jet_pts[i]}gev/{n+1}/JetsForAnalysis.parquet"
+            if ( self.gen == "pythia" ):
+                path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/53423546/{self.target_jet_pts[i]}gev/FilteredJetsForAnalysisCombined.parquet"
+            elif ( self.gen == "herwig" ):
+                # path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/storage/herwig/1006458/{self.target_jet_pts[i]}gev/FilteredJetsForAnalysisCombined.parquet"
+                path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/herwiggen/tree_gen/54380351/{self.target_jet_pts[i]}gev/FilteredJetsForAnalysisCombined.parquet"
             df = pd.read_parquet(path)
+
+            avg_jet_pt = df['jet_pt'].mean()
+            avg_jet_pts[target_jetpt] = avg_jet_pt
+            print(f"target_jetpt={target_jetpt} average jet pT = {avg_jet_pt:.2f}")
 
             # Group by jet_id to process one jet at a time
             grouped_jets = df.groupby(['event_id', 'jet_id']) # grouped_jets = df.groupby('jet_id')
             # print("grouped_jets", print(grouped_jets.head(2)))
 
 
-            for z_cut in self.z_cuts:
+            for cut_mode, cut_value in self.cut_configs:
 
                 for partontype in self.partontypes:
 
-                    # Make a canvas
-                    canvas_wwjetpt = ROOT.TCanvas("canvas_wwjetpt", f"Subjet EECs: jet p_T = {target_jetpt}, z_cut = {z_cut}, weight=p_T,1p_T,1 / p_T,jet^2", 800, 600)
-                    canvas_wwjetpt.SetLogx()
-
-                    canvas_wwradpt = ROOT.TCanvas("canvas_wwradpt", f"Subjet EECs: jet p_T = {target_jetpt}, z_cut = {z_cut}, weight=p_T,1p_T,1 / p_T,radiator^2", 800, 600)
-                    canvas_wwradpt.SetLogx()
-
-                    can_CAB = ROOT.TCanvas("can_CAB", "C_{AB}", 800, 600)
-                    can_CAB.SetLogx()
-
-                    can_radpt = ROOT.TCanvas("can_radpt", "Radiator p_{T}", 800, 600)
-                    can_radkt = ROOT.TCanvas("can_radkt", "Radiator k_{T}", 800, 600)
-                    # can_radkt.SetLogx()
-
-                    nbins = 50
-                    xmin, xmax = 0.01, 1.0
+                    nbins = 25 #15 #50
+                    xmin, xmax = 0.001, 1.0
+                    ptrl_xmin, ptrl_xmax = 0.1, 50
                     log_bins = np.logspace(np.log10(xmin), np.log10(xmax), nbins + 1)
+                    ptrl_log_bins = np.logspace(np.log10(ptrl_xmin), np.log10(ptrl_xmax), nbins + 1)
+                    pt_bins = np.arange(int(target_jetpt / 2), target_jetpt * 1.2 + 2, dtype=float)
+                    radpt_bins = np.linspace(0, int(target_jetpt*1.2+2), int(target_jetpt*1.2+2)+1)
+                    radkt_bins = np.linspace(-5, 5, nbins+1)
+                    # rg_bins = np.logspace(np.log10(0.001), np.log10(1), nbins + 1)  # theta_g = Delta R / R, range [0, 1]
 
-                    # Initialize ROOT histograms // ww = weight with // radpt = radiator pt
-                    hist_full = ROOT.TH1D(f"hist_full_{partontype}_jetpt{target_jetpt}_zcut{z_cut}", "EEC; R_{L}", nbins, log_bins)
+                    cut_tag = self.format_cut_tag(cut_mode, cut_value)
+                    cut_label = self.get_cut_label(cut_mode, cut_value)
+                    hist_jetpt_label = f"SD z_{{cut}} = {cut_value}" if cut_mode == "sd" else "Max k_{T} jet p_{T}"
 
-                    hist_AA_wwjetpt = ROOT.TH1D(f"hist_AA_{partontype}_jetpt{target_jetpt}_zcut{z_cut}_wwjetpt", "AxA; R_{L}", nbins, log_bins)
-                    hist_BB_wwjetpt = ROOT.TH1D(f"hist_BB_{partontype}_jetpt{target_jetpt}_zcut{z_cut}_wwjetpt", "BxB", nbins, log_bins)
-                    hist_AB_wwjetpt = ROOT.TH1D(f"hist_AB_{partontype}_jetpt{target_jetpt}_zcut{z_cut}_wwjetpt", "AxB", nbins, log_bins)
+                    hist_jetpt_all = ROOT.TH1D( f"hist_jetpt_all_{partontype}_jetpt{target_jetpt}_{cut_tag}", f"jet p_{{T}} ({cut_label}); p_{{T, jet}}", len(pt_bins) - 1, pt_bins)
+                    hist_jetpt_cut = ROOT.TH1D( f"hist_jetpt_{partontype}_jetpt{target_jetpt}_{cut_tag}", f"{hist_jetpt_label}; p_{{T, jet}}", len(pt_bins) - 1, pt_bins)
 
-                    hist_AA_wwradpt = ROOT.TH1D(f"hist_AA_{partontype}_jetpt{target_jetpt}_zcut{z_cut}_wwradpt", "AxA; R_{L}", nbins, log_bins)
-                    hist_BB_wwradpt = ROOT.TH1D(f"hist_BB_{partontype}_jetpt{target_jetpt}_zcut{z_cut}_wwradpt", "BxB", nbins, log_bins)
-                    hist_AB_wwradpt = ROOT.TH1D(f"hist_AB_{partontype}_jetpt{target_jetpt}_zcut{z_cut}_wwradpt", "AxB", nbins, log_bins)
+                    hist_full = ROOT.TH1D( f"hist_full_{partontype}_jetpt{target_jetpt}_{cut_tag}", f"EEC ({cut_label}); R_{{L}}", nbins, log_bins)
+                    hist_full_ptRL = ROOT.TH1D( f"hist_full_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}", f"EEC ({cut_label}); <p_{{T}}>R_{{L}} [GeV/c]", nbins, ptrl_log_bins)
 
-                    radpt_bins = np.linspace(0, target_jetpt, target_jetpt+1)
-                    radkt_bins = np.linspace(-5, 5, nbins+1) #np.logspace(np.log10(0.1), np.log10(target_jetpt), nbins+1) #TODO: fille this in!!
-                    hist_radiatorpt = ROOT.TH1D(f"radiator_pt_{partontype}_jetpt{target_jetpt}_zcut{z_cut}", "radiator p_{T}; p_{T,radiator}", target_jetpt, radpt_bins)
-                    hist_radiatorkt = ROOT.TH1D(f"ln_radiator_kt_{partontype}_jetpt{target_jetpt}_zcut{z_cut}", "ln radiator k_{T}; ln(k_{T,radiator})", nbins, radkt_bins)
+                    hist_rad_wwjetpt = ROOT.TH1D( f"hist_rad_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "EEC; R_{L}", nbins, log_bins)
+                    hist_rad_wwradpt = ROOT.TH1D( f"hist_rad_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "EEC; R_{L}", nbins, log_bins)
+                    hist_rad_ptRL_wwjetpt = ROOT.TH1D( f"hist_rad_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                    hist_rad_ptRL_wwradpt = ROOT.TH1D( f"hist_rad_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+
+                    hist_AA_wwjetpt = ROOT.TH1D( f"hist_AA_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "AxA; R_{L}", nbins, log_bins)
+                    hist_BB_wwjetpt = ROOT.TH1D( f"hist_BB_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "BxB", nbins, log_bins)
+                    hist_AB_wwjetpt = ROOT.TH1D( f"hist_AB_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "AxB", nbins, log_bins)
+                    hist_AA_ptRL_wwjetpt = ROOT.TH1D( f"hist_AA_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "AxA; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                    hist_BB_ptRL_wwjetpt = ROOT.TH1D( f"hist_BB_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "BxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                    hist_AB_ptRL_wwjetpt = ROOT.TH1D( f"hist_AB_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt", "AxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+
+                    hist_AA_wwradpt = ROOT.TH1D( f"hist_AA_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "AxA; R_{L}", nbins, log_bins)
+                    hist_BB_wwradpt = ROOT.TH1D( f"hist_BB_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "BxB", nbins, log_bins)
+                    hist_AB_wwradpt = ROOT.TH1D( f"hist_AB_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "AxB", nbins, log_bins)
+                    hist_AA_ptRL_wwradpt = ROOT.TH1D( f"hist_AA_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "AxA; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                    hist_BB_ptRL_wwradpt = ROOT.TH1D( f"hist_BB_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "BxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                    hist_AB_ptRL_wwradpt = ROOT.TH1D( f"hist_AB_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt", "AxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+
+                    hist_radiatorpt = ROOT.TH1D( f"radiator_pt_{partontype}_jetpt{target_jetpt}_{cut_tag}", "radiator p_{T}; p_{T,radiator}", len(radpt_bins) - 1, radpt_bins)
+                    hist_radiatorkt = ROOT.TH1D( f"radiator_lnkt_{partontype}_jetpt{target_jetpt}_{cut_tag}", "radiator ln k_{T}; ln(k_{T,radiator})", nbins, radkt_bins)
+
+                    hist_rg = ROOT.TH1D(f"hist_rg_{partontype}_jetpt{target_jetpt}_{cut_tag}", "R_{g} = #DeltaR_{AB}; R_{g}; (1/N_{jets}) dN/dR_{g}", nbins, log_bins)
 
                     num_jets = 0.
-                    num_jets_passed_SD = 0.
+                    num_jets_passed_cut = 0.
 
 
                     # Loop over jets
@@ -245,12 +308,11 @@ class MyAnalysis:
                         # Get the C/A jet (usually the one with the highest pt)
                         jets = fj.sorted_by_pt(cs.inclusive_jets())
                         if not jets: continue
+                        # if len(jets) > 1:
+                        #     print(f"WARNING: {len(jets)} C/A jets from one anti-kT jet, stored pt={jet_constituents['jet_pt'].iloc[0]:.2f}, leading CA pt={jets[0].perp():.2f}")
                         jet = jets[0]
                         num_jets += 1
-
-                        # # Select jet pt --> this is done in Filtered file
-                        # if not (jet.perp() >= target_jetpt-0.5 and jet.perp() < target_jetpt+0.5):
-                        #     continue
+                        hist_jetpt_all.Fill(jet.perp()) # this is the C/A jet pt, for anti-kt, use jet_pt
 
                         # Generate the Lund Plane
                         # This builds the tree of all declusterings in the C/A history
@@ -258,166 +320,140 @@ class MyAnalysis:
                         lund_plane_elements = lund_gen.result(jet) # lund_gen(jet)
 
 
-                        # Find the Soft Drop prong (z > 0.1)
-                        # We walk down the primary declustering sequence (widest angle first)
-                        for d in lund_plane_elements:
-                            # The LundPlane objects provide .z(), .Delta(), .kt(), etc.
-                            if d.z() > z_cut:
-                                # sd_info["z"] = d.z()
-                                # sd_info["theta"] = d.Delta() # Angular separation
-                                # sd_info["kt"] = d.kt()       # Relative transverse momentum
-                                parent_radiator = d.pair() # Gives the parent of the prongs that passed Soft Drop
-                                subjets = sorted(parent_radiator.pieces(), key=lambda x: x.pt(), reverse=True) #to ensure subjet_a is the harder subjet
-                                # TODO: compare parent_radiator.pieces() with d.pieces(). are these the same??? If not, which is correct below?
-                                if len(subjets) == 2:
-                                    subjet_a, subjet_b = subjets
-                                    # print(f"Subjet 1 pT: {subjet_a.pt()}, Subjet 2 pT: {subjet_b.pt()}")
-                                else:
-                                    print("This PseudoJet has no parents (it's a single particle).")
-                                
-                                num_jets_passed_SD += 1
+                        # Find the selected splitting according to the current cut mode
+                        selected_d = self.select_split(lund_plane_elements, cut_mode, cut_value)
+                        if selected_d is None:
+                            continue
 
-                                # Add to jet histograms
-                                hist_radiatorpt.Fill(parent_radiator.perp())
-                                hist_radiatorkt.Fill( np.log(d.kt()) ) # TODO: is this right? should it be parent_radiator.perp()? Or one of the subjets?? prob not that.
+                        parent_radiator = selected_d.pair()
+                        subjets = sorted(parent_radiator.pieces(), key=lambda x: x.pt(), reverse=True)
+                        if len(subjets) == 2:
+                            subjet_a, subjet_b = subjets
+                        else:
+                            print("This PseudoJet has no parents (it's a single particle).")
+                            continue
 
+                        num_jets_passed_cut += 1
+                        hist_jetpt_cut.Fill(jet.perp()) # this is the C/A jet pt, for anti-kt, use jet_pt
+                        hist_radiatorpt.Fill(parent_radiator.perp())
+                        hist_radiatorkt.Fill(np.log(selected_d.kt()))
 
-                                # Get EEC of AxA and BxB
-                                for label, sj, hist_wwjetpt, hist_wwradpt in [("full", jet, hist_full, None), ("A", subjet_a, hist_AA_wwjetpt, hist_AA_wwradpt), ("B", subjet_b, hist_BB_wwjetpt, hist_BB_wwradpt)]:
-                                    # print("Filling for combo", label)
-                                    # # Get constituents for this specific prong
-                                    # sj_constituents = fj.sorted_by_pt(sj.constituents())
-                                    
-                                    # # Apply your pt threshold (trk_thrd = 1)
-                                    # c_select = fj.vectorPJ()
-                                    # for c in sj_constituents:
-                                    #     if c.pt() < trk_thrd:
-                                    #         break
-                                    #     c_select.append(c)
-                                            
-                                    # # Calculate the EEC for this subjet
-                                    # eec_result_wwjetpt = ecorrel.CorrelatorBuilder( c_select, jet.perp(), 2, 1, dphi_cut, deta_cut )
-                                    # if label != "full": 
-                                    #     eec_result_wwradpt = ecorrel.CorrelatorBuilder( c_select, parent_radiator.perp(), 2, 1, dphi_cut, deta_cut ) #sj.perp()
+                        # Calculate and fill r_g = Delta R_{AB}  # selected_d.Delta() gives the angle between the two prongs in the Lund plane
+                        r_g = selected_d.Delta() #/ self.jet_R
+                        hist_rg.Fill(r_g)
 
-                                    # for index in range(eec_result_wwjetpt.correlator(2).rs().size()):
-                                    #     hist_wwjetpt.Fill(eec_result_wwjetpt.correlator(2).rs()[index], eec_result_wwjetpt.correlator(2).weights()[index])
-                                    #     if label != "full": 
-                                    #         hist_wwradpt.Fill(eec_result_wwradpt.correlator(2).rs()[index], eec_result_wwradpt.correlator(2).weights()[index])
+                        # Get EEC of full, AxA and BxB
+                        for label, sj, hist_wwjetpt, hist_wwradpt, hist_ptRL_wwjetpt, hist_ptRL_wwradpt in [
+                            ("full", jet, hist_full, None, hist_full_ptRL, None),
+                            ("rad", parent_radiator, hist_rad_wwjetpt, hist_rad_wwradpt, hist_rad_ptRL_wwjetpt, hist_rad_ptRL_wwradpt),
+                            ("A", subjet_a, hist_AA_wwjetpt, hist_AA_wwradpt, hist_AA_ptRL_wwjetpt, hist_AA_ptRL_wwradpt),
+                            ("B", subjet_b, hist_BB_wwjetpt, hist_BB_wwradpt, hist_BB_ptRL_wwjetpt, hist_BB_ptRL_wwradpt)
+                        ]:
+                            self.FillHists(label, sj, hist_wwjetpt, jet.perp(), hist_ptRL=hist_ptRL_wwjetpt, avg_pt=avg_jet_pt)
+                            if label != "full":
+                                self.FillHists(label, sj, hist_wwradpt, parent_radiator.perp(), hist_ptRL=hist_ptRL_wwradpt, avg_pt=avg_jet_pt)
 
-                                    self.FillHists(label, sj, hist_wwjetpt, jet.perp())
-                                    if label != "full": 
-                                        self.FillHists(label, sj, hist_wwradpt, parent_radiator.perp())
-
-                                # Now do AxB
-                                self.FillHists("AxB", subjet_a, hist_AB_wwjetpt, jet.perp(), sj_B=subjet_b)
-                                self.FillHists("AxB", subjet_a, hist_AB_wwradpt, parent_radiator.perp(), sj_B=subjet_b)
-                                # sj_A_const = fj.sorted_by_pt(subjet_a.constituents())
-                                # sj_B_const = fj.sorted_by_pt(subjet_b.constituents())
-
-                                # c_select_A = fj.vectorPJ()
-                                # c_select_B = fj.vectorPJ()
-                                # for c in sj_A_const:
-                                #     if c.pt() < trk_thrd:
-                                #         break
-                                #     c_select_A.append(c)
-                                # for c in sj_B_const:
-                                #     if c.pt() < trk_thrd:
-                                #         break
-                                #     c_select_B.append(c)
-
-                                # eec_result_wwjetpt = ecorrel.CorrelatorBuilder( c_select_A, c_select_B, jet.perp(), 2, 1, dphi_cut, deta_cut )
-                                # eec_result_wwradpt = ecorrel.CorrelatorBuilder( c_select_A, c_select_B, parent_radiator.perp(), 2, 1, dphi_cut, deta_cut ) #sj.perp()
-
-                                # for index in range(eec_result_wwjetpt.correlator(2).rs().size()):
-                                #     hist_AB_wwjetpt.Fill(eec_result_wwjetpt.correlator(2).rs()[index], eec_result_wwjetpt.correlator(2).weights()[index])
-                                #     hist_AB_wwradpt.Fill(eec_result_wwradpt.correlator(2).rs()[index], eec_result_wwradpt.correlator(2).weights()[index])
-                                
-
-                                break # Soft Drop stops at the first splitting that passes
+                        # Now do AxB
+                        self.FillHists("AxB", subjet_a, hist_AB_wwjetpt, jet.perp(), hist_ptRL=hist_AB_ptRL_wwjetpt, avg_pt=avg_jet_pt, sj_B=subjet_b)
+                        self.FillHists("AxB", subjet_a, hist_AB_wwradpt, parent_radiator.perp(), hist_ptRL=hist_AB_ptRL_wwradpt, avg_pt=avg_jet_pt, sj_B=subjet_b)
                         # if event_idx > 200: #jet_id > 10:
                         #     break #TODO: get rid of after testing
                         
                     # Normalize and format all curves       
-                    self.FormatHist(hist_full, num_jets_passed_SD, ROOT.kBlack)
+                    self.FormatHist(hist_full, num_jets_passed_cut, ROOT.kGray)
+                    self.FormatHist(hist_full_ptRL, num_jets_passed_cut, ROOT.kGray, pt_rl=True, avg_pt=avg_jet_pt)
 
-                    self.FormatHist(hist_AA_wwjetpt, num_jets_passed_SD, ROOT.kBlue)
-                    self.FormatHist(hist_BB_wwjetpt, num_jets_passed_SD, ROOT.kOrange+7)
-                    self.FormatHist(hist_AB_wwjetpt, num_jets_passed_SD, ROOT.kGreen+2)
+                    self.FormatHist(hist_rad_wwjetpt, num_jets_passed_cut, ROOT.kBlack)
+                    self.FormatHist(hist_rad_ptRL_wwjetpt, num_jets_passed_cut, ROOT.kBlack, pt_rl=True, avg_pt=avg_jet_pt)
+                    self.FormatHist(hist_rad_wwradpt, num_jets_passed_cut, ROOT.kBlack)
+                    self.FormatHist(hist_rad_ptRL_wwradpt, num_jets_passed_cut, ROOT.kBlack, pt_rl=True, avg_pt=avg_jet_pt)
 
-                    self.FormatHist(hist_AA_wwradpt, num_jets_passed_SD, ROOT.kBlue)
-                    self.FormatHist(hist_BB_wwradpt, num_jets_passed_SD, ROOT.kOrange+7)
-                    self.FormatHist(hist_AB_wwradpt, num_jets_passed_SD, ROOT.kGreen+2)
+                    self.FormatHist(hist_AA_wwjetpt, num_jets_passed_cut, ROOT.kBlue)
+                    self.FormatHist(hist_AA_ptRL_wwjetpt, num_jets_passed_cut, ROOT.kBlue, pt_rl=True, avg_pt=avg_jet_pt)
+                    self.FormatHist(hist_BB_wwjetpt, num_jets_passed_cut, ROOT.kOrange+7)
+                    self.FormatHist(hist_BB_ptRL_wwjetpt, num_jets_passed_cut, ROOT.kOrange+7, pt_rl=True, avg_pt=avg_jet_pt)
+                    self.FormatHist(hist_AB_wwjetpt, num_jets_passed_cut, ROOT.kGreen+2)
+                    self.FormatHist(hist_AB_ptRL_wwjetpt, num_jets_passed_cut, ROOT.kGreen+2, pt_rl=True, avg_pt=avg_jet_pt)
 
+                    self.FormatHist(hist_AA_wwradpt, num_jets_passed_cut, ROOT.kBlue)
+                    self.FormatHist(hist_AA_ptRL_wwradpt, num_jets_passed_cut, ROOT.kBlue, pt_rl=True, avg_pt=avg_jet_pt)
+                    self.FormatHist(hist_BB_wwradpt, num_jets_passed_cut, ROOT.kOrange+7)
+                    self.FormatHist(hist_BB_ptRL_wwradpt, num_jets_passed_cut, ROOT.kOrange+7, pt_rl=True, avg_pt=avg_jet_pt)
+                    self.FormatHist(hist_AB_wwradpt, num_jets_passed_cut, ROOT.kGreen+2)
+                    self.FormatHist(hist_AB_ptRL_wwradpt, num_jets_passed_cut, ROOT.kGreen+2, pt_rl=True, avg_pt=avg_jet_pt)
 
-                    # Add a Legend
-                    legend = ROOT.TLegend(0.7, 0.5, 0.9, 0.65)
-                    legend.AddEntry(hist_full, f"all {partontype} jets that passed SD", "l")
-                    legend.AddEntry(hist_AA_wwjetpt, "AxA", "l")
-                    legend.AddEntry(hist_BB_wwjetpt, "BxB", "l")
-                    legend.AddEntry(hist_AB_wwjetpt, "AxB", "l")
-
-
-                    canvas_wwjetpt.cd()
-                    hist_full.Draw("HIST")
-                    hist_AA_wwjetpt.Draw("HIST SAME")
-                    hist_BB_wwjetpt.Draw("HIST SAME")
-                    hist_AB_wwjetpt.Draw("HIST SAME")
-                    legend.Draw()
-                    canvas_wwjetpt.SaveAs(f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/subjet_eec_comparison_{partontype}_jetpt{target_jetpt}_R0.4_sd{z_cut}_wwjetpt.pdf")
-
-                    canvas_wwradpt.cd()
-                    hist_full.Draw("HIST")
-                    hist_AA_wwradpt.Draw("HIST SAME")
-                    hist_BB_wwradpt.Draw("HIST SAME")
-                    hist_AB_wwradpt.Draw("HIST SAME")
-                    legend.Draw()
-                    canvas_wwradpt.SaveAs(f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/subjet_eec_comparison_{partontype}_jetpt{target_jetpt}_R0.4_sd{z_cut}_wwradpt.pdf")
-
+                    self.FormatHist(hist_rg, num_jets_passed_cut, ROOT.kRed+1) #TODO: do this?
                     
-                    # Calulate C_AB
-                    can_CAB.cd()
-                    # Usage in your main script:
-                    hist_CAB_wwjetpt = self.GetCABHist(hist_AA_wwjetpt, hist_BB_wwjetpt, hist_AB_wwjetpt, "CAB_wwjetpt")
-                    hist_CAB_wwradpt = self.GetCABHist(hist_AA_wwradpt, hist_BB_wwradpt, hist_AB_wwradpt, "CAB_wwradpt")
+                    # Calculate C_AB for both RL and <pT>RL
+                    hist_CAB_wwjetpt = self.GetCABHist(hist_AA_wwjetpt, hist_BB_wwjetpt, hist_AB_wwjetpt, f"CAB_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt")
+                    hist_CAB_wwradpt = self.GetCABHist(hist_AA_wwradpt, hist_BB_wwradpt, hist_AB_wwradpt, f"CAB_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt")
+                    hist_CAB_ptRL_wwjetpt = self.GetCABHist(hist_AA_ptRL_wwjetpt, hist_BB_ptRL_wwjetpt, hist_AB_ptRL_wwjetpt, f"CAB_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwjetpt")
+                    hist_CAB_ptRL_wwradpt = self.GetCABHist(hist_AA_ptRL_wwradpt, hist_BB_ptRL_wwradpt, hist_AB_ptRL_wwradpt, f"CAB_ptRL_{partontype}_jetpt{target_jetpt}_{cut_tag}_wwradpt")
 
-                    self.FormatHist(hist_CAB_wwjetpt, 1, ROOT.kPink+10)
-                    self.FormatHist(hist_CAB_wwradpt, 1, ROOT.kViolet+7)
-                    legend_CAB = ROOT.TLegend(0.2, 0.5, 0.4, 0.65)
-                    legend_CAB.AddEntry(hist_CAB_wwjetpt, "weight uses jet pt", "l")
-                    legend_CAB.AddEntry(hist_CAB_wwradpt, "weight uses rad pt", "l")
+                    self.FormatHist(hist_CAB_wwjetpt, -1, ROOT.kPink+10)
+                    self.FormatHist(hist_CAB_wwradpt, -1, ROOT.kViolet+7)
+                    self.FormatHist(hist_CAB_ptRL_wwjetpt, -1, ROOT.kPink+10)
+                    self.FormatHist(hist_CAB_ptRL_wwradpt, -1, ROOT.kViolet+7)
 
-                    hist_CAB_wwjetpt.Draw("HIST")
-                    hist_CAB_wwradpt.Draw("HIST SAME")
-                    legend_CAB.Draw()
-                    can_CAB.SaveAs(f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/CAB_{partontype}_jetpt{target_jetpt}_R0.4_sd{z_cut}.pdf")
-
-                    # Plot jet level info
-                    can_radpt.cd()
-                    hist_radiatorpt.Draw()
-                    can_radpt.SaveAs(f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/radiator_pt_{partontype}_jetpt{target_jetpt}_R0.4_sd{z_cut}.pdf")
-                    
-                    can_radkt.cd()
-                    hist_radiatorkt.Draw()
-                    can_radkt.SaveAs(f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/radiator_kt_{partontype}_jetpt{target_jetpt}_R0.4_sd{z_cut}.pdf")
-                    
+                    for i in range(1, hist_CAB_wwjetpt.GetNbinsX() + 1):
+                        con = hist_CAB_wwjetpt.GetBinContent(i)
+                        # print("check bin", i, "==> C_AB:", con)
+                
                     # Write to root file
+                    hist_jetpt_all.Write()
+                    hist_jetpt_cut.Write()
                     hist_radiatorpt.Write()
                     hist_radiatorkt.Write()
                     hist_full.Write()
+                    hist_full_ptRL.Write()
+                    hist_rad_wwjetpt.Write()
+                    hist_rad_ptRL_wwjetpt.Write()
+                    hist_rad_wwradpt.Write()
+                    hist_rad_ptRL_wwradpt.Write()
                     hist_AA_wwjetpt.Write()
+                    hist_AA_ptRL_wwjetpt.Write()
                     hist_BB_wwjetpt.Write()
+                    hist_BB_ptRL_wwjetpt.Write()
                     hist_AB_wwjetpt.Write()
+                    hist_AB_ptRL_wwjetpt.Write()
                     hist_AA_wwradpt.Write()
+                    hist_AA_ptRL_wwradpt.Write()
                     hist_BB_wwradpt.Write()
+                    hist_BB_ptRL_wwradpt.Write()
                     hist_AB_wwradpt.Write()
+                    hist_AB_ptRL_wwradpt.Write()
                     hist_CAB_wwjetpt.Write()
                     hist_CAB_wwradpt.Write()
+                    hist_CAB_ptRL_wwjetpt.Write()
+                    hist_CAB_ptRL_wwradpt.Write()
+                    if cut_mode == "sd":
+                        hist_rg.Write()
 
+            root_outfile.Close()
+
+        avg_txt_path = f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/jse_avg_jet_pts_{self.gen}.txt"
+        with open(avg_txt_path, "w") as avg_file:
+            for jetpt in self.target_jet_pts:
+                avg_file.write(f"{jetpt} {avg_jet_pts[jetpt]:.6f}\n")
+
+        return avg_jet_pts
 
 def main():
-    analysis = MyAnalysis()
-    analysis.run()
+    # analysis_pythia = MyAnalysis("pythia")
+    # pythia_avg = analysis_pythia.run()
+
+    analysis_herwig = MyAnalysis("herwig")
+    herwig_avg = analysis_herwig.run()
+
+    print("\nAverage jet pts for pythia:")
+    for jetpt in analysis_pythia.target_jet_pts:
+        print(f"  jetpt{jetpt}: {pythia_avg[jetpt]:.6f}")
+
+    print("\nAverage jet pts for herwig:")
+    for jetpt in analysis_herwig.target_jet_pts:
+        print(f"  jetpt{jetpt}: {herwig_avg[jetpt]:.6f}")
+    # analysis.run("pythia")
+    # analysis.run("herwig")
 
 
 

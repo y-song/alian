@@ -181,34 +181,34 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 			setattr(self, hist_list_name, [])
 
 
-			for observable in self.observable_list:
-				# Should only be one: observable == "EEC"
-				if observable != "corr_deltajt":
-					raise ValueError("Observable %s is not implemented in this script" % observable)
+			# for observable in self.observable_list:
+			# 	# Should only be one: observable == "EEC"
+			# 	if observable != "corr_deltajt":
+			# 		raise ValueError("Observable %s is not implemented in this script" % observable)
 
-				obs_bins = getattr(self, "obs_bins_" + observable)
-				# Use more finely binned pT bins for TH2s than for the RMs
-				pt_bins = array.array('d', list(range(0, 201, 1)))
-				rapi_bins = np.linspace(-5,5,201)
+			# 	obs_bins = getattr(self, "obs_bins_" + observable)
+			# 	# Use more finely binned pT bins for TH2s than for the RMs
+			# 	pt_bins = array.array('d', list(range(0, 201, 1)))
+			# 	rapi_bins = np.linspace(-5,5,201)
 
 
-				dim = 4
-				nbins  = [len(pt_bins)-1, len(pt_bins)-1, len(rapi_bins)-1, 50]
-				min_li = [pt_bins[0],     pt_bins[0],      rapi_bins[0],      obs_bins[0]]
-				max_li = [pt_bins[-1],    pt_bins[-1],     rapi_bins[-1],     obs_bins[-1]]
+			# 	dim = 4
+			# 	nbins  = [len(pt_bins)-1, len(pt_bins)-1, len(rapi_bins)-1, 50]
+			# 	min_li = [pt_bins[0],     pt_bins[0],      rapi_bins[0],      obs_bins[0]]
+			# 	max_li = [pt_bins[-1],    pt_bins[-1],     rapi_bins[-1],     obs_bins[-1]]
 
-				nbins = (nbins)
-				xmin = (min_li)
-				xmax = (max_li)
+			# 	nbins = (nbins)
+			# 	xmin = (min_li)
+			# 	xmax = (max_li)
 				
-				nbins_array = array.array('i', nbins)
-				xmin_array = array.array('d', xmin)
-				xmax_array = array.array('d', xmax)
+			# 	nbins_array = array.array('i', nbins)
+			# 	xmin_array = array.array('d', xmin)
+			# 	xmax_array = array.array('d', xmax)
 
-				obs_setting = self.obs_settings[observable]
-				grooming_setting = self.obs_grooming_settings[observable]
-				obs_label = self.utils.obs_label(obs_setting, grooming_setting)
-				pinfo("all the settings", obs_setting, grooming_setting, obs_label)
+			# 	obs_setting = self.obs_settings[observable]
+			# 	grooming_setting = self.obs_grooming_settings[observable]
+			# 	obs_label = self.utils.obs_label(obs_setting, grooming_setting)
+			# 	pinfo("all the settings", obs_setting, grooming_setting, obs_label)
 
 
 
@@ -361,78 +361,79 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 			#jets_h  = fj.sorted_by_pt(jet_selector(jet_def(parts_pythia_h  ))) # full hadron level
 			jets_ch = fj.sorted_by_pt(jet_selector(jet_def(track_selector_ch(parts_pythia_hch)))) # charged hadron level
 
-			anothacounter=0
-
 			# Find the charged jet closest to the axis of the original parton
 			# Require that the match is within some small angle, and that it is unique
 			jet_matching_distance = 0.6  # Match jets with deltaR < jet_matching_distance*jetR
-			self.parent0match, self.parent1match = None, None
+			jet_parent_matches = []
 			for i_jch, jch in enumerate(jets_ch):
+				matched_parents = []
 				for i_parent, parent in enumerate(self.parents):
-					anothacounter+=1
-					parentmatch_name = "parent%imatch" % i_parent
-					#plot 
-					self.hDeltaR.Fill(jch.delta_R(parent))
-					if jch.delta_R(parent) < jet_matching_distance * jetR:
-						match = getattr(self, parentmatch_name)
-						if not match:
-							setattr(self, parentmatch_name, jch)
-						else:  # Already found a match
-							# Set flag value so that we know to ignore this one
-							setattr(self, parentmatch_name, 0)
+					# anothacounter += 1
+					dR = jch.delta_R(parent)
+					self.hDeltaR.Fill(dR)
+					if dR < jet_matching_distance * jetR:
+						matched_parents.append(i_parent)
+				if len(matched_parents) == 1:
+					jet_parent_matches.append(matched_parents[0])
+				else:
+					jet_parent_matches.append(None)
 
-
-			# If we have matches, fill histograms
+			# Assign a unique jet match to each parent if possible, and preserve the old count logic
+			self.parent0match, self.parent1match = None, None
 			for i_parent, parent in enumerate(self.parents):
-				jet = getattr(self, "parent%imatch" % i_parent)
-				if not jet:
-					if jet == 0: # More than one match -- take note and continue
-						count1 += 1
-						continue
-					else:  # jet == None
-						# No matches -- take note and continue
-						count2 += 1
-						continue
+				matched_jets = [jch for jch, match_idx in zip(jets_ch, jet_parent_matches) if match_idx == i_parent]
+				if len(matched_jets) == 1:
+					setattr(self, "parent%imatch" % i_parent, matched_jets[0])
+				elif len(matched_jets) > 1:
+					setattr(self, "parent%imatch" % i_parent, 0)
+				else:
+					setattr(self, "parent%imatch" % i_parent, None)
+
+			# for i_parent, parent in enumerate(self.parents):
+			# 	jet = getattr(self, "parent%imatch" % i_parent)
+			# 	if not jet:
+			# 		if jet == 0: # More than one match -- take note and continue
+			# 			count1 += 1
+			# 			continue
+			# 		else:  # jet == None
+			# 			# No matches -- take note and continue
+			# 			count2 += 1
+			# 			continue
 
 				# One unique match
 				# Identify the histograms which need to be filled
-				parton_id = self.parent_ids[i_parent]
-				# print("parton_id is ", parton_id)
-				parton_types = []
-				if parton_id in self.quark_pdg_ids:
-					if parton_id in self.up_pdg_ids or parton_id in self.down_pdg_ids or parton_id in self.strange_pdg_ids:
-						parton_types += ["light"]
-				elif parton_id in self.gluon_pdg_ids:
-					parton_types += ["gluon"]
-				parton_types += ["inclusive"]
+				# parton_id = self.parent_ids[i_parent]
+				# parton_types = []
+				# if parton_id in self.quark_pdg_ids:
+				# 	if parton_id in self.up_pdg_ids or parton_id in self.down_pdg_ids or parton_id in self.strange_pdg_ids:
+				# 		parton_types += ["light"]
+				# elif parton_id in self.gluon_pdg_ids:
+				# 	parton_types += ["gluon"]
+				# parton_types += ["inclusive"]
 
-				# If parent parton not identified, skip for now
-				if not len(parton_types):
-					continue
+				# # If parent parton not identified, skip for now
+				# if not len(parton_types):
+				# 	continue
 
-
+			# Save every jet into the output file
+			for i_jch, jch in enumerate(jets_ch):
+				
 				# Fill histograms
-
-				# print("filling jet level thnsparse")
 				self.hjetpT.Fill(jet.pt())
-				# print("Filling jet pt", jet.pt())
-				# print("iev", iev, "ijet", self.ijet)
 
-
-				# Now save jet information by looping through constituents
-				constituents = fj.sorted_by_pt(jet.constituents())
+				matched_parent_idx = jet_parent_matches[i_jch]
+				parton_id = self.parent_ids[matched_parent_idx] if matched_parent_idx is not None else 0
+				constituents = fj.sorted_by_pt(jch.constituents())
 				for c in constituents:
 					all_constituents.append({
 						"event_id": iev + self.ev_num_start,
 						"jet_id": self.ijet,
-						"jet_pt": jet.pt(),
-						"parton_pid": parton_id,
-						"c_px": c.px(), # "c_pt": c.pt(),
-						"c_py": c.py(), # "c_eta": c.eta(),
-						"c_pz": c.pz(), # "c_phi": c.phi() })
-						"c_e": c.e() })
-					# print("  added const", c.px(), c.py(), c.pz(), c.e())
-
+						"jet_pt": jch.pt(),
+						"parton_pid": parton_id, #this is the parent parton ID
+						"c_px": c.px(),
+						"c_py": c.py(),
+						"c_pz": c.pz(),
+						"c_e": c.e()})
 				self.ijet += 1
 					
 					
