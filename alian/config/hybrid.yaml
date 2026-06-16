@@ -1,0 +1,38 @@
+selections:
+  track:
+    pt_min: 0.150
+
+jet_finder:
+  R: 0.4
+  alg: antikt
+  pT_min: 10
+  eta_max: 0.5
+
+analysis:
+  pt_min_eec: 0.150
+  pt_min_jet: 10
+  z_cut: 0.1
+  wake: false
+
+output:
+  bins:
+    event: ['lin', 0, 1, 1]
+    track_pT: ['log', 0.1, 20, 300]
+    jet_pT: ['lin', 0, 200, 100]
+    jet_eta: ['lin', -1., 1., 40]
+    RL: ['log', 1.0e-4, 1.0, 50]
+    zg: ['lin', -1.0, 0.5, 30]
+  histograms:
+    # define histograms with bins described in `bins`
+    event: [1, "event", "Event count;;Counts", event]
+    track_pT: [1, "track_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);dN/d#it{p}_{T}", track_pT]
+    jet_pT: [1, "jet_pT", "Jet #it{p}_{T} spectrum;jet #it{p}_{T} (GeV);Counts", jet_pT]
+    jet_eta: [1, "jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", jet_eta]
+    sdjet_pT_jet_pT: [2, "sdjet_pT_jet_pT", "SD jet #it{p}_{T} vs jet #it{p}_{T};jet #it{p}_{T} (GeV);SD jet #it{p}_{T} (GeV)", jet_pT, jet_pT]
+    eec: [2, "eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    sdjet_eec: [2, "sdjet_eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_aa: [2, "eec_aa", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_bb: [2, "eec_bb", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    eec_ab: [2, "eec_ab", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
+    rg: [2, "rg", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", jet_pT, RL]
+    zg: [2, "zg", "#it{z}_{g};jet #it{p}_{T} (GeV);#it{z}_{g}", jet_pT, zg]

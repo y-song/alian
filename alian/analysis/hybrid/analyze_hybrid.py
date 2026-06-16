@@ -1,142 +1,45 @@
 #!/usr/bin/env python3
-
+"""Example usage:
+python analysis/hybrid/analyze_hybrid.py -i /rstorage/youqi/HYBRID_Hadrons.out -c config/hybrid.yaml -n 10
+"""
 
 import argparse
 import itertools
 import numpy as np
-from alian.analysis.base import delta_R
+from alian.analysis.base import AnalysisBaseHepMC, add_default_args_hepmc, delta_R
+import heppyy
 
-import tqdm
-import os
-import sys
-import array
-import yasp
-import cppyy
-import ROOT
+fj = heppyy.load_cppyy("fastjet")
 
-import heppyy.util.fastjet_cppyy
-import heppyy.util.heppyy_cppyy
 
-from cppyy.gbl import fastjet as fj
-from cppyy.gbl.std import vector
-from cppyy.gbl import heppyy
-from heppyy.util.logger import Logger
+class AnalyzeHybrid(AnalysisBaseHepMC):
 
-ROOT.TH1.SetDefaultSumw2()
-ROOT.TH2.SetDefaultSumw2()
+    def init_analysis(self, analysis_cfg: dict):
+        config = self._defaults | analysis_cfg
+        for setting, value in config.items():
+            setattr(self, setting, value)
+        self.eec_trk_selector = fj.SelectorPtMin(self.pt_min_eec)
+        self.lund_gen = fj.contrib.LundGenerator()
+        if self.wake:
+            ner = heppyy.NegativeEnergyRecombiner(1001)
+            self.jet_finder.jet_def = fj.JetDefinition(
+                self.jet_finder.alg, self.jet_finder.R, ner
+            )
 
-def linbins(xmin, xmax, nbins):
-    lspace = np.linspace(xmin, xmax, nbins+1)
-    arr = array.array('f', lspace)
-    return arr
-
-def logbins(xmin, xmax, nbins):
-    lspace = np.logspace(np.log10(xmin), np.log10(xmax), nbins+1)
-    arr = array.array('f', lspace)
-    return arr
-
-class AnalyzeHybrid:
-    def __init__(self, args, log):
-        self.args = args
-        self.log = log
-
-        fj.ClusterSequence.print_banner()
-        print()
-
-        ner = heppyy.NegativeEnergyRecombiner(1001)
-        log.critical(ner.description())
-
-        jet_R0 = args.jet_R
-        self.jet_def = fj.JetDefinition(fj.antikt_algorithm, jet_R0)
-        if args.wake:
-            self.jet_def = fj.JetDefinition(fj.antikt_algorithm, jet_R0, ner)
-        jet_def_lund = fj.JetDefinition(fj.cambridge_algorithm, 1.0)
-        self.lund_gen = fj.contrib.LundGenerator(jet_def_lund)
-        log.critical(self.jet_def.description())
-        log.critical(self.lund_gen.description())
-
-        self.jet_selector = fj.SelectorPtMin(args.jet_min_pt) * fj.SelectorAbsEtaMax(args.part_max_eta - jet_R0)
-        self.eec_trk_selector = fj.SelectorPtMin(args.eec_min_pt)
-
-        self.input = heppyy.HybridFile(args.input)
-
-        # outf_path = os.path.join(output_dir, args.tree_output_fname)
-        self.output = ROOT.TFile("~/heppyy/heppyy/test.root", 'recreate')
-        self.output.cd()
-
-        self.hists = {}
-        self.hists['jet_pT'] = ROOT.TH1D("jet_pT", "Jet #it{p}_{T} spectrum;jet #it{p}_{T} (GeV);Counts", 200, linbins(0,200,200))
-        self.hists['jet_eta'] = ROOT.TH1D("jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", 40, linbins(-1,1,40))
-        self.hists['sdjet_pT_jet_pT'] = ROOT.TH2D("sdjet_pT_jet_pT", "SD jet #it{p}_{T} vs jet #it{p}_{T};jet #it{p}_{T} (GeV);SD jet #it{p}_{T} (GeV)", 200, linbins(0,200,200), 200, linbins(0,200,200))
-        self.hists['rg'] = ROOT.TH2D("rg", "#it{R}_{g};jet #it{p}_{T} (GeV);#it{R}_{g}", 200, linbins(0,200,200), 50, logbins(1E-4,1,50))
-        self.hists['zg'] = ROOT.TH2D("zg", "#it{z}_{g};jet #it{p}_{T} (GeV);#it{z}_{g}", 200, linbins(0,200,200), 30, linbins(-1,0.5,30))
-        self.hists['eec'] = ROOT.TH2D("eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", 200, linbins(0,200,200), 50, logbins(1E-4,1,50))
-        self.hists['sdjet_eec'] = ROOT.TH2D("sdjet_eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", 200, linbins(0,200,200), 50, logbins(1E-4,1,50))
-        self.hists['eec_aa'] = ROOT.TH2D("eec_aa", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", 200, linbins(0,200,200), 50, logbins(1E-4,1,50))
-        self.hists['eec_bb'] = ROOT.TH2D("eec_bb", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", 200, linbins(0,200,200), 50, logbins(1E-4,1,50))
-        self.hists['eec_ab'] = ROOT.TH2D("eec_ab", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", 200, linbins(0,200,200), 50, logbins(1E-4,1,50))
-
-    def analyze_events(self, args, log):
-        for ievent in tqdm.tqdm(range(args.nev)):
-            if not self.input.nextEvent():
-                break
-            parts = self.input.getParticles(include_wake=args.wake, charged_only=False)
-            partons = self.input.getPartons()
-            sparts = self.input.getParticlesStr()
-            spartons = self.input.getPartonsStr()
-            ev_info = self.input.info()
-
-            ana.analyze_event(ievent, parts, partons, sparts, spartons, ev_info)
-
-    def analyze_event(self, ievent, parts, partons, sparts, spartons, ev_info):
-        args = self.args
-        log = self.log
-
-        log.info(f'* event {ievent} has {len(partons)} partons')
-        log.info(f'  ev_info.weight: {ev_info.weight()}, ev_info.cross: {ev_info.cross()}, ev_info.x: {ev_info.x()}, ev_info.y: {ev_info.y()}')
-        for np in range(len(partons)):
-            log.info(f'  parton pt: {partons[np].pt()} eta: {partons[np].eta()}')
-            log.debug(f'- from psj: px={partons[np].px()}, py={partons[np].py()}, pz={partons[np].pz()}, E={partons[np].E()}, m={partons[np].m()}, ui={partons[np].user_index()}')
-            log.debug(f'- from str: {spartons[np]}')
-        log.debug(f'event {ievent} has {len(parts)} particles')
-        for np in range(len(parts)):
-            log.debug(f'- from psj: px={parts[np].px()}, py={parts[np].py()}, pz={parts[np].pz()}, E={parts[np].E()}, m={parts[np].m()}, ui={parts[np].user_index()}')
-            log.debug(f'- from str: {sparts[np]}')
-
-        parts_selected = vector[fj.PseudoJet](
-            [
-                part for part in parts
-                if part.eta() < args.part_max_eta and part.pt() > args.part_min_pt
-            ]
-        )
-
-        jets = fj.sorted_by_pt(self.jet_selector(self.jet_def(parts_selected)))
-        if len(jets) == 0:
-            return
-
-        log.info(f'-> event {ievent} has {len(jets)} jets')
-        for j in jets:
-            log.info(f'   - jet pt: {j.pt()} eta: {j.eta()}')
-        log.disable_console()
-        log.info('debugging... - this should not write to console but show up in the log file')
-        log.enable_console()
-
-        for j in jets:
-            log.debug(f'jet pt: {j.pt()} eta: {j.eta()}')
-            self.hists['jet_pT'].Fill(j.pt())
-            self.hists['jet_eta'].Fill(j.eta())
-
-            # match partons to jets
-            for np in range(len(partons)):
-                p = partons[np]
+    def analyze_event(self):
+        self.hists['event'].Fill(0.5)
+        [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
+        [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
+        [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]
+        for j in self.jets:
+            for p in self.partons:
                 if j.delta_R(p) < 0.4:
-                    log.debug(f' - matched parton {np} with pt: {p.perp()} eta: {p.eta()}')
-
-            if j.pt() < args.jet_min_pt_ana:
+                    self.logger.debug(f'matched parton pt={p.perp():.2f} eta={p.eta():.2f} to jet pt={j.pt():.2f}')
+            if j.pt() < self.pt_min_jet:
                 break
             self.do_eec(j, "eec")
             lund_seq = self.lund_gen.result(j)
-            l = self.select_soft_drop(lund_seq, z_cut=args.z_cut) # class is LundDeclustering
+            l = self.select_soft_drop(lund_seq, z_cut=self.z_cut)
             if l is None:
                 self.hists['rg'].Fill(j.pt(), -0.99)
                 self.hists['zg'].Fill(j.pt(), -0.99)
@@ -153,10 +56,6 @@ class AnalyzeHybrid:
             self.do_eec(subjet_a, "eec_aa", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.do_eec(subjet_b, "eec_bb", ew_denom=sd_pt, jet_pt_bin=j.pt())
             self.do_eec_cross(subjet_a, subjet_b, "eec_ab", ew_denom=sd_pt, jet_pt_bin=j.pt())
-
-    def finalize(self):
-        self.output.Write()
-        self.output.Close()
 
     def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None):
         if ew_denom is None:
@@ -206,30 +105,8 @@ class AnalyzeHybrid:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='analyze hybrid with fastjet on the fly', prog=os.path.basename(__file__))
-    parser.add_argument('-i', '--input', help='input file', default='', required=True)
-    parser.add_argument('-n', '--nev', help='number of events', default=10, type=int)
-    parser.add_argument('-w', '--wake', help='include wake particles', action='store_true', default=False)
-    parser.add_argument('-v', '--verbose', help="be verbose", default=False, action='store_true')
-    parser.add_argument('--part-max-eta', help="max eta of a particle to accept", default=0.9, type=float)
-    parser.add_argument('--part-min-pt', help="min pT of a particle to accept", default=0.15, type=float)
-    parser.add_argument('--jet-min-pt', help="minimum pT jet to accept", default=5., type=float)
-    parser.add_argument('--jet-min-pt-ana', help="minimum pT jet to accept for substructure ana", default=5., type=float)
-    parser.add_argument('--jet-R', help="jet R", default=0.4, type=float)
-    parser.add_argument('--eec-min-pt', help="minimum pT for EEC constituents to accept", default=1.0, type=float)
-    parser.add_argument('--z-cut', default=0.1, type=float)
-    parser.add_argument('-g', '--debug', help="write debug things", default=False, action='store_true')
+    parser = argparse.ArgumentParser(description='Analyze hybrid model output.')
+    parser = add_default_args_hepmc(parser)
     args = parser.parse_args()
-
-    # set up logging - this uses singleton Logger
-    log_level = 'DEBUG' if args.debug else 'WARNING'
-    log = Logger(console=args.verbose, level=log_level)
-    if args.verbose:
-        log.set_level('INFO')
-    if args.debug:
-        log.set_level('DEBUG')
-    log.critical(args)
-
-    ana = AnalyzeHybrid(args, log)
-    ana.analyze_events(args, log)
-    ana.finalize()
+    ana = AnalyzeHybrid(args.input_file, args.output_file, args.config_file, args.nev)
+    ana.run()

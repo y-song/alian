@@ -68,7 +68,8 @@ class JetFinder:
             cfg["jet_finder"] = {}
 
         options = {**cls._defaults, **cfg["jet_finder"]}
-
+        if "eta_max" not in cfg["jet_finder"]:
+            options["eta_max"] = 0.9 - options["R"]
         return cls(**options)
     @load.register(str)
     @load.register(Path)
