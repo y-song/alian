@@ -324,7 +324,7 @@ for i, target_jet_pt in enumerate(target_jet_pts):
                linewidth=1.5, label=f'Target $p_T$ = {target_jet_pt} GeV')
 
     ax.set_xlim(0, pt_max)
-    ax.set_ylim(0.5, 2.0)
+    ax.set_ylim(0.0, 2.0)
     ax.set_xlabel(r'Charged jet $p_T$ [GeV]', fontsize=13)
     ax.set_ylabel(r'Herwig / Pythia', fontsize=13)
     ax.set_title(
