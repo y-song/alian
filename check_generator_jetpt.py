@@ -13,12 +13,15 @@ import json
 
 target_jet_pts = [50, 100, 200, 500]
 
-slurm_base   = "/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/51506550/slurm-output"
-parquet_base = "/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/51506550"
-herwig_base  = "/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/storage/herwig/1006458"
-output_dir   = "/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/pythia_vs_herwig"
+pythia_jobid = "53423546" #"51506550"
+herwig_jobid = "54380351" #"1006458"
 
-herwig_json  = "/global/cfs/cdirs/alice/blianggi/mypyjetty/pyjetty/pyjetty/alice_analysis/process/user/jse/herwig_scale_factors.json"
+slurm_base   = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{pythia_jobid}/slurm-output"
+parquet_base = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{pythia_jobid}"
+herwig_base  = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/herwiggen/tree_gen/{herwig_jobid}" #"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/storage/herwig/{herwig_jobid}"
+output_dir   = f"/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/pythia_vs_herwig"
+
+herwig_json  = f"/global/cfs/cdirs/alice/blianggi/mypyjetty/pyjetty/pyjetty/alice_analysis/process/user/jse/herwig_scale_factors_{herwig_jobid}.json"
 
 # File index ranges for each pt bin in the Pythia slurm outputs
 slurm_ranges = {
@@ -36,8 +39,9 @@ def plot_jet_pt_counts():
 
         print("analyzing jet pt:", target_jet_pt, "GeV")
 
-        pythia_path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/51506550/{target_jet_pt}gev/JetsForAnalysisCombined.parquet"
-        herwig_path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/storage/herwig/1006458/{target_jet_pt}gev/JetsForAnalysisCombined.parquet"
+        pythia_path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{pythia_jobid}/{target_jet_pt}gev/JetsForAnalysisCombined.parquet"
+        herwig_path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/herwiggen/tree_gen/{herwig_jobid}/{target_jet_pt}gev/JetsForAnalysisCombined.parquet"
+        # herwig_path = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/storage/herwig/{herwig_jobid}/{target_jet_pt}gev/JetsForAnalysisCombined.parquet"
                     
         # 1. Load the Parquet files
         # Note: You may need to install 'fastparquet' or 'pyarrow'
@@ -120,13 +124,13 @@ def get_pythia_scale_factor(target_jet_pt):
     Returns scale_f in mb/event.
     """
     idx_start, idx_end = slurm_ranges[target_jet_pt]
-    all_files = sorted(glob.glob(os.path.join(slurm_base, "slurm-51506550_*.out")))
+    all_files = sorted(glob.glob(os.path.join(slurm_base, f"slurm-{pythia_jobid}_*.out")))
 
     selected_files = [
         f for f in all_files
-        if idx_start <= int(re.search(r'slurm-51506550_(\d+)\.out', f).group(1)) <= idx_end
+        if idx_start <= int(re.search(rf'slurm-{pythia_jobid}_(\d+)\.out', f).group(1)) <= idx_end
     ]
-
+    
     if len(selected_files) == 0:
         raise RuntimeError(f"No slurm files found for target_jet_pt={target_jet_pt} "
                            f"(expected indices {idx_start}–{idx_end})")
@@ -149,7 +153,7 @@ def get_pythia_scale_factor(target_jet_pt):
     sigma_mean = sigma_arr.mean()
     sigma_std  = sigma_arr.std()
     n_total    = int(n_arr.sum())
-    scale_f    = sigma_mean / n_total  # mb/event
+    scale_f = sigma_mean / n_total      #where n_total = Σ N_i  # mb/event
 
     print(f"\n  [Pythia] target_jet_pt = {target_jet_pt} GeV")
     print(f"    Files parsed:        {len(sigma_values)}  ({n_failed} failed)")
@@ -246,7 +250,7 @@ for i, target_jet_pt in enumerate(target_jet_pts):
 
     ax.set_yscale('log')
     ax.set_xlim(0, pt_max)
-    ax.set_xlabel(r'Jet $p_T$ [GeV]', fontsize=13)
+    ax.set_xlabel(r'Charged jet $p_T$ [GeV]', fontsize=13)
     ax.set_ylabel(r'$d\sigma/dp_T$ [pb/GeV]', fontsize=13)
     ax.set_title(
         rf'$\hat{{p}}_{{T,\mathrm{{min}}}}$ = {int(target_jet_pt * 0.8)} GeV  '
@@ -266,3 +270,78 @@ output_path = os.path.join(output_dir, "jet_pt_xsec_pythia_vs_herwig.pdf")
 plt.savefig(output_path, bbox_inches='tight')
 plt.close('all')
 print(f"\nSaved: {output_path}")
+
+# ─────────────────────────────────────────────
+# PLOT 2: Ratio Herwig / Pythia
+# ─────────────────────────────────────────────
+
+print("\n" + "="*60)
+print("Creating Herwig/Pythia ratio plot...")
+print("="*60)
+
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+axes = axes.flatten()
+
+for i, target_jet_pt in enumerate(target_jet_pts):
+    ax = axes[i]
+
+    # --- Get scale factors ---
+    pythia_scale_f = get_pythia_scale_factor(target_jet_pt)   # mb/event
+    herwig_scale_f = herwig_scale_factors[target_jet_pt]       # nb/event
+
+    # --- Load parquets ---
+    pythia_path = os.path.join(parquet_base, f"{target_jet_pt}gev", "JetsForAnalysisCombined.parquet")
+    herwig_path = os.path.join(herwig_base,  f"{target_jet_pt}gev", "JetsForAnalysisCombined.parquet")
+
+    print(f"\n  Loading parquets for {target_jet_pt} GeV...")
+    df_pythia = pd.read_parquet(pythia_path, columns=['jet_pt', 'jet_id'])
+    df_herwig = pd.read_parquet(herwig_path, columns=['jet_pt', 'jet_id'])
+    print(f"    Pythia jets: {len(df_pythia)},  Herwig jets: {len(df_herwig)}")
+
+    # --- Define bins ---
+    pt_max      = target_jet_pt * 2
+    bins        = np.arange(0, pt_max + BIN_WIDTH, BIN_WIDTH)
+    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+
+    # --- Histogram jet pT ---
+    pythia_counts, _ = np.histogram(df_pythia['jet_pt'], bins=bins)
+    herwig_counts, _ = np.histogram(df_herwig['jet_pt'], bins=bins)
+
+    # --- Convert to d sigma / d pT in pb/GeV ---
+    pythia_xsec = pythia_scale_f * 1e9 * pythia_counts / BIN_WIDTH  # pb/GeV
+    herwig_xsec = herwig_scale_f * 1e3 * herwig_counts / BIN_WIDTH  # pb/GeV
+
+    # --- Compute ratio (avoid division by zero) ---
+    ratio = np.zeros_like(pythia_xsec)
+    valid_mask = pythia_xsec > 0
+    ratio[valid_mask] = herwig_xsec[valid_mask] / pythia_xsec[valid_mask]
+
+    # --- Plot ratio ---
+    ax.step(bin_centers[valid_mask], ratio[valid_mask],
+            where='mid', color='purple', linewidth=2)
+    ax.axhline(y=1.0, color='black', linestyle='--', linewidth=1.5, label='Herwig = Pythia')
+    ax.axvline(x=target_jet_pt, color='black', linestyle='--',
+               linewidth=1.5, label=f'Target $p_T$ = {target_jet_pt} GeV')
+
+    ax.set_xlim(0, pt_max)
+    ax.set_ylim(0.5, 2.0)
+    ax.set_xlabel(r'Charged jet $p_T$ [GeV]', fontsize=13)
+    ax.set_ylabel(r'Herwig / Pythia', fontsize=13)
+    ax.set_title(
+        rf'$\hat{{p}}_{{T,\mathrm{{min}}}}$ = {int(target_jet_pt * 0.8)} GeV  '
+        rf'(target $p_T$ = {target_jet_pt} GeV)',
+        fontsize=12
+    )
+    ax.legend(fontsize=11)
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+    del df_pythia
+    del df_herwig
+
+plt.suptitle(r'Charged jet $p_T$ Cross Section Ratio: Herwig / Pythia', fontsize=16, y=1.01)
+plt.tight_layout()
+
+output_path_ratio = os.path.join(output_dir, "jet_pt_xsec_ratio_herwig_over_pythia.pdf")
+plt.savefig(output_path_ratio, bbox_inches='tight')
+plt.close('all')
+print(f"\nSaved: {output_path_ratio}")

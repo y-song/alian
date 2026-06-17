@@ -8,20 +8,22 @@ import json
 # CONFIG
 # ─────────────────────────────────────────────
 
-herwig_base   = "/rstorage/generators/herwig_alice/hepmc/1006458"
-output_json   = "herwig_scale_factors.json"  # will be read by the main plotting script
+jobid = "54380351"
+# herwig_base   = "/rstorage/generators/herwig_alice/hepmc/1006458"
+herwig_base   = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/herwiggen/hepmc/{jobid}"
+output_json   = f"herwig_scale_factors_{jobid}.json"  # will be read by the main plotting script
 
 target_jet_pts = [50, 100, 200, 500]
 
-# Subdirectory number for each pt bin
+# Subdirectory name for each pt bin (use folder names like '50gev', etc)
 pt_to_subdir = {
-    50:  1,
-    100: 2,
-    200: 3,
-    500: 4,
+    50:  '50gev',
+    100: '100gev',
+    200: '200gev',
+    500: '500gev',
 }
 
-N_DIRS = 150  # directories per pt bin
+N_DIRS = 750  # directories per pt bin
 
 
 # ─────────────────────────────────────────────
@@ -93,7 +95,7 @@ def get_herwig_scale_factor(target_jet_pt):
     sigma_mean = sigma_arr.mean()
     sigma_std  = sigma_arr.std()
     n_total    = int(n_arr.sum())
-    scale_f    = sigma_mean / n_total  # nb/event
+    scale_f = sigma_mean / n_total   # nb/event
 
     print(f"\n  target_jet_pt = {target_jet_pt} GeV")
     print(f"    Directories parsed:  {len(sigma_values)}  ({n_failed} failed/missing)")

@@ -577,7 +577,8 @@ class PlotCurves:
                           subdir, file_tag, ratio_ytitle,
                           ratio_subdir, ratio_file_tag,
                           canvas_name, ratio_canvas_name,
-                          ptRL_canvas_name, ptRL_subdir, ptRL_file_tag):
+                          ptRL_canvas_name, ptRL_subdir, ptRL_file_tag,
+                          event_partontype_label=None, plot_type="subjet_eec"):
         cut_suffix = self.get_cut_suffix(z_cut)
 
         canvas = self.make_canvas(canvas_name, partontype=partontype_a,
@@ -600,7 +601,7 @@ class PlotCurves:
 
         ev_leg = self.MakeEventLeg(
             gen_label,
-            "q and g" if partontype_a == "quark" else partontype_a,
+            event_partontype_label if event_partontype_label is not None else partontype_a,
             target_jetpt, z_cut, den_weight)
 
         legend1 = ROOT.TLegend(0.68, 0.68, 0.88, 0.73)
@@ -616,7 +617,7 @@ class PlotCurves:
             f"subjet_eec_comparison_{file_tag}_jetpt{target_jetpt}"
             f"_R0.4_{cut_suffix}_ww{den_weight}.pdf"
         )
-        self._save_canvas(canvas, subdir, z_cut, output_name, plot_type="subjet_eec")
+        self._save_canvas(canvas, subdir, z_cut, output_name, plot_type=plot_type)
 
         # ptRL variant
         hists_ptRL_a = self.GetSubjetEECHists(
@@ -673,6 +674,7 @@ class PlotCurves:
             gen_label=gen,
             target_jetpt=target_jetpt, z_cut=z_cut, den_weight=den_weight,
             subdir=gen,
+            plot_type="subjet_eec/QVSG/RL",
             file_tag=f"{gen}_QVSG",
             ratio_ytitle="C_{AB}^{quark} / C_{AB}^{gluon}",
             ratio_subdir="CAB/ratio", #None,
@@ -682,56 +684,65 @@ class PlotCurves:
             ptRL_canvas_name="canvas_ptRL_qvsg",
             ptRL_subdir= "subjet_eec/QVSG/ptRL", #"QVSG/ptRL",
             ptRL_file_tag=f"{gen}_QVSG",
+            event_partontype_label="q and g",
         )
 
     def plot_herwig_vs_pythia(self, partontype, target_jetpt, z_cut, den_weight):
         self.set_current_rootfiles(target_jetpt)
         self._plot_two_gen_eec(
             file_a=self.pythia_rootfile, file_b=self.herwig_rootfile,
-            partontype_a="inclusive", partontype_b="inclusive",
+            partontype_a=partontype, partontype_b=partontype,
             label_a="pythia", label_b="herwig",
             gen_label="pythia and herwig",
             target_jetpt=target_jetpt, z_cut=z_cut, den_weight=den_weight,
             subdir="pythia_vs_herwig",
-            file_tag="PYTHIA_VS_HERWIG",
+            file_tag=f"PYTHIA_VS_HERWIG_{partontype}",
             ratio_ytitle="C_{AB}^{pythia} / C_{AB}^{herwig}",
             ratio_subdir="CAB_ratio",
-            ratio_file_tag="PYTHIA_VS_HERWIG",
+            ratio_file_tag=f"PYTHIA_VS_HERWIG_{partontype}",
             canvas_name="canvas_herwig_vs_pythia",
             ratio_canvas_name="canvas_ratio_hvp",
             ptRL_canvas_name="canvas_ptRL_hvp",
             ptRL_subdir="subjet_eec/ptRL",
-            ptRL_file_tag="PYTHIA_VS_HERWIG",
+            ptRL_file_tag=f"PYTHIA_VS_HERWIG_{partontype}",
+            event_partontype_label=partontype,
         )
         self._plot_CAB_ptRL_ratio_hvp(partontype, target_jetpt, z_cut)
 
     def _plot_CAB_ptRL_ratio_hvp(self, partontype, target_jetpt, z_cut):
-        """CAB ptRL ratio for PYTHIA vs HERWIG (no q vs g equivalent)."""
+        """CAB ptRL ratio for PYTHIA vs HERWIG, for an arbitrary parton type."""
         cut_suffix = self.get_cut_suffix(z_cut)
         self.set_current_rootfiles(target_jetpt)
+
         hist_a = self.GetCABHist(
-            self.pythia_rootfile, "inclusive", target_jetpt, z_cut, "jet", ptRL=True)
+            self.pythia_rootfile, partontype, target_jetpt, z_cut, "jet", ptRL=True)
         hist_b = self.GetCABHist(
-            self.herwig_rootfile, "inclusive", target_jetpt, z_cut, "jet", ptRL=True)
+            self.herwig_rootfile, partontype, target_jetpt, z_cut, "jet", ptRL=True)
         if not (hist_a and hist_b):
+            print(f"WARNING: CAB ptRL histograms not found for "
+                f"{partontype} jetpt{target_jetpt} {cut_suffix} (pythia vs herwig)")
             return
+
         ratio = hist_a.Clone(
-            f"ratio_CAB_ptRL_pythia_over_herwig_jetpt{target_jetpt}_{cut_suffix}_wwjetpt")
+            f"ratio_CAB_ptRL_pythia_over_herwig_{partontype}"
+            f"_jetpt{target_jetpt}_{cut_suffix}_wwjetpt")
+        ratio.SetDirectory(0)
         ratio.Divide(hist_b)
         ratio.GetYaxis().SetTitle(
             "C_{AB}^{pythia}_{ptRL} / C_{AB}^{herwig}_{ptRL}")
 
         canvas = self.make_canvas("canvas_ratio_ptRL_hvp", partontype=partontype,
-                                  target_jetpt=target_jetpt, z_cut=z_cut)
+                                target_jetpt=target_jetpt, z_cut=z_cut)
         canvas.SetLogx()
         canvas.cd()
         ratio.Draw("HIST")
         self.draw_hori_line(1e-3, 1, 1, ROOT.kGray+3, 9)
         output_name = (
-            f"CAB_ptRL_ratio_PYTHIA_VS_HERWIG_jetpt{target_jetpt}_R0.4_{cut_suffix}.pdf"
+            f"CAB_ptRL_ratio_PYTHIA_VS_HERWIG_{partontype}"
+            f"_jetpt{target_jetpt}_R0.4_{cut_suffix}.pdf"
         )
         self._save_canvas(canvas, "pythia_vs_herwig", z_cut, output_name,
-                          plot_type="CAB_ratio/ptRL")
+                        plot_type="CAB_ratio/ptRL")
 
     # -------------------------------------------------------------------------
     # Plot: PYTHIA vs HERWIG ratio across all jet pTs
@@ -1366,38 +1377,39 @@ class PlotCurves:
                     for gen in ["pythia", "herwig"]:                # Loop over generators
                         for den_weight in ["jet", "rad"]:           # Loop over weight type
                             
-                            if not (partontype in ("quark", "gluon") and gen == "herwig"):
-                                self.plot_basic(gen, partontype, target_jetpt,
-                                                z_cut, den_weight)
-                                    
-                                # --- MPV collection: basic (and ptRL) ---
-                                self._collect_mpv_basic(gen, partontype, target_jetpt,
-                                                        z_cut, den_weight)
+                            # if not (partontype in ("quark", "gluon") and gen == "herwig"):
+                            self.plot_basic(gen, partontype, target_jetpt,
+                                            z_cut, den_weight)
                                 
-                                # --- GET R_G ---
-                                if self.cut_mode == "sd":
-                                    self.plot_rg(gen, partontype, target_jetpt, z_cut, den_weight)
+                            # --- MPV collection: basic (and ptRL) ---
+                            self._collect_mpv_basic(gen, partontype, target_jetpt,
+                                                    z_cut, den_weight)
                             
-                            # --- PLOT C_AB,etc FOR PYTHIA ---
-                            if gen == "pythia":
-                                self.plot_CAB("pythia", partontype, target_jetpt, z_cut)
-                                self.plot_CAB_ptRL("pythia", partontype, target_jetpt, z_cut)
-                                self.plot_rad_prop("pythia", "pt",   partontype, target_jetpt, z_cut)
-                                self.plot_rad_prop("pythia", "lnkt", partontype, target_jetpt, z_cut)
+                            # --- GET R_G ---
+                            if self.cut_mode == "sd":
+                                self.plot_rg(gen, partontype, target_jetpt, z_cut, den_weight)
+                        
+                            # # --- PLOT C_AB,etc --- #FOR PYTHIA
+                            # if gen == "pythia":
+                            self.plot_CAB(gen, partontype, target_jetpt, z_cut)
+                            self.plot_CAB_ptRL(gen, partontype, target_jetpt, z_cut)
+                            self.plot_rad_prop(gen, "pt",   partontype, target_jetpt, z_cut)
+                            self.plot_rad_prop(gen, "lnkt", partontype, target_jetpt, z_cut)
                             
-                            # --- PLOT C_AB,etc FOR HERWIG ---
-                            if gen == "herwig" and partontype == "inclusive":
-                                self.plot_CAB("herwig", partontype, target_jetpt, z_cut)
-                                self.plot_CAB_ptRL("herwig", partontype, target_jetpt, z_cut)
-                                self.plot_rad_prop("herwig", "pt",   partontype, target_jetpt, z_cut)
-                                self.plot_rad_prop("herwig", "lnkt", partontype, target_jetpt, z_cut)
+                            # # --- PLOT C_AB,etc FOR HERWIG ---
+                            # if gen == "herwig" and partontype == "inclusive":
+                            #     self.plot_CAB("herwig", partontype, target_jetpt, z_cut)
+                            #     self.plot_CAB_ptRL("herwig", partontype, target_jetpt, z_cut)
+                            #     self.plot_rad_prop("herwig", "pt",   partontype, target_jetpt, z_cut)
+                            #     self.plot_rad_prop("herwig", "lnkt", partontype, target_jetpt, z_cut)
                             
-                            if partontype == "inclusive" and gen == "pythia":
+                            if gen == "pythia": #partontype == "inclusive" and 
                                 # --- PYTHIA VS HERWIG ---
                                 self.plot_herwig_vs_pythia(partontype, target_jetpt,
                                                         z_cut, den_weight)
                                                 
-                                # --- QUARKS VS GLUONS ---
+                            # --- QUARKS VS GLUONS ---
+                            if partontype == "inclusive":
                                 self.plot_q_vs_g(gen, target_jetpt, z_cut, den_weight)
 
                             # --- PLOT ACROSS PT ---
@@ -1410,12 +1422,13 @@ class PlotCurves:
                 # NOW it's safe for consumers to read the cache.
 
                 # --- MPV collection: pythia vs herwig ---
-                for den_weight in ["jet", "rad"]:
-                    self._collect_mpv_hvp("inclusive", target_jetpt, z_cut, den_weight)
+                for partontype in self.partontypes:
+                    for den_weight in ["jet", "rad"]:
+                        self._collect_mpv_hvp(partontype, target_jetpt, z_cut, den_weight)
                 # --- MPV collection: quark vs gluon (after partontype loop, so files are loaded) ---
                 # Done per gen, using already-loaded files for this jet pT
                 for cut_mode_check in [cut_mode]:  # current cut_mode only
-                    for gen in ["pythia"]:
+                    for gen in ["pythia", "herwig"]:
                         for den_weight in ["jet", "rad"]:
                             self._collect_mpv_qvg(gen, target_jetpt, z_cut, den_weight)
 

@@ -90,15 +90,20 @@ def process(infile, outfile):
     h_jet_n   = ROOT.TH1D("h_jet_n",   "number of jets per event;N_{jets};events", 20, 0, 20)
 
     h_trackpt_jetpt = ROOT.TH2D("h_trackpt_jetpt", "track p_{T} vs jet p_{T};p_{T}^{jet} [GeV/c];p_{T}^{track} [GeV/c]", 200, 0, 20, 200, 0, 20)
+    h_tracketa_jetpt = ROOT.TH2D("h_tracketa_jetpt", "track #eta vs jet p_{T};p_{T}^{jet} [GeV/c];#eta^{track} [GeV/c]", 200, 0, 20, 80, -1.0, 1.0)
     # h_trackpt_jetpt_ext = ROOT.TH2D("h_trackpt_jetpt_ext", "track p_{T} vs jet p_{T};p_{T}^{jet} [GeV/c];p_{T}^{track} [GeV/c]", 100, 0, 100, 100, 0, 100)
 
     # Track pt spectrum for events containing a jet > JET_TRIG_PT
     h_pt_jettrig = ROOT.TH1D("h_pt_jettrig", "track p_{T} (events with jet > 8 GeV);p_{T} [GeV/c];counts", 200, 0.0, 20.0)
+    h_eta_jettrig = ROOT.TH1D("h_eta_jettrig", "track #eta (events with jet > 8 GeV);#eta;counts", 80, -1.0, 1.0)
     h_jet_n_jettrig = ROOT.TH1D("h_jet_n_jettrig", "number of selected jets per event (events with jet > 8 GeV);N_{jets};events", 20, 0, 20) #total selected jet multiplicity, but only for the triggered events (those with ≥1 jet above 8 GeV)
     h_jet_n_above_below_jettrig = ROOT.TH2D("h_jet_n_above_below", "jet multiplicity: above vs below 8 GeV;N_{jets}^{>8 GeV};N_{jets}^{<8 GeV}", 20, 0, 20, 20, 0, 20)
     
+    # track eta vs track pt for jet constituents
+    h_tracketa_trackpt_fid  = ROOT.TH2D("h_tracketa_trackpt_fid", "track #eta vs track p_{T} (constituents, fiducial jets);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
+    h_tracketa_trackpt_edge = ROOT.TH2D("h_tracketa_trackpt_edge", "track #eta vs track p_{T} (constituents, jets>8 GeV outside fiducial);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
 
-    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_pt_jettrig, h_jet_n_above_below_jettrig): #h_pt_ext, h_trackpt_jetpt_ext
+    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_tracketa_trackpt_fid, h_tracketa_trackpt_edge): #h_pt_ext, h_trackpt_jetpt_ext
         h.Sumw2()
 
     # Bookkeeping counters stored as a 1-bin histogram (mergeable with hadd)
@@ -197,32 +202,36 @@ def process(infile, outfile):
             njet_below_jettrig = 0   # jets below (or equal to) JET_TRIG_PT
             max_jet_pt = 0.0   # highest accepted-jet pt in this event
             for jet in jets:
-                # Fiducial acceptance cut on jet
-                if abs(jet.eta()) > JET_ETA_MAX:
-                    continue
-
-                njet_ev += 1
-                n_jets_sel += 1
-
                 jpt  = jet.pt()
                 jeta = jet.eta()
-                jphi = jet.phi()   # FastJet phi() is in [0, 2pi)
+                jphi = jet.phi()
 
-                if jpt > max_jet_pt:
-                    max_jet_pt = jpt
-                if jpt > JET_TRIG_PT:
-                    njet_above_jettrig += 1
+                if abs(jeta) <= JET_ETA_MAX:
+                    # ----- fiducial jet (all your usual cuts) -----
+                    njet_ev += 1
+                    n_jets_sel += 1
+
+                    if jpt > max_jet_pt:
+                        max_jet_pt = jpt
+                    if jpt > JET_TRIG_PT:
+                        njet_above_jettrig += 1
+                    else:
+                        njet_below_jettrig += 1
+
+                    h_jet_pt.Fill(jpt)
+                    h_jet_eta.Fill(jeta)
+                    h_jet_phi.Fill(jphi)
+
+                    for c in jet.constituents():
+                        h_trackpt_jetpt.Fill(jpt, c.pt())
+                        h_tracketa_jetpt.Fill(jpt, c.eta())
+                        h_tracketa_trackpt_fid.Fill(c.pt(), c.eta())
+
                 else:
-                    njet_below_jettrig += 1
-
-                h_jet_pt.Fill(jpt)
-                h_jet_eta.Fill(jeta)
-                h_jet_phi.Fill(jphi)
-
-                # Constituent track pt vs parent jet pt
-                for c in jet.constituents():
-                    h_trackpt_jetpt.Fill(jpt, c.pt())
-                    # h_trackpt_jetpt_ext.Fill(jpt, c.pt())
+                    # ----- edge jet: outside fiducial, only if > 8 GeV -----
+                    if jpt > JET_TRIG_PT:
+                        for c in jet.constituents():
+                            h_tracketa_trackpt_edge.Fill(c.pt(), c.eta())
 
             h_jet_n.Fill(njet_ev)
             h_jet_n_above_below_jettrig.Fill(njet_above_jettrig, njet_below_jettrig)
@@ -234,6 +243,7 @@ def process(infile, outfile):
 
                 w_ev = np.ones(len(ev_pt), dtype=np.float64)
                 h_pt_jettrig.FillN(len(ev_pt), ev_pt.astype(np.float64), w_ev)
+                h_eta_jettrig.FillN(len(ev_eta), ev_eta.astype(np.float64), w_ev)
 
     h_cuts.SetBinContent(1, n_events_total)
     h_cuts.SetBinContent(2, n_events_sel)
@@ -245,8 +255,9 @@ def process(infile, outfile):
     fout = ROOT.TFile(outfile, "RECREATE")
     h_pt.Write(); h_eta.Write(); h_phi.Write() #
     h_jet_pt.Write(); h_jet_eta.Write(); h_jet_phi.Write(); h_jet_n.Write()
-    h_trackpt_jetpt.Write(); #h_trackpt_jetpt_ext.Write()
-    h_pt_jettrig.Write(); h_jet_n_jettrig.Write(); h_jet_n_above_below_jettrig.Write()
+    h_trackpt_jetpt.Write(); h_tracketa_jetpt.Write() #h_trackpt_jetpt_ext.Write()
+    h_pt_jettrig.Write(); h_eta_jettrig.Write(); h_jet_n_jettrig.Write(); h_jet_n_above_below_jettrig.Write()
+    h_tracketa_trackpt_fid.Write(); h_tracketa_trackpt_edge.Write()
     h_cuts.Write()
     fout.Close()
 

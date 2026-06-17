@@ -16,6 +16,7 @@ import array
 import numpy as np
 from array import array
 import math
+import json
 
 from pyjetty.mputils import *
 from pyjetty.mputils.mputils import pinfo, pwarning
@@ -42,10 +43,8 @@ class MyAnalysis:
         self.target_jet_pts = [ 50, 100, 200, 500 ]
         self.gen = def_gen
         
-        if self.gen == "pythia":
-            self.partontypes = [ "inclusive", "quark", "gluon"]
-        elif self.gen == "herwig":
-            self.partontypes = [ "inclusive"]
+        self.partontypes = [ "inclusive", "quark", "gluon"]
+
         # num_files_to_parse = 1 #100
 
         # Jet Definitions
@@ -199,6 +198,16 @@ class MyAnalysis:
             # if label != "full":
             #     hist_wwradpt.Fill(eec_result_wwradpt.correlator(2).rs()[index], eec_result_wwradpt.correlator(2).weights()[index])
 
+    def count_constituents(self, sj):
+        """Count constituents in a subjet passing the pt threshold (trk_thrd)."""
+        sj_constituents = fj.sorted_by_pt(sj.constituents())
+        n = 0
+        for c in sj_constituents:
+            if c.pt() < self.trk_thrd:
+                break
+            n += 1
+        return n
+
     def run(self):
         avg_jet_pts = {}
         for i, target_jetpt in enumerate(self.target_jet_pts):
@@ -271,6 +280,21 @@ class MyAnalysis:
 
                     hist_rg = ROOT.TH1D(f"hist_rg_{partontype}_jetpt{target_jetpt}_{cut_tag}", "R_{g} = #DeltaR_{AB}; R_{g}; (1/N_{jets}) dN/dR_{g}", nbins, log_bins)
 
+                    # --- Particle / combination counting setup ---
+                    n_max = 60  # adjust if subjets can have more particles
+                    hist_nA_nB = ROOT.TH2D(f"hist_nA_nB_{partontype}_jetpt{target_jetpt}_{cut_tag}", "N particles in subjet A vs B; N_{A}; N_{B}", n_max, -0.5, n_max - 0.5, n_max, -0.5, n_max - 0.5)
+                    hist_nTotalUnGroomed = ROOT.TH1D(f"hist_nTotalUnGroomed_{partontype}_jetpt{target_jetpt}_{cut_tag}", "N particles in ungroomed jet; N_{total ungroomed}; counts", n_max, -0.5, n_max - 0.5)
+                    hist_nTotalGroomed = ROOT.TH1D(f"hist_nTotalGroomed_{partontype}_jetpt{target_jetpt}_{cut_tag}", "N particles in groomed jet; N_{total groomed}; counts", n_max, -0.5, n_max - 0.5)
+
+                    comb_max = n_max * n_max
+                    hist_combAA = ROOT.TH1D(f"hist_combAA_{partontype}_jetpt{target_jetpt}_{cut_tag}", "AxA combinations; N_{A}^{2}; counts", 200, -0.5, comb_max - 0.5)
+                    hist_combBB = ROOT.TH1D(f"hist_combBB_{partontype}_jetpt{target_jetpt}_{cut_tag}", "BxB combinations; N_{B}^{2}; counts", 200, -0.5, comb_max - 0.5)
+                    hist_combAB = ROOT.TH1D(f"hist_combAB_{partontype}_jetpt{target_jetpt}_{cut_tag}", "AxB combinations; N_{A} N_{B}; counts", 200, -0.5, comb_max - 0.5)
+                    hist_combTotal = ROOT.TH1D(f"hist_combTotal_{partontype}_jetpt{target_jetpt}_{cut_tag}", "Total combinations; (N_{A}+N_{B})^{2}; counts", 200, -0.5, 4 * comb_max - 0.5)
+
+                    # Per-jet records for this configuration
+                    count_records = []
+
                     num_jets = 0.
                     num_jets_passed_cut = 0.
 
@@ -335,12 +359,47 @@ class MyAnalysis:
 
                         num_jets_passed_cut += 1
                         hist_jetpt_cut.Fill(jet.perp()) # this is the C/A jet pt, for anti-kt, use jet_pt
-                        hist_radiatorpt.Fill(parent_radiator.perp())
+                        hist_radiatorpt.Fill(parent_radiator.perp()) # equal to selected_d.pair().perp()
                         hist_radiatorkt.Fill(np.log(selected_d.kt()))
 
                         # Calculate and fill r_g = Delta R_{AB}  # selected_d.Delta() gives the angle between the two prongs in the Lund plane
                         r_g = selected_d.Delta() #/ self.jet_R
                         hist_rg.Fill(r_g)
+
+                        # --- Count particles and combinations for this configuration ---
+                        n_A = self.count_constituents(subjet_a)
+                        n_B = self.count_constituents(subjet_b)
+                        n_total_ungroomed = self.count_constituents(jet)
+                        n_total_groomed = self.count_constituents(parent_radiator)
+
+                        # Combinations (N^2 convention, matching ordered self-pairs from CorrelatorBuilder)
+                        comb_AA = n_A * n_A
+                        comb_BB = n_B * n_B
+                        comb_AB = n_A * n_B * 2
+                        comb_total = (n_A + n_B) * (n_A + n_B)
+
+                        # Fill aggregate histograms
+                        hist_nA_nB.Fill(n_A, n_B)
+                        hist_nTotalUnGroomed.Fill(n_total_ungroomed)
+                        hist_nTotalGroomed.Fill(n_total_groomed)
+                        hist_combAA.Fill(comb_AA)
+                        hist_combBB.Fill(comb_BB)
+                        hist_combAB.Fill(comb_AB)
+                        hist_combTotal.Fill(comb_total)
+
+                        # Store per-jet record
+                        count_records.append({
+                            "event_id": int(event_idx),
+                            "jet_id": int(jet_id),
+                            "n_A": int(n_A),
+                            "n_B": int(n_B),
+                            "n_total_ungroomed": int(n_total_ungroomed),
+                            "n_total_groomed": int(n_total_groomed),
+                            "comb_AA": int(comb_AA),
+                            "comb_BB": int(comb_BB),
+                            "comb_AB": int(comb_AB),
+                            "comb_total": int(comb_total),
+                        })
 
                         # Get EEC of full, AxA and BxB
                         for label, sj, hist_wwjetpt, hist_wwradpt, hist_ptRL_wwjetpt, hist_ptRL_wwradpt in [
@@ -428,6 +487,43 @@ class MyAnalysis:
                     hist_CAB_ptRL_wwradpt.Write()
                     if cut_mode == "sd":
                         hist_rg.Write()
+                    hist_nA_nB.Write()
+                    hist_nTotalUnGroomed.Write()
+                    hist_nTotalGroomed.Write()
+                    hist_combAA.Write()
+                    hist_combBB.Write()
+                    hist_combAB.Write()
+                    hist_combTotal.Write()
+
+                    # --- Save per-jet counts to JSON ---
+                    json_dir = "/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles"
+                    json_path = os.path.join(
+                        json_dir,
+                        f"jse_counts_{self.gen}_jetpt{target_jetpt}_{partontype}_{cut_tag}.json"
+                    )
+                    summary = {
+                        "gen": self.gen,
+                        "target_jetpt": target_jetpt,
+                        "partontype": partontype,
+                        "cut_mode": cut_mode,
+                        "cut_value": cut_value,
+                        "num_jets": num_jets,
+                        "num_jets_passed_cut": num_jets_passed_cut,
+                        "totals": {
+                            "sum_n_A": int(sum(r["n_A"] for r in count_records)),
+                            "sum_n_B": int(sum(r["n_B"] for r in count_records)),
+                            "sum_n_total_ungroomed": int(sum(r["n_total_ungroomed"] for r in count_records)),
+                            "sum_n_total_groomed": int(sum(r["n_total_groomed"] for r in count_records)),
+                            "sum_comb_AA": int(sum(r["comb_AA"] for r in count_records)),
+                            "sum_comb_BB": int(sum(r["comb_BB"] for r in count_records)),
+                            "sum_comb_AB": int(sum(r["comb_AB"] for r in count_records)),
+                            "sum_comb_total": int(sum(r["comb_total"] for r in count_records)),
+                        },
+                        "per_jet": count_records,
+                    }
+                    with open(json_path, "w") as f:
+                        json.dump(summary, f, indent=2)
+                    print(f"Wrote counts to {json_path}  ({len(count_records)} jets)")
 
             root_outfile.Close()
 
@@ -445,9 +541,9 @@ def main():
     analysis_herwig = MyAnalysis("herwig")
     herwig_avg = analysis_herwig.run()
 
-    print("\nAverage jet pts for pythia:")
-    for jetpt in analysis_pythia.target_jet_pts:
-        print(f"  jetpt{jetpt}: {pythia_avg[jetpt]:.6f}")
+    # print("\nAverage jet pts for pythia:") #comment this out too if not running pythia
+    # for jetpt in analysis_pythia.target_jet_pts:
+    #     print(f"  jetpt{jetpt}: {pythia_avg[jetpt]:.6f}")
 
     print("\nAverage jet pts for herwig:")
     for jetpt in analysis_herwig.target_jet_pts:
