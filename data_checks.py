@@ -93,6 +93,9 @@ def process(infile, outfile):
     h_tracketa_jetpt = ROOT.TH2D("h_tracketa_jetpt", "track #eta vs jet p_{T};p_{T}^{jet} [GeV/c];#eta^{track} [GeV/c]", 200, 0, 20, 80, -1.0, 1.0)
     # h_trackpt_jetpt_ext = ROOT.TH2D("h_trackpt_jetpt_ext", "track p_{T} vs jet p_{T};p_{T}^{jet} [GeV/c];p_{T}^{track} [GeV/c]", 100, 0, 100, 100, 0, 100)
 
+    h_trackpt_jetpt_edge = ROOT.TH2D("h_trackpt_jetpt_edge", "track p_{T} vs jet p_{T};p_{T}^{jet} [GeV/c];p_{T}^{track} [GeV/c]", 200, 0, 20, 200, 0, 20)
+    h_tracketa_jetpt_edge = ROOT.TH2D("h_tracketa_jetpt_edge", "track #eta vs jet p_{T};p_{T}^{jet} [GeV/c];#eta^{track} [GeV/c]", 200, 0, 20, 80, -1.0, 1.0)
+
     # Track pt spectrum for events containing a jet > JET_TRIG_PT
     h_pt_jettrig = ROOT.TH1D("h_pt_jettrig", "track p_{T} (events with jet > 8 GeV);p_{T} [GeV/c];counts", 200, 0.0, 20.0)
     h_eta_jettrig = ROOT.TH1D("h_eta_jettrig", "track #eta (events with jet > 8 GeV);#eta;counts", 80, -1.0, 1.0)
@@ -101,9 +104,10 @@ def process(infile, outfile):
     
     # track eta vs track pt for jet constituents
     h_tracketa_trackpt_fid  = ROOT.TH2D("h_tracketa_trackpt_fid", "track #eta vs track p_{T} (constituents, fiducial jets);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
+    h_tracketa_trackpt_jettrig_fid  = ROOT.TH2D("h_tracketa_trackpt_jettrig_fid", "track #eta vs track p_{T} (constituents, fiducial jets);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
     h_tracketa_trackpt_edge = ROOT.TH2D("h_tracketa_trackpt_edge", "track #eta vs track p_{T} (constituents, jets>8 GeV outside fiducial);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
 
-    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_tracketa_trackpt_fid, h_tracketa_trackpt_edge): #h_pt_ext, h_trackpt_jetpt_ext
+    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_trackpt_jetpt_edge, h_tracketa_jetpt_edge, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_tracketa_trackpt_fid, h_tracketa_trackpt_jettrig_fid, h_tracketa_trackpt_edge): #h_pt_ext, h_trackpt_jetpt_ext
         h.Sumw2()
 
     # Bookkeeping counters stored as a 1-bin histogram (mergeable with hadd)
@@ -226,11 +230,17 @@ def process(infile, outfile):
                         h_trackpt_jetpt.Fill(jpt, c.pt())
                         h_tracketa_jetpt.Fill(jpt, c.eta())
                         h_tracketa_trackpt_fid.Fill(c.pt(), c.eta())
+                        if jpt > JET_TRIG_PT:
+                            h_tracketa_trackpt_jettrig_fid.Fill(c.pt(), c.eta())
 
                 else:
-                    # ----- edge jet: outside fiducial, only if > 8 GeV -----
-                    if jpt > JET_TRIG_PT:
-                        for c in jet.constituents():
+                    # ----- edge jet: outside fiducial -----
+                    for c in jet.constituents():
+                        h_trackpt_jetpt_edge.Fill(jpt, c.pt())
+                        h_tracketa_jetpt_edge.Fill(jpt, c.eta())
+                        
+                        # ----- edge jet: outside fiducial, only if > 8 GeV -----
+                        if jpt > JET_TRIG_PT:
                             h_tracketa_trackpt_edge.Fill(c.pt(), c.eta())
 
             h_jet_n.Fill(njet_ev)
@@ -256,8 +266,9 @@ def process(infile, outfile):
     h_pt.Write(); h_eta.Write(); h_phi.Write() #
     h_jet_pt.Write(); h_jet_eta.Write(); h_jet_phi.Write(); h_jet_n.Write()
     h_trackpt_jetpt.Write(); h_tracketa_jetpt.Write() #h_trackpt_jetpt_ext.Write()
+    h_trackpt_jetpt_edge.Write(); h_tracketa_jetpt_edge.Write()
     h_pt_jettrig.Write(); h_eta_jettrig.Write(); h_jet_n_jettrig.Write(); h_jet_n_above_below_jettrig.Write()
-    h_tracketa_trackpt_fid.Write(); h_tracketa_trackpt_edge.Write()
+    h_tracketa_trackpt_fid.Write(); h_tracketa_trackpt_jettrig_fid.Write(); h_tracketa_trackpt_edge.Write()
     h_cuts.Write()
     fout.Close()
 

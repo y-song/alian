@@ -964,6 +964,21 @@ class PlotCurves:
         if hist is None:
             return None, None
 
+        # Full histogram x-axis range for fixing the plot extent (not the fit range).
+        # Guard the lower bound for the log x-axis: clamp to the first positive
+        # bin's low edge if the axis minimum is <= 0.
+        xaxis = hist.GetXaxis()
+        xmin, xmax = xaxis.GetXmin(), xaxis.GetXmax()
+        if xmin <= 0:
+            lo = None
+            for ib in range(1, hist.GetNbinsX() + 1):
+                edge = hist.GetBinLowEdge(ib)
+                if edge > 0:
+                    lo = edge
+                    break
+            xmin = lo if lo is not None else hist.GetBinCenter(1)
+        xrange = (xmin, xmax)
+
         # Pull bin centers and contents into numpy arrays
         nb = hist.GetNbinsX()
         xs, ys, yerrs = [], [], []
@@ -995,7 +1010,7 @@ class PlotCurves:
                 try:
                     self._save_fit_diagnostic(xs_full, ys_full, yerrs_full,
                                               None, save_path, plot_title,
-                                              None, None, p0=None)
+                                              None, None, p0=None, xrange=xrange)
                 except Exception:
                     pass
             return None, None
@@ -1040,6 +1055,7 @@ class PlotCurves:
                     xs_full, ys_full, yerrs_full,   # full data for context
                     popt, save_path, plot_title, mu, mu_err,
                     p0=p0, fit_xs=xs,               # windowed x's actually fit
+                    xrange=xrange,
                 )
             except Exception as ex:
                 print(f"  Failed to save fit diagnostic: {ex}")
@@ -1047,7 +1063,7 @@ class PlotCurves:
         return mu, mu_err
 
     def _save_fit_diagnostic(self, xs, ys, yerrs, popt, save_path,
-                            title, mu, mu_err, p0=None, fit_xs=None):
+                            title, mu, mu_err, p0=None, fit_xs=None, xrange=None):
         """Save a matplotlib plot showing histogram data points, the initial-guess
         curve (from p0), and the fitted curve."""
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -1104,6 +1120,8 @@ class PlotCurves:
             ax.set_title(title, fontsize=10)
         ax.legend(fontsize=8, loc="best")
         ax.grid(True, which="both", alpha=0.3)
+        if xrange is not None:
+            ax.set_xlim(*xrange)
         fig.tight_layout()
         fig.savefig(save_path)
         plt.close(fig)
@@ -1210,7 +1228,7 @@ class PlotCurves:
                                     target_jetpt, mu, mu_err)
 
     def _plot_mpv_summary(self, case_key, title, xlabel, ylabel, outdir, filename,
-                        component_styles=None):
+                        component_styles=None, ylim=None):
         """Generic MPV summary plot: y = peak position vs x = jet pT.
 
         component_styles: dict mapping component name -> dict of matplotlib kwargs
@@ -1247,8 +1265,11 @@ class PlotCurves:
         ax.set_ylabel(ylabel)
         ax.set_title(title, fontsize=11)
         ax.set_xscale("log")
+        ax.set_yscale("log")   # <-- ADD THIS
         ax.grid(True, which="both", alpha=0.3)
         ax.legend(fontsize=8, loc="best", framealpha=0.9)
+        if ylim is not None:
+            ax.set_ylim(*ylim)
         fig.tight_layout()
 
         os.makedirs(outdir, exist_ok=True)
@@ -1256,6 +1277,151 @@ class PlotCurves:
         plt.close(fig)
 
 
+    def _plot_mpv_ratio(self, num_data, den_data, comp_labels, styles,
+                        title, xlabel, ylabel, outdir, filename, ylim=None):
+        """Plot ratio of MPV (num/den) vs jet pT for each component.
+
+        num_data / den_data: dicts {component: {jetpt: (mu, mu_err)}}
+        comp_labels: list of component names to ratio (must exist in both, ideally)
+        styles: dict component -> matplotlib kwargs
+        """
+        fig, ax = plt.subplots(figsize=(7, 5))
+        plotted = False
+
+        for comp in comp_labels:
+            nd = num_data.get(comp, {})
+            dd = den_data.get(comp, {})
+            if not nd or not dd:
+                continue
+            pts = sorted(set(nd.keys()) & set(dd.keys()))
+            if not pts:
+                continue
+
+            ratios, rerrs = [], []
+            for p in pts:
+                n, ne = nd[p]
+                d, de = dd[p]
+                if n is None or d is None or d == 0:
+                    continue
+                r = n / d
+                # propagate relative errors in quadrature
+                rel = 0.0
+                if ne and n:
+                    rel += (ne / n) ** 2
+                if de and d:
+                    rel += (de / d) ** 2
+                ratios.append(r)
+                rerrs.append(abs(r) * np.sqrt(rel))
+            if not ratios:
+                continue
+
+            style = styles.get(comp, dict(marker="o", linestyle="-", label=comp))
+            ax.errorbar(pts[:len(ratios)], ratios, yerr=rerrs, capsize=3,
+                        markersize=7, **style)
+            plotted = True
+
+        if not plotted:
+            plt.close(fig)
+            return
+
+        ax.axhline(1.0, color="gray", linestyle=":", alpha=0.7)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=11)
+        ax.set_xscale("log")
+        ax.grid(True, which="both", alpha=0.3)
+        ax.legend(fontsize=8, loc="best", framealpha=0.9)
+        if ylim is not None:
+            ax.set_ylim(*ylim)
+        fig.tight_layout()
+        os.makedirs(outdir, exist_ok=True)
+        fig.savefig(os.path.join(outdir, filename))
+        plt.close(fig)
+        
+    def _plot_all_mpv_ratios(self):
+        """Build ratio MPV summaries:
+        quark/inclusive & gluon/inclusive (quark_vs_gluon folder),
+        herwig/pythia (pythia_vs_herwig folder).
+        """
+        base = os.path.join(self.base_plot_dir, "mpv_summary")
+        comp_labels = ["full", "rad", "AA", "BB", "AB"]
+        comp_colors = {"full": "gray", "rad": "black", "AA": "C0", "BB": "C1", "AB": "C2"}
+        comp_markers = {"full": "o", "rad": "s", "AA": "D", "BB": "^", "AB": "v"}
+
+        def base_styles():
+            return {c: dict(color=comp_colors[c], marker=comp_markers[c],
+                            linestyle="-", label=c) for c in comp_labels}
+
+        # collect the parameter combinations actually present
+        gens   = ["pythia", "herwig"]
+        cuts   = sorted({self.get_cut_suffix(z) for _, z in self.cut_modes})
+        dens   = ["jet", "rad"]
+
+        for cut_suffix in cuts:
+            for den in dens:
+                for ptRL in (False, True):
+                    tag = "ptRL_" if ptRL else ""
+                    obs = "p_TR_L" if ptRL else "R_L"
+                    ylim = None  # ratios near 1; let it autoscale (or set fixed if you prefer)
+
+                    # ---- quark/inclusive and gluon/inclusive (per gen) ----
+                    for gen in gens:
+                        incl_key = (f"basic_{('ptRL_' if ptRL else '')}{gen}"
+                                    f"_inclusive_{cut_suffix}_ww{den}")
+                        incl_data = self.mpv_data.get(incl_key, {})
+                        if not incl_data:
+                            continue
+                        for parton in ("quark", "gluon"):
+                            pk = (f"basic_{('ptRL_' if ptRL else '')}{gen}"
+                                  f"_{parton}_{cut_suffix}_ww{den}")
+                            pdata = self.mpv_data.get(pk, {})
+                            if not pdata:
+                                continue
+                            outdir = os.path.join(base, "quark_vs_gluon", gen,
+                                                  cut_suffix, "ptRL" if ptRL else "RL",
+                                                  "ratio")
+                            fname = (f"mpv_ratio_{tag}{parton}_over_inclusive_{gen}"
+                                     f"_{cut_suffix}_ww{den}.pdf")
+                            title = (f"MPV ratio — {parton}/inclusive ({gen.upper()}), "
+                                     f"{cut_suffix}, ww{den}" + (" (ptRL)" if ptRL else ""))
+                            self._plot_mpv_ratio(
+                                pdata, incl_data, comp_labels, base_styles(),
+                                title, "Jet p_T [GeV/c]",
+                                f"{parton}/inclusive peak in {obs}",
+                                outdir, fname, ylim=ylim)
+
+                    # ---- herwig/pythia (per partontype) ----
+                    for parton in self.partontypes:
+                        hvp_key = (f"hvp_{('ptRL_' if ptRL else '')}{parton}"
+                                   f"_{cut_suffix}_ww{den}")
+                        hvp_data = self.mpv_data.get(hvp_key, {})
+                        if not hvp_data:
+                            continue
+                        # split hvp_data into pythia/herwig per component
+                        pythia_data = {c: hvp_data[f"{c}_pythia"]
+                                       for c in comp_labels if f"{c}_pythia" in hvp_data}
+                        herwig_data = {c: hvp_data[f"{c}_herwig"]
+                                       for c in comp_labels if f"{c}_herwig" in hvp_data}
+                        if not pythia_data or not herwig_data:
+                            continue
+                        outdir = os.path.join(base, "pythia_vs_herwig",
+                                              cut_suffix, "ptRL" if ptRL else "RL",
+                                              "ratio")
+                        fname = (f"mpv_ratio_{tag}herwig_over_pythia_{parton}"
+                                 f"_{cut_suffix}_ww{den}.pdf")
+                        title = (f"MPV ratio — HERWIG/PYTHIA, {parton}, "
+                                 f"{cut_suffix}, ww{den}" + (" (ptRL)" if ptRL else ""))
+                        self._plot_mpv_ratio(
+                            herwig_data, pythia_data, comp_labels, base_styles(),
+                            title, "Jet p_T [GeV/c]",
+                            f"HERWIG/PYTHIA peak in {obs}",
+                            outdir, fname, ylim=ylim)
+
+        print(f"MPV ratio plots saved under: {base}")
+        
+    def mpv_ylim(ptRL):
+            return (1.5, 7.0) if ptRL else (0.001, 0.12)
+    
     def plot_all_mpv_summaries(self):
         """Produce all MPV summary PDFs after data has been collected."""
         base = os.path.join(self.base_plot_dir, "mpv_summary")
@@ -1316,7 +1482,7 @@ class PlotCurves:
                         f"_{cut_suffix}_{den_token}.pdf")
                 self._plot_mpv_summary(case_key, title, "Jet p_T [GeV/c]",
                                     ylabel, outdir, fname,
-                                    component_styles=basic_styles)
+                                    component_styles=basic_styles, ylim=mpv_ylim(ptRL))
 
             elif kind == "hvp":
                 ptRL = (parts[1] == "ptRL")
@@ -1334,7 +1500,7 @@ class PlotCurves:
                         f"_{cut_suffix}_{den_token}.pdf")
                 self._plot_mpv_summary(case_key, title, "Jet p_T [GeV/c]",
                                     ylabel, outdir, fname,
-                                    component_styles=hvp_styles())
+                                    component_styles=hvp_styles(), ylim=mpv_ylim(ptRL))
 
             elif kind == "qvg":
                 ptRL = (parts[1] == "ptRL")
@@ -1352,9 +1518,11 @@ class PlotCurves:
                         f"_{cut_suffix}_{den_token}.pdf")
                 self._plot_mpv_summary(case_key, title, "Jet p_T [GeV/c]",
                                     ylabel, outdir, fname,
-                                    component_styles=qvg_styles())
+                                    component_styles=qvg_styles(), ylim=mpv_ylim(ptRL))
 
         print(f"MPV summary plots saved under: {base}")
+        
+        self._plot_all_mpv_ratios() 
 
     
 

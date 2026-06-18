@@ -535,21 +535,19 @@ class MyAnalysis:
         return avg_jet_pts
 
 def main():
-    # analysis_pythia = MyAnalysis("pythia")
-    # pythia_avg = analysis_pythia.run()
+    analysis_pythia = MyAnalysis("pythia")
+    pythia_avg = analysis_pythia.run()
 
-    analysis_herwig = MyAnalysis("herwig")
-    herwig_avg = analysis_herwig.run()
+    # analysis_herwig = MyAnalysis("herwig")
+    # herwig_avg = analysis_herwig.run()
 
-    # print("\nAverage jet pts for pythia:") #comment this out too if not running pythia
-    # for jetpt in analysis_pythia.target_jet_pts:
-    #     print(f"  jetpt{jetpt}: {pythia_avg[jetpt]:.6f}")
+    print("\nAverage jet pts for pythia:") #comment this out too if not running pythia
+    for jetpt in analysis_pythia.target_jet_pts:
+        print(f"  jetpt{jetpt}: {pythia_avg[jetpt]:.6f}")
 
-    print("\nAverage jet pts for herwig:")
-    for jetpt in analysis_herwig.target_jet_pts:
-        print(f"  jetpt{jetpt}: {herwig_avg[jetpt]:.6f}")
-    # analysis.run("pythia")
-    # analysis.run("herwig")
+    # print("\nAverage jet pts for herwig:")
+    # for jetpt in analysis_herwig.target_jet_pts:
+    #     print(f"  jetpt{jetpt}: {herwig_avg[jetpt]:.6f}")
 
 
 
