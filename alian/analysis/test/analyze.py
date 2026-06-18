@@ -12,6 +12,11 @@ import heppyy
 fj = heppyy.load_cppyy('fastjet')
 
 class Analyze(AnalysisBase):
+    _defaults = {
+        'pt_min_eec': 1.0,
+        'pt_min_jet': 20.0,
+        'z_cut': 0.1,
+    }
 
     def init_analysis(self, analysis_cfg: dict):
         config = self._defaults | analysis_cfg
@@ -29,41 +34,48 @@ class Analyze(AnalysisBase):
 
         # self.hists['event'].Fill(0.5)
         self.hists['cent_mult'].Fill(self.event.multiplicity, self.event.centrality)
+        self.hists['cent_ntrack'].Fill(len(self.tracks), self.event.centrality)
+        self.hists['cent_rho'].Fill(self.rho, self.event.centrality)
+        self.hists['sigma_rho'].Fill(self.rho, self.sigma)
         [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
         [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
         [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]
+        [self.hists['jet_rhoA_pT'].Fill(j.pt(), j.area()*self.rho) for j in self.jets]
+        [self.hists['jet_A_pT'].Fill(j.pt(), j.area()) for j in self.jets]
+        [self.hists['jet_pT_sub_pT'].Fill(j.pt(), j.pt()-j.area()*self.rho) for j in self.jets]
         for j in self.jets:
-            if (j.pt() < self.pt_min_jet):
+            pt_sub = j.pt() - j.area()*self.rho
+            if (pt_sub < self.pt_min_jet):
                 break
             self.do_eec(j, "eec")
             lund_seq = self.lund_gen.result(j)
             l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
             if l is None:
-                self.hists['rg'].Fill(j.pt(), -0.99)
-                self.hists['zg'].Fill(j.pt(), -0.99)
+                self.hists['rg'].Fill(pt_sub, -0.99)
+                self.hists['zg'].Fill(pt_sub, -0.99)
                 continue
             subjet_a = l.harder()
             subjet_b = l.softer()
             sd_pt = subjet_a.pt() + subjet_b.pt() # approximate
             # sd_j = self.sd(j)
-            self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, but this includes stuff removed by SD
-            # self.do_eec(sd_j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, and this only includes stuff passes by SD
-            self.do_eec(subjet_a, "eec_aa", ew_denom=sd_pt, jet_pt_bin=j.pt())
-            self.do_eec(subjet_b, "eec_bb", ew_denom=sd_pt, jet_pt_bin=j.pt())
-            self.do_eec_cross(subjet_a, subjet_b, "eec_ab", ew_denom=sd_pt, jet_pt_bin=j.pt())
-            self.hists['rg'].Fill(j.pt(), delta_R(subjet_a, subjet_b))
-            # self.hists['rg'].Fill(j.pt(), sd_j.structure_of[fj.contrib.SoftDrop]().delta_R())
-            self.hists['rg_log'].Fill(j.pt(), delta_R(subjet_a, subjet_b))
-            self.hists['zg'].Fill(j.pt(), subjet_b.pt() / sd_pt)
-            self.do_eec_noew(subjet_a, "eec_aa_noew", jet_pt_bin=j.pt())
-            self.do_eec_noew(subjet_b, "eec_bb_noew", jet_pt_bin=j.pt())
-            self.do_eec_cross_noew(subjet_a, subjet_b, "eec_ab_noew", jet_pt_bin=j.pt())
+            self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=pt_sub) # jet passes SD, but this includes stuff removed by SD
+            # self.do_eec(sd_j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=pt_sub) # jet passes SD, and this only includes stuff passes by SD
+            self.do_eec(subjet_a, "eec_aa", ew_denom=sd_pt, jet_pt_bin=pt_sub)
+            self.do_eec(subjet_b, "eec_bb", ew_denom=sd_pt, jet_pt_bin=pt_sub)
+            self.do_eec_cross(subjet_a, subjet_b, "eec_ab", ew_denom=sd_pt, jet_pt_bin=pt_sub)
+            self.hists['rg'].Fill(pt_sub, delta_R(subjet_a, subjet_b))
+            # self.hists['rg'].Fill(pt_sub, sd_j.structure_of[fj.contrib.SoftDrop]().delta_R())
+            self.hists['rg_log'].Fill(pt_sub, delta_R(subjet_a, subjet_b))
+            self.hists['zg'].Fill(pt_sub, subjet_b.pt() / sd_pt)
+            self.do_eec_noew(subjet_a, "eec_aa_noew", jet_pt_bin=pt_sub)
+            self.do_eec_noew(subjet_b, "eec_bb_noew", jet_pt_bin=pt_sub)
+            self.do_eec_cross_noew(subjet_a, subjet_b, "eec_ab_noew", jet_pt_bin=pt_sub)
 
     def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None):
         if ew_denom is None:
-            ew_denom = jet.pt()
+            ew_denom = jet.pt() - jet.area()*self.rho
         if jet_pt_bin is None:
-            jet_pt_bin = jet.pt()
+            jet_pt_bin = jet.pt() - jet.area()*self.rho
         tracks = self.eec_trk_selector(jet.constituents())
         for p1, p2 in itertools.permutations(tracks, 2):
             ew = p1.pt() * p2.pt() / ew_denom / ew_denom
@@ -81,7 +93,7 @@ class Analyze(AnalysisBase):
 
     def do_eec_noew(self, jet, hist_name, jet_pt_bin=None):
         if jet_pt_bin is None:
-            jet_pt_bin = jet.pt()
+            jet_pt_bin = jet.pt() - jet.area()*self.rho
         tracks = self.eec_trk_selector(jet.constituents())
         for p1, p2 in itertools.permutations(tracks, 2):
             rl = delta_R(p1, p2)

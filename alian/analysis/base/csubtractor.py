@@ -1,14 +1,18 @@
 # port of https://phab.hepforge.org/source/fastjetsvn/browse/contrib/contribs/ConstituentSubtractor/tags/1.4.4/example_event_wide.cc
 # to python w/ heppy
 
+from functools import singledispatchmethod
+from pathlib import Path
+
+from .logs import set_up_logger
+from .utils import read_yaml
 import argparse
 import heppyy
 fj = heppyy.load_cppyy('fastjet')
 std = heppyy.load_cppyy('std')
 from alian.utils import pprints
-from .analysis import BaseAnalysis
 
-class CEventSubtractor(BaseAnalysis):
+class CEventSubtractor():
 	_defaults = {
 		'max_eta': 4,
 		'bge_rho_grid_size': 0.1,
@@ -22,7 +26,7 @@ class CEventSubtractor(BaseAnalysis):
 	}
 	def __init__(self, **kwargs):
 		# constants
-		# self.max_eta=4  # specify the maximal pseudorapidity for the input particles. It is used for the subtraction. Particles with eta>|max_eta| are removed and not used during the subtraction (they are not returned). The same parameter should be used for the GridMedianBackgroundEstimator as it is demonstrated in this example. If JetMedianBackgroundEstimator is used, then lower parameter should be used  (to avoid including particles outside this range). 
+		# self.max_eta=4  # specify the maximal pseudorapidity for the input particles. It is used for the subtraction. Particles with eta>|max_eta| are removed and not used during the subtraction (they are not returned). The same parameter should be used for the GridMedianBackgroundEstimator as it is demonstrated in this example. If JetMedianBackgroundEstimator is used, then lower parameter should be used  (to avoid including particles outside this range).
 		# self.max_eta_jet=3  # the maximal pseudorapidity for selected jets. Not used for the subtraction - just for the final output jets in this example.
 		# self.bge_rho_grid_size = 0.2
 		# self.max_distance = 0.3
@@ -33,9 +37,9 @@ class CEventSubtractor(BaseAnalysis):
 		# self.CSS=1.0  # choose the scale for scaling the signal charged particles
 		# self.max_pt_correct = 5.
 
-		# default values in _defaults
-
-		super(CEventSubtractor, self).__init__(**kwargs)
+		self.logger = set_up_logger(__name__)
+		for param, default in self._defaults.items():
+			setattr(self, param, kwargs.get(param, default))
 		self.initialize_subtractor()
   
 	def initialize_subtractor(self):
@@ -80,24 +84,32 @@ class CEventSubtractor(BaseAnalysis):
 		self.corrected_jet = self.subtractor.result(jet)
 		return self.corrected_jet
 
-class CSubtractorJetByJet(BaseAnalysis):
-	def __init__(self, **kwargs):
-		# set the default values
-		self.configure_from_args(	max_eta=4, 
-									bge_rho_grid_size=0.2)
+	@singledispatchmethod
+	@classmethod
+	def load(cls, file, *args, **kwargs):
+		raise NotImplementedError(f'Cannot configure background subtractor from type {type(file)}.')
+	@load.register(dict)
+	@classmethod
+	def _load(cls, cfg):
+		options = {**cls._defaults, **cfg.get('bkg_sub', {})}
+		return cls(**options)
+	@load.register(str)
+	@load.register(Path)
+	@classmethod
+	def _load(cls, file):
+		cfg = read_yaml(file)
+		return cls.load(cfg)
 
-		super(CSubtractorJetByJet, self).__init__(**kwargs)
+	def dump(self):
+		"""Dump all background subtraction parameters."""
+		cfg = "\n".join([f"\t{param}: {repr(getattr(self, param))}" for param in self._defaults])
+		self.logger.info(f"Background subtractor configuration:\n{cfg}", stacklevel = 2)
 
+class CSubtractorJetByJet(CEventSubtractor):
+	def initialize_subtractor(self):
 		# background estimator
 		self.bge_rho = fj.GridMedianBackgroundEstimator(self.max_eta, self.bge_rho_grid_size)
-		self.subtractor = fj.contrib.ConstituentSubtractor(self.bge_rho) 
-
-	def set_event_particles(self, full_event):
-		self.bge_rho.set_particles(full_event);
-
-	def process_jet(self, jet):
-		self.corrected_jet = self.subtractor.result(jet)
-		return self.corrected_jet
+		self.subtractor = fj.contrib.ConstituentSubtractor(self.bge_rho)
 
 	def process_jets(self, jets):
 		self.corrected_jets = []

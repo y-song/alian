@@ -51,9 +51,8 @@ class JetFinder:
         self.pT_min = pT_min
         self.jet_selector = fj.SelectorAbsEtaMax(self.eta_max) * fj.SelectorPtMin(pT_min)
         fj.ClusterSequence.print_banner()
-        # TODO: jet background subtraction
-        # self.area_def = fj.AreaDefinition(fj.active_area, fj.GhostedAreaSpec(self.eta_max + self.jet_R))
-        # self.bg_estimator = fj.GridMedianBackgroundEstimator(self.bg_y_max, self.bg_grid_spacing)
+        self.area_def = fj.AreaDefinition(fj.active_area, fj.GhostedAreaSpec(self.eta_max + self.R))
+        # I used fj.AreaDefinition(fj.active_area_explicit_ghosts) for run 2 PbPb
 
     @singledispatchmethod
     @classmethod
@@ -98,8 +97,11 @@ class JetFinder:
             self.logger.error(f"Cannot pass type {type(alg)} as jet algorithm, defaulting to anti-kT. Valid options: {valid_algs}")
             return fj.antikt_algorithm
 
-    def find_jets(self, tracks, m = 0.13957, index_offset = 0):
+    def find_jets(self, tracks, m = 0.13957, index_offset = 0, use_area = False):
         # NOTE: ClusterSequence must be attached somehow to self to keep it in scope
-        self.cs = fj.ClusterSequence(tracks, self.jet_def)
+        if use_area:
+            self.cs = fj.ClusterSequenceArea(tracks, self.jet_def, self.area_def)
+        else:
+            self.cs = fj.ClusterSequence(tracks, self.jet_def)
         jets = fj.sorted_by_pt(self.jet_selector(self.cs.inclusive_jets()))
         return jets

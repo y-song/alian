@@ -4,6 +4,7 @@ from alian.io import data_io
 from ROOT import TFile
 
 import heppyy
+fj = heppyy.load_cppyy('fastjet')
 
 from .event import Event, get_selected_clusters, get_selected_tracks
 from .jet_finder import JetFinder
@@ -87,6 +88,26 @@ class AnalysisBase:
         else:
             self.logger.info("No configuration for jet finder, no jets will be loaded.")
             self.load_jets = False
+        if 'bkg_estimator' in self.cfg:
+            self.logger.info("Background estimator config found.")
+            self.load_bge = True
+            bge_cfg = self.cfg.get('bkg_estimator') or {}
+            max_eta = bge_cfg.get('max_eta', 0.9)
+            # grid_size = bge_cfg.get('bge_rho_grid_size', 0.1)
+            # self.bge = fj.GridMedianBackgroundEstimator(max_eta, grid_size)
+            # follow AN at https://alice-notes.web.cern.ch/node/1760 for some parameters: excludes two hardest, kT, R = 0.2
+            # follow https://github.com/y-song/pyjetty/blob/main/pyjetty/mputils/icsubtractor.py for some other parameters
+            sel_not = getattr(fj, "operator!")  # cppyy doesn't bind fastjet's free-function Selector negation to ~/-
+            self.bge_jet_selector = fj.SelectorAbsEtaMax(max_eta-0.2) * sel_not(fj.SelectorNHardest(2)) * sel_not(fj.SelectorIsPureGhost())
+            self.bge_jet_def = fj.JetDefinition(fj.kt_algorithm, 0.2)
+            self.bge_area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(max_eta))
+            self.bge = fj.JetMedianBackgroundEstimator(	self.bge_jet_selector, self.bge_jet_def, self.bge_area_def )
+            # bge_params = "\n".join([f"\tmax_eta: {repr(max_eta)}", f"\tbge_rho_grid_size: {repr(grid_size)}"])
+            # self.logger.info(f"Background estimator configuration:\n{bge_params}", stacklevel = 2)
+            self.logger.info("Background estimator configured.")
+        else:
+            self.logger.info("No configuration for background estimation.")
+            self.load_bge = False
         self.logger.info("Configuring output...")
         self.init_output()
         self.logger.info("Output configured.")
@@ -136,7 +157,11 @@ class AnalysisBase:
         if self.load_clusters:
             self.clusters = get_selected_clusters(event_struct, self.selector.cluster)
         if self.load_jets:
-            self.jets = self.jet_finder.find_jets(self.tracks)
+            self.jets = self.jet_finder.find_jets(self.tracks, use_area = self.load_bge)
+        if self.load_bge:
+            self.bge.set_particles(self.tracks)
+            self.rho = self.bge.rho()
+            self.sigma = self.bge.sigma()
 
     def finalize(self):
         """Finalize analysis before saving output. Should be overriden in analyses if necessary."""
