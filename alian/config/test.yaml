@@ -14,7 +14,9 @@ jet_finder:
 
 bkg_estimator:
   max_eta: 0.9
-  bge_rho_grid_size: 0.5
+  type: grid                 # 'grid' (GridMedianBackgroundEstimator) or 'jet' (JetMedianBackgroundEstimator)
+  bge_rho_grid_size: 0.5    # only used when type: grid
+  bge_jet_R: 0.2             # only used when type: jet (kt jet R for background clustering)
 
 analysis:
   pt_min_eec: 1.0

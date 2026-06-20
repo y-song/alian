@@ -93,21 +93,29 @@ class AnalysisBase:
             self.load_bge = True
             bge_cfg = self.cfg.get('bkg_estimator') or {}
             max_eta = bge_cfg.get('max_eta', 0.9)
-            # grid_size = bge_cfg.get('bge_rho_grid_size', 0.1)
-            # self.bge = fj.GridMedianBackgroundEstimator(max_eta, grid_size)
-            # follow AN at https://alice-notes.web.cern.ch/node/1760 for some parameters: excludes two hardest, kT, R = 0.2
-            # follow https://github.com/y-song/pyjetty/blob/main/pyjetty/mputils/icsubtractor.py for some other parameters
-            sel_not = getattr(fj, "operator!")  # cppyy doesn't bind fastjet's free-function Selector negation to ~/-
-            self.bge_jet_selector = fj.SelectorAbsEtaMax(max_eta-0.2) * sel_not(fj.SelectorNHardest(2)) * sel_not(fj.SelectorIsPureGhost())
-            self.bge_jet_def = fj.JetDefinition(fj.kt_algorithm, 0.2)
-            self.bge_area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(max_eta))
-            self.bge = fj.JetMedianBackgroundEstimator(	self.bge_jet_selector, self.bge_jet_def, self.bge_area_def )
-            # bge_params = "\n".join([f"\tmax_eta: {repr(max_eta)}", f"\tbge_rho_grid_size: {repr(grid_size)}"])
-            # self.logger.info(f"Background estimator configuration:\n{bge_params}", stacklevel = 2)
+            self.bge_type = bge_cfg.get('type', 'grid')
+            if self.bge_type == 'grid':
+                grid_size = bge_cfg.get('bge_rho_grid_size', 0.1)
+                self.bge = fj.GridMedianBackgroundEstimator(max_eta, grid_size)
+                bge_params = "\n".join([f"\ttype: {self.bge_type!r}", f"\tmax_eta: {repr(max_eta)}", f"\tbge_rho_grid_size: {repr(grid_size)}"])
+            elif self.bge_type == 'jet':
+                # follow AN at https://alice-notes.web.cern.ch/node/1760 for some parameters: excludes two hardest, kT, R = 0.2
+                # follow https://github.com/y-song/pyjetty/blob/main/pyjetty/mputils/icsubtractor.py for some other parameters
+                bge_jet_R = bge_cfg.get('bge_jet_R', 0.2)
+                sel_not = getattr(fj, "operator!")  # cppyy doesn't bind fastjet's free-function Selector negation to ~/-
+                self.bge_jet_selector = fj.SelectorAbsEtaMax(max_eta - bge_jet_R) * sel_not(fj.SelectorNHardest(2)) * sel_not(fj.SelectorIsPureGhost())
+                self.bge_jet_def = fj.JetDefinition(fj.kt_algorithm, bge_jet_R)
+                self.bge_area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(max_eta))
+                self.bge = fj.JetMedianBackgroundEstimator(self.bge_jet_selector, self.bge_jet_def, self.bge_area_def)
+                bge_params = "\n".join([f"\ttype: {self.bge_type!r}", f"\tmax_eta: {repr(max_eta)}", f"\tbge_jet_R: {repr(bge_jet_R)}"])
+            else:
+                raise ValueError(f"Unknown bkg_estimator type: {self.bge_type!r} (expected 'grid' or 'jet')")
+            self.logger.info(f"Background estimator configuration:\n{bge_params}", stacklevel = 2)
             self.logger.info("Background estimator configured.")
         else:
             self.logger.info("No configuration for background estimation.")
             self.load_bge = False
+            self.bge_type = None
         self.logger.info("Configuring output...")
         self.init_output()
         self.logger.info("Output configured.")
@@ -151,6 +159,7 @@ class AnalysisBase:
     def build_event(self, event_struct):
         """Build event as Event and store in self.event."""
         self.event = Event(event_struct)
+        self.event_counter = event_struct.counter
     def build_event_objs(self, event_struct):
         """Build tracks and optionally clusters and jets from associated event."""
         self.tracks = get_selected_tracks(event_struct, self.selector.track)
@@ -162,6 +171,39 @@ class AnalysisBase:
             self.bge.set_particles(self.tracks)
             self.rho = self.bge.rho()
             self.sigma = self.bge.sigma()
+
+    def get_rho_per_grid(self):
+        """Background density (scalar pT sum / area) for every grid cell of
+        self.bge, i.e. the full per-cell distribution that
+        GridMedianBackgroundEstimator.rho() takes the median of. Mirrors the
+        binning logic in fastjet's GridMedianBackgroundEstimator::set_particles()."""
+        scalar_pt = [0.0] * self.bge.n_tiles()
+        for t in self.tracks:
+            j = self.bge.tile_index(t)
+            if j >= 0:
+                scalar_pt[j] += t.pt()
+        return [pt / self.bge.tile_area(j) for j, pt in enumerate(scalar_pt)]
+
+    def get_rho_per_jet(self):
+        """Background density (pT / area) for every background jet used in the
+        last rho()/sigma() call of self.bge, i.e. the full per-jet distribution
+        that JetMedianBackgroundEstimator.rho() takes the median of. Mirrors
+        the per-jet density used in fastjet's
+        JetMedianBackgroundEstimator::compute_rho() (default _use_area_4vector
+        = True, so area_4vector().perp() is used rather than the scalar area)."""
+        return [j.pt() / j.area_4vector().perp() for j in self.bge.jets_used()]
+
+    def get_rho_per_cell(self):
+        """Full per-cell background density distribution that self.bge.rho()
+        takes the median of, dispatching on which estimator is configured via
+        bkg_estimator.type ('grid' -> get_rho_per_grid(), 'jet' ->
+        get_rho_per_jet()). Lets analyses stay agnostic to which estimator is
+        active."""
+        if self.bge_type == 'grid':
+            return self.get_rho_per_grid()
+        if self.bge_type == 'jet':
+            return self.get_rho_per_jet()
+        raise ValueError(f"Unknown bkg_estimator type: {self.bge_type!r}")
 
     def finalize(self):
         """Finalize analysis before saving output. Should be overriden in analyses if necessary."""
