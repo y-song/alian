@@ -13,14 +13,16 @@ FILE_LIST_PP=list/pp.txt
 FILE_LIST_OO=list/OO.txt
 CONFIG=config/embed.yaml
 ANALYSIS_CODE=analysis/test/embed.py
-OUTPUT_DIR=/rstorage/youqi/$SLURM_ARRAY_JOB_ID/$SLURM_ARRAY_TASK_ID
-
+OUTPUT_DIR=/rstorage/youqi/$SLURM_ARRAY_JOB_ID
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     mkdir -p "$OUTPUT_DIR"
     cp submit_embed.sh "$OUTPUT_DIR"
     cp "$CONFIG" "$OUTPUT_DIR"
     cp "$ANALYSIS_CODE" "$OUTPUT_DIR"
 fi
+
+OUTPUT_DIR=/rstorage/youqi/$SLURM_ARRAY_JOB_ID/$SLURM_ARRAY_TASK_ID
+mkdir -p "$OUTPUT_DIR"
 
 FILE_ID=$(( SLURM_ARRAY_TASK_ID + 1 ))
 FILE_PP=$(sed -n "${FILE_ID}p" "$FILE_LIST_PP")
