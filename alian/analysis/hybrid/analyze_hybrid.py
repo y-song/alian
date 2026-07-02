@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Example usage:
-python analysis/hybrid/analyze_hybrid.py -i /rstorage/youqi/HYBRID_Hadrons.out -c config/hybrid.yaml -n 10
+python analysis/hybrid/analyze_hybrid.py -i /rstorage/youqi/hybrid/vac_hadrons/vac_hadrons.out -c config/hybrid.yaml -n 10
 """
 
 import argparse
@@ -27,10 +27,10 @@ class AnalyzeHybrid(AnalysisBaseHepMC):
             )
 
     def analyze_event(self):
-        self.hists['event'].Fill(0.5)
-        [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
-        [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
-        [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]
+        self.hists['event'].Fill(0.5, self.weight)
+        [self.hists['track_pT'].Fill(t.pt(), self.weight) for t in self.tracks]
+        [self.hists['jet_pT'].Fill(j.pt(), self.weight) for j in self.jets]
+        [self.hists['jet_eta'].Fill(j.eta(), self.weight) for j in self.jets]
         for j in self.jets:
             for p in self.partons:
                 if j.delta_R(p) < 0.4:
@@ -41,16 +41,16 @@ class AnalyzeHybrid(AnalysisBaseHepMC):
             lund_seq = self.lund_gen.result(j)
             l = self.select_soft_drop(lund_seq, z_cut=self.z_cut)
             if l is None:
-                self.hists['rg'].Fill(j.pt(), -0.99)
-                self.hists['zg'].Fill(j.pt(), -0.99)
-                self.hists['sdjet_pT_jet_pT'].Fill(j.pt(), 0)
+                self.hists['rg'].Fill(j.pt(), -0.99, self.weight)
+                self.hists['zg'].Fill(j.pt(), -0.99, self.weight)
+                self.hists['sdjet_pT_jet_pT'].Fill(j.pt(), 0, self.weight)
                 continue
             subjet_a = l.harder()
             subjet_b = l.softer()
             sd_pt = subjet_a.pt() + subjet_b.pt() # approximate
-            self.hists['sdjet_pT_jet_pT'].Fill(j.pt(), sd_pt)
-            self.hists['rg'].Fill(j.pt(), delta_R(subjet_a, subjet_b))
-            self.hists['zg'].Fill(j.pt(), subjet_b.pt() / sd_pt)
+            self.hists['sdjet_pT_jet_pT'].Fill(j.pt(), sd_pt, self.weight)
+            self.hists['rg'].Fill(j.pt(), delta_R(subjet_a, subjet_b), self.weight)
+            self.hists['zg'].Fill(j.pt(), subjet_b.pt() / sd_pt, self.weight)
             self.do_eec(j, "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, but this includes stuff removed by SD
             # self.do_eec(sd(j), "sdjet_eec", ew_denom=sd_pt, jet_pt_bin=j.pt()) # jet passes SD, and this only includes stuff passes by SD
             self.do_eec(subjet_a, "eec_aa", ew_denom=sd_pt, jet_pt_bin=j.pt())
@@ -66,7 +66,7 @@ class AnalyzeHybrid(AnalysisBaseHepMC):
         for p1, p2 in itertools.permutations(tracks, 2):
             ew = p1.pt() * p2.pt() / ew_denom / ew_denom
             rl = delta_R(p1, p2)
-            self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
+            self.hists[hist_name].Fill(jet_pt_bin, rl, ew*self.weight)
 
     def do_eec_cross(self, subjet_a, subjet_b, hist_name, ew_denom, jet_pt_bin):
         tracks_a = self.eec_trk_selector(subjet_a.constituents())
@@ -75,7 +75,7 @@ class AnalyzeHybrid(AnalysisBaseHepMC):
             for p2 in tracks_b:
                 ew = p1.pt() * p2.pt() / ew_denom / ew_denom
                 rl = delta_R(p1, p2)
-                self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
+                self.hists[hist_name].Fill(jet_pt_bin, rl, ew*self.weight)
 
     def do_eec_noew(self, jet, hist_name, jet_pt_bin=None):
         if jet_pt_bin is None:
@@ -83,7 +83,7 @@ class AnalyzeHybrid(AnalysisBaseHepMC):
         tracks = self.eec_trk_selector(jet.constituents())
         for p1, p2 in itertools.permutations(tracks, 2):
             rl = delta_R(p1, p2)
-            self.hists[hist_name].Fill(jet_pt_bin, rl)
+            self.hists[hist_name].Fill(jet_pt_bin, rl, self.weight)
 
     def do_eec_cross_noew(self, subjet_a, subjet_b, hist_name, jet_pt_bin):
         tracks_a = self.eec_trk_selector(subjet_a.constituents())
@@ -91,7 +91,7 @@ class AnalyzeHybrid(AnalysisBaseHepMC):
         for p1 in tracks_a:
             for p2 in tracks_b:
                 rl = delta_R(p1, p2)
-                self.hists[hist_name].Fill(jet_pt_bin, rl)
+                self.hists[hist_name].Fill(jet_pt_bin, rl, self.weight)
 
     def select_soft_drop(self, lund_seq, z_cut=0.1):
         """

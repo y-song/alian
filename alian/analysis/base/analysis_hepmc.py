@@ -123,7 +123,7 @@ class AnalysisBaseHepMC:
         """Read one event from the HepMC file and build tracks and jets."""
         self.parts          = self.data_source.getParticles(include_wake=self.wake, charged_only=False)
         self.partons        = self.data_source.getPartons()
-        self.ev_info        = self.data_source.info()
+        self.weight         = self.data_source.info().weight()
         self.tracks = std.vector[fj.PseudoJet]([p for p in self.parts if self.selector.track.selects(p)])
         if self.load_jets:
             self.jets = self.jet_finder.find_jets(self.tracks)
