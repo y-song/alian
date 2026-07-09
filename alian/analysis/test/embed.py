@@ -18,6 +18,7 @@ python analysis/test/embed.py -i1 /rstorage/alice/run3/data/LHC24_ppref/Berkeley
 
 import argparse
 from time import perf_counter
+import numpy as np
 
 import heppyy
 fj = heppyy.load_cppyy('fastjet')
@@ -127,6 +128,7 @@ class EmbeddingAnalysis:
         combined_jf_opts = {**JetFinder._defaults, **oo_cfg.get('jet_finder', {})}
         self.combined_jet_finder = JetFinder(**combined_jf_opts)
 
+        self.area_cut = 0.56*np.pi*pp_jf_opts['R']*pp_jf_opts['R']
         self.output = Output.load(self.cfg)
         self.hists = self.output.hists
         self.logger.info("Embedding analysis initialized.")
@@ -163,7 +165,7 @@ class EmbeddingAnalysis:
     # -----------------------------------------------------------------------
 
     def analyze_event_pair(self, pp_ev, oo_ev):
-        # --- truth jets from file 1 ---
+        # --- truth jets from pp files ---
         pp_tracks = get_selected_tracks(pp_ev, self.pp_selector.track)
         pp_jets = self.pp_jet_finder.find_jets(pp_tracks, use_area=False)
         pp_jets = [j for j in pp_jets if j.pt() >= self.pt_min_pp_jet]
@@ -177,9 +179,11 @@ class EmbeddingAnalysis:
         # --- rho from both estimators on the combined event ---
         self.bge_grid.set_particles(combined)
         rho_grid = self.bge_grid.rho()
+        sigma_grid = self.bge_grid.sigma()
 
         self.bge_jet.set_particles(combined)
         rho_jet = self.bge_jet.rho()
+        sigma_jet = self.bge_jet.sigma()
 
         # --- cluster combined event with jet areas ---
         combined_jets = self.combined_jet_finder.find_jets(combined, use_area=True)
@@ -193,8 +197,8 @@ class EmbeddingAnalysis:
         for pp_j in pp_jets:    
 
             match = self._find_match(pp_j, combined_jets)
-            self.hists['combined_jet_pT_pp_jet_pT'].Fill(pp_j.pt(), match.pt() if match is not None else 0.0)
-            self.hists['combined_jet_A_pp_jet_pT'].Fill(pp_j.pt(), match.area() if match is not None else -0.1)
+            self.hists['combined_pT_pp_jet_pT'].Fill(pp_j.pt(), match.pt() if match is not None else 0.0)
+            self.hists['combined_A_pp_jet_pT'].Fill(pp_j.pt(), match.area() if match is not None else -0.1)
 
             if match is None:
                 pt_sub_grid = 0
@@ -202,18 +206,29 @@ class EmbeddingAnalysis:
             else:
                 pt_sub_grid = match.pt() - rho_grid * match.area()
                 pt_sub_jet  = match.pt() - rho_jet  * match.area()
+                perpcone_rho = self._find_perpcone_rho(match, combined)
 
             self.hists['delta_pT_grid_pp_jet_pT'].Fill(pp_j.pt(), pt_sub_grid - pp_j.pt())
-            self.hists['delta_pT_jet_pp_jet_pT'].Fill( pp_j.pt(), pt_sub_jet  - pp_j.pt())
-            self.hists['sub_pT_grid_pp_jet_pT'].Fill( pp_j.pt(), pt_sub_grid)
-            self.hists['sub_pT_jet_pp_jet_pT'].Fill( pp_j.pt(), pt_sub_jet)
+            self.hists['delta_pT_jet_pp_jet_pT'].Fill(pp_j.pt(), pt_sub_jet  - pp_j.pt())
+            self.hists['sub_pT_grid_pp_jet_pT'].Fill(pp_j.pt(), pt_sub_grid)
+            self.hists['sub_pT_jet_pp_jet_pT'].Fill(pp_j.pt(), pt_sub_jet)
 
-            if pt_sub_grid > 10.0:
+            if pt_sub_grid > 10.0 and match.area() > self.area_cut:
                 self.hists['delta_pT_grid_pp_jet_pT_matched'].Fill(pp_j.pt(), pt_sub_grid - pp_j.pt())
-                self.hists['sub_pT_grid_pp_jet_pT_matched'].Fill( pp_j.pt(), pt_sub_grid)
-            if pt_sub_jet > 10.0:
+                self.hists['sub_pT_grid_pp_jet_pT_matched'].Fill(pp_j.pt(), pt_sub_grid)
+                self.hists['rho_grid_pp_jet_pT_matched'].Fill(pp_j.pt(), rho_grid)
+                self.hists['sigma_grid_pp_jet_pT_matched'].Fill(pp_j.pt(), sigma_grid)
+                self.hists['combined_A_pp_jet_pT_grid_matched'].Fill(pp_j.pt(), match.area())
+                self.hists['combined_perpcone_rho_pp_jet_pT_grid_matched'].Fill(pp_j.pt(), perpcone_rho)
+                self.hists['delta_rho_grid_pp_jet_pT_grid_matched'].Fill(pp_j.pt(), rho_grid-perpcone_rho)
+            if pt_sub_jet > 10.0 and match.area() > self.area_cut:
                 self.hists['delta_pT_jet_pp_jet_pT_matched'].Fill(pp_j.pt(), pt_sub_jet - pp_j.pt())
-                self.hists['sub_pT_jet_pp_jet_pT_matched'].Fill( pp_j.pt(), pt_sub_jet)
+                self.hists['sub_pT_jet_pp_jet_pT_matched'].Fill(pp_j.pt(), pt_sub_jet)
+                self.hists['sigma_jet_pp_jet_pT_matched'].Fill(pp_j.pt(), sigma_jet)
+                self.hists['rho_jet_pp_jet_pT_matched'].Fill(pp_j.pt(), rho_jet)
+                self.hists['combined_A_pp_jet_pT_jet_matched'].Fill(pp_j.pt(), match.area())
+                self.hists['combined_perpcone_rho_pp_jet_pT_jet_matched'].Fill(pp_j.pt(), perpcone_rho)
+                self.hists['delta_rho_jet_pp_jet_pT_jet_matched'].Fill(pp_j.pt(), rho_jet-perpcone_rho)
 
     # -----------------------------------------------------------------------
     # helpers
@@ -234,6 +249,15 @@ class EmbeddingAnalysis:
             if dR < best_dR:
                 best, best_dR = j, dR
         return best
+    
+    def _find_perpcone_rho(self, ref_jet, combined, coneR=0.4):
+        perpcone = fj.PseudoJet()
+        perpcone.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + np.pi/2, ref_jet.m())
+        perpcone_pt = 0
+        for part in combined:
+          if perpcone.delta_R(part) <= coneR:
+            perpcone_pt += part.perp()
+        return perpcone_pt / (np.pi*coneR*coneR)
 
     # -----------------------------------------------------------------------
     # output / timing

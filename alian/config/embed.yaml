@@ -55,16 +55,23 @@ output:
     jet_pT:     ['lin',   0, 200, 100]
     delta_pT:   ['lin', -80,  80, 160]
     rho:        ['lin',   0, 100, 100]
-    area:       ['lin',  -0.2,  2,  44]
+    delta_rho:  ['lin', -20,  20,  80]
+    area:       ['lin', -0.2,  2,  44]
     centrality: ['lin',   0, 100, 100]
   histograms:
     # combined jet pT vs pp jet pT (y=0 when no match found)
-    combined_jet_pT_pp_jet_pT: [2, "combined_jet_pT_pp_jet_pT",
+    combined_pT_pp_jet_pT: [2, "combined_pT_pp_jet_pT",
       "Combined jet #it{p}_{T} vs pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{combined} (GeV)",
       jet_pT, jet_pT]
     # combined jet area vs pp jet pT (y=-0.1 when no match found)
-    combined_jet_A_pp_jet_pT: [2, "combined_jet_A_pp_jet_pT",
+    combined_A_pp_jet_pT: [2, "combined_A_pp_jet_pT",
       "Combined jet area vs pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);jet area",
+      jet_pT, area]
+    combined_A_pp_jet_pT_grid_matched: [2, "combined_A_pp_jet_pT_grid_matched",
+      "Combined jet area vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);jet area",
+      jet_pT, area]
+    combined_A_pp_jet_pT_jet_matched: [2, "combined_A_pp_jet_pT_jet_matched",
+      "Combined jet area vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);jet area",
       jet_pT, area]
     # delta_pT = (pt_combined - rho*A) - pt_pp for each rho estimator (-pt_pp when no match)
     delta_pT_grid_pp_jet_pT: [2, "delta_pT_grid_pp_jet_pT",
@@ -73,6 +80,30 @@ output:
     delta_pT_jet_pp_jet_pT:  [2, "delta_pT_jet_pp_jet_pT",
       "Jet-median #rho;#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{sub} - #it{p}_{T}^{pp} (GeV)",
       jet_pT, delta_pT]
+    rho_grid_pp_jet_pT_matched: [2, "rho_grid_pp_jet_pT_matched",
+      "Grid-median #rho vs #it{p}_{T}^{pp} (matched);#it{p}_{T}^{pp} (GeV);#rho (GeV)",
+      jet_pT, rho]
+    rho_jet_pp_jet_pT_matched: [2, "rho_jet_pp_jet_pT_matched",
+      "Jet-median #rho vs #it{p}_{T}^{pp} (matched);#it{p}_{T}^{pp} (GeV);#rho (GeV)",
+      jet_pT, rho]
+    combined_perpcone_rho_pp_jet_pT_grid_matched: [2, "combined_perpcone_rho_pp_jet_pT_grid_matched",
+      "Perp-cone #rho vs #it{p}_{T}^{pp} (grid median matched);#it{p}_{T}^{pp} (GeV);#rho_{perp-cone} (GeV)",
+      jet_pT, rho]
+    combined_perpcone_rho_pp_jet_pT_jet_matched: [2, "combined_perpcone_rho_pp_jet_pT_jet_matched",
+      "Perp-cone #rho vs #it{p}_{T}^{pp} (jet median matched);#it{p}_{T}^{pp} (GeV);#rho_{perp-cone} (GeV)",
+      jet_pT, rho]
+    delta_rho_grid_pp_jet_pT_grid_matched: [2, "delta_rho_grid_pp_jet_pT_grid_matched",
+      "(Grid-median event #rho - Perp-cone #rho) vs #it{p}_{T}^{pp} (matched);#it{p}_{T}^{pp} (GeV);#rho_{event}-#rho_{perp-cone} (GeV)",
+      jet_pT, delta_rho]
+    delta_rho_jet_pp_jet_pT_jet_matched: [2, "delta_rho_jet_pp_jet_pT_jet_matched",
+      "(Jet-median event #rho - Perp-cone #rho) vs #it{p}_{T}^{pp} (matched);#it{p}_{T}^{pp} (GeV);#rho_{event}-#rho_{perp-cone} (GeV)",
+      jet_pT, delta_rho]   
+    sigma_grid_pp_jet_pT_matched: [2, "sigma_grid_pp_jet_pT_matched",
+      "Grid-median #sigma vs #it{p}_{T}^{pp} (matched);#it{p}_{T}^{pp} (GeV);#sigma (GeV)",
+      jet_pT, rho]
+    sigma_jet_pp_jet_pT_matched: [2, "sigma_jet_pp_jet_pT_matched",
+      "Jet-median #sigma vs #it{p}_{T}^{pp} (matched);#it{p}_{T}^{pp} (GeV);#sigma (GeV)",
+      jet_pT, rho]      
     sub_pT_grid_pp_jet_pT: [2, "sub_pT_grid_pp_jet_pT",
       "Grid-median #rho;#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{sub} (GeV)",
       jet_pT, jet_pT]
