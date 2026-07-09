@@ -157,7 +157,7 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     gStyle->SetOptStat(0);
     SetStyle();
 
-    std::string infile  = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    std::string infile  = "/rstorage/youqi/hybrid/" + file_name + "/AnalysisResultsFinal.root";
     std::string jetR    = "04";
     std::string jetR_str = "0.4";
     std::string outfile = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
@@ -182,7 +182,7 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     TH1D *h_aa  = LoadAndProcess(f, "eec_aa", pt_lo, pt_hi, njets);
     TH1D *h_bb  = LoadAndProcess(f, "eec_bb", pt_lo, pt_hi, njets);
     TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets, 2.0);
-    TH1D *h_rg  = LoadAndProcess(f, "rg_log", pt_lo, pt_hi, njets);
+    TH1D *h_rg  = LoadAndProcess(f, "rg", pt_lo, pt_hi, njets);
     TH1D *h_zg  = LoadAndProcess(f, "zg", pt_lo, pt_hi, njets);
 
     TH1D *h_sdjet_groomed_eec;
@@ -199,12 +199,12 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
         TH1D       *hist;
     };
     std::vector<HistConfig> configs = {
-        // {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
+        {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
         // {"SD jet EEC", kGray+2, kFullCircle , h_sdjet_eec},
-        {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
-        {"EEC,aa", kBlue,     kFullSquare    , h_aa},
-        {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
-        {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
+        // {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
+        // {"EEC,aa", kBlue,     kFullSquare    , h_aa},
+        // {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
+        // {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
         // {"Rg",     kRed,      kFullTriangleUp, h_rg},
     };
 
@@ -234,8 +234,8 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
 
         TH1D *h = cfg.hist;
         FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
-        h->GetXaxis()->SetRangeUser(0.01, 0.4);
-        h->GetYaxis()->SetRangeUser(0, 4);
+        h->GetXaxis()->SetRangeUser(0.001, 0.4);
+        h->GetYaxis()->SetRangeUser(0, 8);
         h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
 
         if (first) {

@@ -85,17 +85,17 @@ void addLegendInfo(TLegend *l, string pt_min, string pt_max, string jetR)
     l->SetFillStyle(0); // turn legend transparent
 }
 
-void plot_dpt()
+void plot_matched_jet_delta_rho()
 {
     SetStyle();
 
     const string jetR = "04";
     const string jetRPoint = "0.4";
-    const string jobID = "1798818";
+    const string jobID = "1799040";
 
-    TFile *f = new TFile(("/rstorage/youqi/" + jobID + "/AnalysisResultsFinal.root").c_str(), "READ");
-    TH2D *h_grid_med = (TH2D *)f->Get("delta_pT_grid_pp_jet_pT_matched");
-    TH2D *h_jet_med = (TH2D *)f->Get("delta_pT_jet_pp_jet_pT_matched");
+    TFile *f = new TFile(("/home/youqi/temp/" + jobID + "/AnalysisResultsFinal.root").c_str(), "READ");
+    TH2D *h_grid_med = (TH2D *)f->Get("delta_rho_grid_pp_jet_pT_grid_matched");
+    TH2D *h_jet_med = (TH2D *)f->Get("delta_rho_jet_pp_jet_pT_jet_matched");
 
     TH2D *h1 = (TH2D *)h_grid_med->Clone("h1");
     TH2D *h2 = (TH2D *)h_grid_med->Clone("h2");
@@ -106,30 +106,30 @@ void plot_dpt()
 
     h1->GetXaxis()->SetRangeUser(20.0, 40.0);
     h2->GetXaxis()->SetRangeUser(40.0, 60.0);
-    // h3->GetXaxis()->SetRangeUser(30.0, 40.0);
+    h3->GetXaxis()->SetRangeUser(60.0, 100.0);
     h4->GetXaxis()->SetRangeUser(20.0, 40.0);
     h5->GetXaxis()->SetRangeUser(40.0, 60.0);
-    // h6->GetXaxis()->SetRangeUser(30.0, 40.0);
+    h6->GetXaxis()->SetRangeUser(60.0, 100.0);
 
     TH1D *h1_proj = h1->ProjectionY();
     TH1D *h2_proj = h2->ProjectionY();
-    // TH1D *h3_proj = h3->ProjectionY();
+    TH1D *h3_proj = h3->ProjectionY();
     TH1D *h4_proj = h4->ProjectionY();
     TH1D *h5_proj = h5->ProjectionY();
-    // TH1D *h6_proj = h6->ProjectionY();
+    TH1D *h6_proj = h6->ProjectionY();
 
-    cout << "Grid median mean: " << h1_proj->GetMean() << ", " << h2_proj->GetMean() << /*", " << h9_proj->GetMean() <<*/ endl;
-    cout << "sigma: " << h1_proj->GetStdDev() << ", " << h2_proj->GetStdDev() << /*", " << h9_proj->GetStdDev() <<*/ endl;
+    cout << "Grid median mean: " << h1_proj->GetMean() << ", " << h2_proj->GetMean() << ", " << h3_proj->GetMean() << endl;
+    cout << "sigma: " << h1_proj->GetStdDev() << ", " << h2_proj->GetStdDev() << ", " << h3_proj->GetStdDev() << endl;
 
-    cout << "Jet median mean: " << h4_proj->GetMean() << ", " << h5_proj->GetMean() << /*", " << h9_proj->GetMean() <<*/ endl;
-    cout << "sigma: " << h4_proj->GetStdDev() << ", " << h5_proj->GetStdDev() << /*", " << h9_proj->GetStdDev() <<*/ endl;
+    cout << "Jet median mean: " << h4_proj->GetMean() << ", " << h5_proj->GetMean() << ", " << h6_proj->GetMean() << endl;
+    cout << "sigma: " << h4_proj->GetStdDev() << ", " << h5_proj->GetStdDev() << ", " << h6_proj->GetStdDev() << endl;
 
     h1_proj->Scale(1.0 / h1_proj->Integral());
     h2_proj->Scale(1.0 / h2_proj->Integral());
-    // h3_proj->Scale(1.0 / h3_proj->Integral());
+    h3_proj->Scale(1.0 / h3_proj->Integral());
     h4_proj->Scale(1.0 / h4_proj->Integral());
     h5_proj->Scale(1.0 / h5_proj->Integral());
-    // h6_proj->Scale(1.0 / h6_proj->Integral());
+    h6_proj->Scale(1.0 / h6_proj->Integral());
 
     // First canvas
     TCanvas *c1 = new TCanvas();
@@ -138,19 +138,20 @@ void plot_dpt()
     
     TLegend *leg1 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
     addLegendInfo(leg1, "", "", jetRPoint);
-    h1_proj->GetXaxis()->SetTitle("#deltap_{T} = p_{T}^{combined sub} #minus p_{T}^{pp} [GeV]");
-    h1_proj->GetYaxis()->SetRangeUser(0, 0.15);
+    // h1_proj->GetXaxis()->SetTitle("Event #rho [GeV]");
+    h1_proj->GetXaxis()->SetRangeUser(-20, 20);
+    h1_proj->GetYaxis()->SetRangeUser(0, 0.1);
     h1_proj->SetTitle("Grid median #rho");
     FormatHist(leg1, h1_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
     FormatHist(leg1, h2_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
-    // FormatHist(leg1, h3_proj, "30 < #it{p}_{T}^{pp} < 40 GeV", kBlue+2);
+    FormatHist(leg1, h3_proj, "60 < #it{p}_{T}^{pp} < 100 GeV", kBlue+2);
 
     h1_proj->Draw();
     h2_proj->Draw("same");
-    // h3_proj->Draw("same");  
+    h3_proj->Draw("same");  
     leg1->Draw("same");
 
-    c1->SaveAs(("output/dpt_grid_med_vs_pp_pt_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    c1->SaveAs(("output/delta_rho_grid_pp_jet_pT_matched_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
 
     // Second canvas
     TCanvas *c2 = new TCanvas();
@@ -159,17 +160,17 @@ void plot_dpt()
     
     TLegend *leg2 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
     addLegendInfo(leg2, "", "", jetRPoint);
-    h4_proj->GetXaxis()->SetTitle("#deltap_{T} = p_{T}^{combined sub} #minus p_{T}^{pp} [GeV]");
-    h4_proj->GetYaxis()->SetRangeUser(0, 0.15);
+    h4_proj->GetXaxis()->SetRangeUser(-20, 20);
+    h4_proj->GetYaxis()->SetRangeUser(0, 0.1);
     h4_proj->SetTitle("Jet median #rho");
     FormatHist(leg2, h4_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
     FormatHist(leg2, h5_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
-    // FormatHist(leg2, h6_proj, "30 < #it{p}_{T}^{pp} < 40 GeV", kBlue+2);
+    FormatHist(leg2, h6_proj, "60 < #it{p}_{T}^{pp} < 100 GeV", kBlue+2);
 
     h4_proj->Draw();
     h5_proj->Draw("same");
-    // h6_proj->Draw("same");  
+    h6_proj->Draw("same");  
     leg2->Draw("same");
 
-    c2->SaveAs(("output/dpt_jet_med_vs_pp_pt_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    c2->SaveAs(("output/delta_rho_jet_pp_jet_pT_matched" + jetR + "_" + jobID + "_matched.pdf").c_str());
 }

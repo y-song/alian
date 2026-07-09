@@ -85,7 +85,7 @@ void addLegendInfo(TLegend *l, string pt_min, string pt_max, string jetR)
     l->SetFillStyle(0); // turn legend transparent
 }
 
-void plot_dpt()
+void plot_matched_jet_rho()
 {
     SetStyle();
 
@@ -94,8 +94,8 @@ void plot_dpt()
     const string jobID = "1798818";
 
     TFile *f = new TFile(("/rstorage/youqi/" + jobID + "/AnalysisResultsFinal.root").c_str(), "READ");
-    TH2D *h_grid_med = (TH2D *)f->Get("delta_pT_grid_pp_jet_pT_matched");
-    TH2D *h_jet_med = (TH2D *)f->Get("delta_pT_jet_pp_jet_pT_matched");
+    TH2D *h_grid_med = (TH2D *)f->Get("rho_grid_pp_jet_pT_matched");
+    TH2D *h_jet_med = (TH2D *)f->Get("rho_jet_pp_jet_pT_matched");
 
     TH2D *h1 = (TH2D *)h_grid_med->Clone("h1");
     TH2D *h2 = (TH2D *)h_grid_med->Clone("h2");
@@ -138,8 +138,9 @@ void plot_dpt()
     
     TLegend *leg1 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
     addLegendInfo(leg1, "", "", jetRPoint);
-    h1_proj->GetXaxis()->SetTitle("#deltap_{T} = p_{T}^{combined sub} #minus p_{T}^{pp} [GeV]");
-    h1_proj->GetYaxis()->SetRangeUser(0, 0.15);
+    h1_proj->GetXaxis()->SetTitle("Event #rho [GeV]");
+    h1_proj->GetXaxis()->SetRangeUser(0, 30.);
+    h1_proj->GetYaxis()->SetRangeUser(0, 0.2);
     h1_proj->SetTitle("Grid median #rho");
     FormatHist(leg1, h1_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
     FormatHist(leg1, h2_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
@@ -150,7 +151,7 @@ void plot_dpt()
     // h3_proj->Draw("same");  
     leg1->Draw("same");
 
-    c1->SaveAs(("output/dpt_grid_med_vs_pp_pt_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    c1->SaveAs(("output/rho_grid_pp_jet_pT_matched_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
 
     // Second canvas
     TCanvas *c2 = new TCanvas();
@@ -159,8 +160,9 @@ void plot_dpt()
     
     TLegend *leg2 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
     addLegendInfo(leg2, "", "", jetRPoint);
-    h4_proj->GetXaxis()->SetTitle("#deltap_{T} = p_{T}^{combined sub} #minus p_{T}^{pp} [GeV]");
-    h4_proj->GetYaxis()->SetRangeUser(0, 0.15);
+    h4_proj->GetXaxis()->SetTitle("Event #rho [GeV]");
+    h4_proj->GetXaxis()->SetRangeUser(0, 30.);
+    h4_proj->GetYaxis()->SetRangeUser(0, 0.2);
     h4_proj->SetTitle("Jet median #rho");
     FormatHist(leg2, h4_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
     FormatHist(leg2, h5_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
@@ -171,5 +173,5 @@ void plot_dpt()
     // h6_proj->Draw("same");  
     leg2->Draw("same");
 
-    c2->SaveAs(("output/dpt_jet_med_vs_pp_pt_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    c2->SaveAs(("output/rho_jet_pp_jet_pT_matched" + jetR + "_" + jobID + "_matched.pdf").c_str());
 }
