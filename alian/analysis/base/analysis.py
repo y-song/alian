@@ -100,10 +100,9 @@ class AnalysisBase:
                 bge_params = "\n".join([f"\ttype: {self.bge_type!r}", f"\tmax_eta: {repr(max_eta)}", f"\tbge_rho_grid_size: {repr(grid_size)}"])
             elif self.bge_type == 'jet':
                 # follow AN at https://alice-notes.web.cern.ch/node/1760 for some parameters: excludes two hardest, kT, R = 0.2
-                # follow https://github.com/y-song/pyjetty/blob/main/pyjetty/mputils/icsubtractor.py for some other parameters
                 bge_jet_R = bge_cfg.get('bge_jet_R', 0.2)
                 sel_not = getattr(fj, "operator!")  # cppyy doesn't bind fastjet's free-function Selector negation to ~/-
-                self.bge_jet_selector = fj.SelectorAbsEtaMax(max_eta - bge_jet_R) * sel_not(fj.SelectorNHardest(2)) * sel_not(fj.SelectorIsPureGhost())
+                self.bge_jet_selector = fj.SelectorAbsEtaMax(max_eta - bge_jet_R) * sel_not(fj.SelectorNHardest(2))# * sel_not(fj.SelectorIsPureGhost())
                 self.bge_jet_def = fj.JetDefinition(fj.kt_algorithm, bge_jet_R)
                 self.bge_area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(max_eta))
                 self.bge = fj.JetMedianBackgroundEstimator(self.bge_jet_selector, self.bge_jet_def, self.bge_area_def)
