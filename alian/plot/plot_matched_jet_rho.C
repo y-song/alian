@@ -94,8 +94,8 @@ void plot_matched_jet_rho()
     const string jobID = "1798818";
 
     TFile *f = new TFile(("/rstorage/youqi/" + jobID + "/AnalysisResultsFinal.root").c_str(), "READ");
-    TH2D *h_grid_med = (TH2D *)f->Get("rho_grid_pp_jet_pT_matched");
-    TH2D *h_jet_med = (TH2D *)f->Get("rho_jet_pp_jet_pT_matched");
+    TH2D *h_grid_med = (TH2D *)f->Get("sigma_grid_pp_jet_pT_matched");
+    TH2D *h_jet_med = (TH2D *)f->Get("sigma_jet_pp_jet_pT_matched");
 
     TH2D *h1 = (TH2D *)h_grid_med->Clone("h1");
     TH2D *h2 = (TH2D *)h_grid_med->Clone("h2");
@@ -138,10 +138,10 @@ void plot_matched_jet_rho()
     
     TLegend *leg1 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
     addLegendInfo(leg1, "", "", jetRPoint);
-    h1_proj->GetXaxis()->SetTitle("Event #rho [GeV]");
-    h1_proj->GetXaxis()->SetRangeUser(0, 30.);
-    h1_proj->GetYaxis()->SetRangeUser(0, 0.2);
-    h1_proj->SetTitle("Grid median #rho");
+    h1_proj->GetXaxis()->SetTitle("Event #sigma [GeV]");
+    h1_proj->GetXaxis()->SetRangeUser(0, 10.);
+    h1_proj->GetYaxis()->SetRangeUser(0, 1.0);
+    h1_proj->SetTitle("Grid median #sigma");
     FormatHist(leg1, h1_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
     FormatHist(leg1, h2_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
     // FormatHist(leg1, h3_proj, "30 < #it{p}_{T}^{pp} < 40 GeV", kBlue+2);
@@ -151,7 +151,7 @@ void plot_matched_jet_rho()
     // h3_proj->Draw("same");  
     leg1->Draw("same");
 
-    c1->SaveAs(("output/rho_grid_pp_jet_pT_matched_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    c1->SaveAs(("output/sigma_grid_pp_jet_pT_matched_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
 
     // Second canvas
     TCanvas *c2 = new TCanvas();
@@ -160,10 +160,10 @@ void plot_matched_jet_rho()
     
     TLegend *leg2 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
     addLegendInfo(leg2, "", "", jetRPoint);
-    h4_proj->GetXaxis()->SetTitle("Event #rho [GeV]");
-    h4_proj->GetXaxis()->SetRangeUser(0, 30.);
-    h4_proj->GetYaxis()->SetRangeUser(0, 0.2);
-    h4_proj->SetTitle("Jet median #rho");
+    h4_proj->GetXaxis()->SetTitle("Event #sigma [GeV]");
+    h4_proj->GetXaxis()->SetRangeUser(0, 10.);
+    h4_proj->GetYaxis()->SetRangeUser(0, 1.0);
+    h4_proj->SetTitle("Jet median #sigma");
     FormatHist(leg2, h4_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
     FormatHist(leg2, h5_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
     // FormatHist(leg2, h6_proj, "30 < #it{p}_{T}^{pp} < 40 GeV", kBlue+2);
@@ -173,5 +173,5 @@ void plot_matched_jet_rho()
     // h6_proj->Draw("same");  
     leg2->Draw("same");
 
-    c2->SaveAs(("output/rho_jet_pp_jet_pT_matched" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    c2->SaveAs(("output/sigma_jet_pp_jet_pT_matched" + jetR + "_" + jobID + "_matched.pdf").c_str());
 }
