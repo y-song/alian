@@ -14,6 +14,8 @@ import fjext
 import ecorrel
 import othercorrel
 import sys
+import time
+from datetime import datetime
 
 import ROOT
 
@@ -78,7 +80,7 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 		self.noISR = (bool)(1-args.ISRon)
 
 		# self defined variables
-		self.weighted = (bool)(args.weightON) #weightON=True(F) means turn weights on(off)
+		# self.weighted = (bool)(args.weightON) #weightON=True(F) means turn weights on(off)
 		self.ev_num_start = args.ev_num_base
 
 		# PDG ID values for quarks and gluons
@@ -159,7 +161,7 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 
 		self.scale_print_final_info(pythia)
 
-		self.fout.Write() # outf.Write()
+		# self.fout.Write() # outf.Write() # if things are missing, put this back in
 		# outf.Close()
 
 		self.save_output_objects() # file gets closed in this function
@@ -171,7 +173,13 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 
 		self.hNevents = ROOT.TH1I("hNevents", 'Number accepted events (unscaled)', 2, -0.5, 1.5)
 		self.hjetpT = ROOT.TH1D("hjetpT", "pT of jet", 200, 0, 200)
+		self.hjetpTScaled = ROOT.TH1D("hjetpTScaled", "pT of jet (scaled by scale factor)", 200, 0, 200)
 		self.hDeltaR = ROOT.TH1F("hDeltaR", 'Delta R between jet and each parent', 40, 0, 0.4)
+
+		self.hparticlepT = ROOT.TH1D("hparticlepT", "pT of particle", 200, 0, 200)
+		self.hparticlepTScaled = ROOT.TH1D("hparticlepTScaled", "pT of particle (scaled by scale factor)", 200, 0, 200)
+		self.hparticleEta = ROOT.TH1D("hparticleEta", "eta of particle", 200, -10, 10)
+		self.hparticleEtaScaled = ROOT.TH1D("hparticleEtaScaled", "eta of particle (scaled by scale factor)", 200, -10, 10)
 
 		
 		for jetR in self.jetR_list:
@@ -324,6 +332,13 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 			# charged-hadron level
 			parts_pythia_hch = pythiafjext.vectorize_select(pythia, [pythiafjext.kFinal, pythiafjext.kCharged], 0, True)
 
+			### remove later:
+			for p in parts_pythia_hch:
+				self.hparticlepT.Fill(p.pt())
+				self.hparticlepTScaled.Fill(p.pt())
+				self.hparticleEta.Fill(p.eta())
+				self.hparticleEtaScaled.Fill(p.eta())
+
 				
 			# Some "accepted" events don't survive hadronization step -- keep track here
 			self.hNevents.Fill(0)
@@ -419,7 +434,8 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 			for i_jch, jch in enumerate(jets_ch):
 				
 				# Fill histograms
-				self.hjetpT.Fill(jet.pt())
+				self.hjetpT.Fill(jch.pt())
+				self.hjetpTScaled.Fill(jch.pt())
 
 				matched_parent_idx = jet_parent_matches[i_jch]
 				parton_id = self.parent_ids[matched_parent_idx] if matched_parent_idx is not None else 0
@@ -449,6 +465,8 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 	def scale_print_final_info(self, pythia):
 		# Scale all jet histograms by the appropriate factor from generated cross section and the number of accepted events
 		scale_f = pythia.info.sigmaGen() / self.hNevents.GetBinContent(1)
+		print("Scale factor for histograms is", scale_f) # in mb
+		print("Calculated from sigmaGen", pythia.info.sigmaGen(), "and Naccepted", self.hNevents.GetBinContent(1))
 
 		for jetR in self.jetR_list:
 			hist_list_name = "hist_list_R%s" % str(jetR).replace('.', '')
@@ -457,6 +475,21 @@ class PythiaQuarkGluon(process_base.ProcessBase):
 
 		self.hNevents.SetBinError(1, 0)
 		self.hjetpT.SetBinError(1, 0)
+
+		self.hjetpTScaled.Scale(scale_f)
+		self.hjetpTScaled.SetBinError(1, 0)
+
+
+		## remove later:
+		self.hparticlepTScaled.Scale(scale_f)
+		self.hparticleEtaScaled.Scale(scale_f)
+		
+		self.hparticlepT.SetBinError(1, 0)
+		self.hparticlepTScaled.SetBinError(1, 0)
+		self.hparticleEta.SetBinError(1, 0)
+		self.hparticleEtaScaled.SetBinError(1, 0)
+
+
 
 
 
@@ -500,4 +533,16 @@ if __name__ == '__main__':
 
 
 	process = PythiaQuarkGluon(config_file=args.config_file, output_dir=args.output_dir, args=args)
+
+	start_time = time.time()
+	start_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+	print(f"Start time: {start_timestamp}")
+
 	process.pythia_quark_gluon(args)
+
+	end_time = time.time()
+	end_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+	duration = end_time - start_time
+
+	print(f"Stop time: {end_timestamp}")
+	print(f"Total execution time: {duration:.2f} seconds")

@@ -22,7 +22,10 @@ class DataAnalysis:
         self.dphi_cut = -9999
         self.deta_cut = -9999
         # Jet-pt slices (lower edges); each pair = [low, high) in GeV.
-        self.pt_slices = [(10, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 80)]
+        self.pt_slices = [
+            (10, 20), (20, 40), (40, 60), (60, 80), (80, 100),
+            (100, 120), (120, 150), (150, 200), (200, 500), (50, 60)
+        ]
 
     # ---------- helpers ----------
     def FormatHist(self, hist, norm_factor, pt_rl=False, avg_pt=None):
@@ -176,10 +179,14 @@ class DataAnalysis:
 
                 num_jets = 0.
                 num_jets_passed_cut = 0.
+                sum_jetpt_passed_cut = 0.
+                sum_radpt_passed_cut = 0.
 
                 for (event_idx, jet_id), jet_constituents in grouped_jets:
                     if event_idx % 10000 == 0:
                         print(f"[{tag}] event {event_idx}")
+                    if num_jets_passed_cut > 100:
+                        break  # limit number of jets processed for testing
 
                     c_pt = jet_constituents['c_pt'].to_numpy()
                     c_eta = jet_constituents['c_eta'].to_numpy()
@@ -213,6 +220,8 @@ class DataAnalysis:
                     subjet_a, subjet_b = subjets
 
                     num_jets_passed_cut += 1
+                    sum_jetpt_passed_cut += jet.perp()
+                    sum_radpt_passed_cut += parent_radiator.perp()
                     hist_jetpt_cut.Fill(jet.perp())
                     hist_radiatorpt.Fill(parent_radiator.perp())
                     hist_radiatorkt.Fill(np.log(selected_d.kt()))
@@ -242,16 +251,16 @@ class DataAnalysis:
                     self.FillHists("AxB", subjet_a, hist_AB_wwradpt, parent_radiator.perp(), hist_ptRL=hist_AB_ptRL_wwradpt, avg_pt=avg_jet_pt, sj_B=subjet_b)
 
                 # normalize / format
-                self.FormatHist(hist_full, num_jets_passed_cut)
-                self.FormatHist(hist_full_ptRL, num_jets_passed_cut, pt_rl=True, avg_pt=avg_jet_pt)
-                for h in [hist_rad_wwjetpt, hist_rad_wwradpt,
-                          hist_AA_wwjetpt, hist_BB_wwjetpt, hist_AB_wwjetpt,
-                          hist_AA_wwradpt, hist_BB_wwradpt, hist_AB_wwradpt, hist_rg]:
-                    self.FormatHist(h, num_jets_passed_cut)
-                for h in [hist_rad_ptRL_wwjetpt, hist_rad_ptRL_wwradpt,
-                          hist_AA_ptRL_wwjetpt, hist_BB_ptRL_wwjetpt, hist_AB_ptRL_wwjetpt,
-                          hist_AA_ptRL_wwradpt, hist_BB_ptRL_wwradpt, hist_AB_ptRL_wwradpt]:
-                    self.FormatHist(h, num_jets_passed_cut, pt_rl=True, avg_pt=avg_jet_pt)
+                # self.FormatHist(hist_full, num_jets_passed_cut)
+                # self.FormatHist(hist_full_ptRL, num_jets_passed_cut, pt_rl=True, avg_pt=avg_jet_pt)
+                # for h in [hist_rad_wwjetpt, hist_rad_wwradpt,
+                #           hist_AA_wwjetpt, hist_BB_wwjetpt, hist_AB_wwjetpt,
+                #           hist_AA_wwradpt, hist_BB_wwradpt, hist_AB_wwradpt, hist_rg]:
+                #     self.FormatHist(h, num_jets_passed_cut)
+                # for h in [hist_rad_ptRL_wwjetpt, hist_rad_ptRL_wwradpt,
+                #           hist_AA_ptRL_wwjetpt, hist_BB_ptRL_wwjetpt, hist_AB_ptRL_wwjetpt,
+                #           hist_AA_ptRL_wwradpt, hist_BB_ptRL_wwradpt, hist_AB_ptRL_wwradpt]:
+                #     self.FormatHist(h, num_jets_passed_cut, pt_rl=True, avg_pt=avg_jet_pt)
 
                 hist_CAB_wwjetpt = self.GetCABHist(hist_AA_wwjetpt, hist_BB_wwjetpt, hist_AB_wwjetpt, f"CAB_{tag}_wwjetpt")
                 hist_CAB_wwradpt = self.GetCABHist(hist_AA_wwradpt, hist_BB_wwradpt, hist_AB_wwradpt, f"CAB_{tag}_wwradpt")
@@ -271,8 +280,21 @@ class DataAnalysis:
                     h.Write()
                 if cut_mode == "sd":
                     hist_rg.Write()
+                
+                # after the loop, before writing
+                h_counters = ROOT.TH1D(f"counters_{tag}", "counters", 4, 0, 4)
+                h_counters.GetXaxis().SetBinLabel(1, "num_jets")
+                h_counters.GetXaxis().SetBinLabel(2, "num_jets_passed_cut")
+                h_counters.GetXaxis().SetBinLabel(3, "sum_jetpt_passed_cut")
+                h_counters.GetXaxis().SetBinLabel(4, "sum_radpt_passed_cut")
+                h_counters.SetBinContent(1, num_jets)
+                h_counters.SetBinContent(2, num_jets_passed_cut)
+                h_counters.SetBinContent(3, sum_jetpt_passed_cut)
+                h_counters.SetBinContent(4, sum_radpt_passed_cut)
+                h_counters.Sumw2(False)   # these are exact counts, not statistical; avoids error propagation weirdness
+                h_counters.Write()
 
-                print(f"[{tag}] jets={num_jets} passed_cut={num_jets_passed_cut}")
+                print(f"[{tag}] jets={num_jets} passed_cut={num_jets_passed_cut}") 
 
         root_outfile.Close()
 

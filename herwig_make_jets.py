@@ -13,6 +13,8 @@ import fjcontrib
 # import fjext
 # import ecorrel
 import sys
+import time
+from datetime import datetime
 
 import ROOT
 
@@ -126,7 +128,7 @@ class HerwigMakeJets(process_base.ProcessBase):
 
 		self.scale_print_final_info()
 
-		self.fout.Write() # outf.Write()
+		# self.fout.Write() # outf.Write() # if things are missing, put this back in
 		# outf.Close()
 
 		self.save_output_objects() # file gets closed in this function
@@ -141,6 +143,9 @@ class HerwigMakeJets(process_base.ProcessBase):
 		self.hNevents = ROOT.TH1I("hNevents", 'Number accepted events (unscaled)', 2, -0.5, 1.5)
 		self.hjetpT = ROOT.TH1D("hjetpT", "pT of jet", 200, 0, 200)
 		self.hDeltaR = ROOT.TH1F("hDeltaR", 'Delta R between jet and each parent', 40, 0, 0.4)
+
+		self.hparticlepT = ROOT.TH1D("hparticlepT", "pT of particle", 200, 0, 200)
+		self.hparticleEta = ROOT.TH1D("hparticleEta", "eta of particle", 200, -10, 10)
 
 		
 		for jetR in self.jetR_list:
@@ -233,6 +238,10 @@ class HerwigMakeJets(process_base.ProcessBase):
 			# # charged-hadron level
 			# parts_pythia_hch = pythiafjext.vectorize_select(pythia, [pythiafjext.kFinal, pythiafjext.kCharged], 0, True)
 			
+			### remove later:
+			for p in pj_particles:
+				self.hparticlepT.Fill(p.pt())
+				self.hparticleEta.Fill(p.eta())
 				
 			# Some "accepted" events don't survive hadronization step -- keep track here
 			self.hNevents.Fill(0)
@@ -335,6 +344,9 @@ class HerwigMakeJets(process_base.ProcessBase):
 		self.hNevents.SetBinError(1, 0)
 		self.hjetpT.SetBinError(1, 0)
 
+		self.hparticlepT.SetBinError(1, 0)
+		self.hparticleEta.SetBinError(1, 0)
+
 
 
 ################################################################
@@ -368,4 +380,16 @@ if __name__ == '__main__':
 
 
 	process = HerwigMakeJets(config_file=args.config_file, output_dir=args.output_dir, args=args)
+
+	start_time = time.time()
+	start_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+	print(f"Start time: {start_timestamp}")
+
 	process.herwig_make_jets(args)
+
+	end_time = time.time()
+	end_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+	duration = end_time - start_time
+
+	print(f"Stop time: {end_timestamp}")
+	print(f"Total execution time: {duration:.2f} seconds")

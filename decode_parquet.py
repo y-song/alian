@@ -9,6 +9,7 @@ import pandas as pd
 df = pd.read_parquet("/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/53423546/100gev/FilteredJetsForAnalysisCombined.parquet")
 # df = pd.read_parquet(f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/storage/herwig/1006458/100gev/FilteredJetsForAnalysisCombined.parquet")
 # df = pd.read_parquet("/global/cfs/cdirs/alice/blianggi/rstorage/alice/generation/blianggi/herwiggen/tree_gen/54316088/100gev/1/JetsForAnalysis.parquet")
+# df = pd.read_parquet("/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/55595752/69/DataJetsForAnalysis.parquet")
 
 # View the first 10 rows
 print(df.head(10))

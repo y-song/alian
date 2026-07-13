@@ -345,3 +345,83 @@ output_path_ratio = os.path.join(output_dir, "jet_pt_xsec_ratio_herwig_over_pyth
 plt.savefig(output_path_ratio, bbox_inches='tight')
 plt.close('all')
 print(f"\nSaved: {output_path_ratio}")
+
+
+# ─────────────────────────────────────────────
+# PLOT 3: Number of jets per event (Pythia vs Herwig)
+# ─────────────────────────────────────────────
+
+def plot_jets_per_event():
+    """
+    For each pt-hat bin, histogram the number of jets per event for
+    Pythia and Herwig on a single canvas (2x2 subplots).
+
+    The parquet is filled PER CONSTITUENT, so each row is a particle.
+    Jets per event = number of unique jet_id values within each event_id.
+    """
+    print("\n" + "=" * 60)
+    print("Creating 'jets per event' comparison plot...")
+    print("=" * 60)
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+
+    for i, target_jet_pt in enumerate(target_jet_pts):
+        ax = axes[i]
+
+        pythia_path = os.path.join(parquet_base, f"{target_jet_pt}gev", "JetsForAnalysisCombined.parquet")
+        herwig_path = os.path.join(herwig_base,  f"{target_jet_pt}gev", "JetsForAnalysisCombined.parquet")
+
+        print(f"\n  Loading parquets for {target_jet_pt} GeV...")
+        df_pythia = pd.read_parquet(pythia_path, columns=['event_id', 'jet_id'])
+        df_herwig = pd.read_parquet(herwig_path, columns=['event_id', 'jet_id'])
+
+        # Jets per event = number of UNIQUE jet_id values per event_id
+        # (rows are constituents, so we must count distinct jets, not rows)
+        pythia_jpe = df_pythia.groupby('event_id')['jet_id'].nunique().to_numpy()
+        herwig_jpe = df_herwig.groupby('event_id')['jet_id'].nunique().to_numpy()
+
+        print(f"    Pythia: {len(pythia_jpe)} events, "
+              f"mean jets/event = {pythia_jpe.mean():.3f}, max = {pythia_jpe.max()}")
+        print(f"    Herwig: {len(herwig_jpe)} events, "
+              f"mean jets/event = {herwig_jpe.mean():.3f}, max = {herwig_jpe.max()}")
+
+        # Integer-centered bins from 0 to overall max
+        max_jpe = int(max(pythia_jpe.max(), herwig_jpe.max()))
+        bins = np.arange(-0.5, max_jpe + 1.5, 1.0)
+
+        hist_settings = {
+            'bins': bins,
+            'histtype': 'step',
+            'linewidth': 2,
+            'density': True,  # normalize: Pythia/Herwig have different event counts
+        }
+
+        ax.hist(pythia_jpe, color='blue', label='Pythia', **hist_settings)
+        ax.hist(herwig_jpe, color='red',  label='Herwig', **hist_settings)
+
+        ax.set_yscale('log')
+        ax.set_xlabel('Number of jets per event', fontsize=13)
+        ax.set_ylabel('Fraction of events', fontsize=13)
+        ax.set_title(
+            rf'$\hat{{p}}_{{T,\mathrm{{min}}}}$ = {int(target_jet_pt * 0.8)} GeV  '
+            rf'(target $p_T$ = {target_jet_pt} GeV)',
+            fontsize=12
+        )
+        ax.legend(fontsize=11)
+        ax.grid(True, linestyle='--', alpha=0.5)
+
+        del df_pythia
+        del df_herwig
+
+    plt.suptitle(r'Number of jets per event: Pythia vs Herwig', fontsize=16, y=1.01)
+    plt.tight_layout()
+
+    output_path_jpe = os.path.join(output_dir, "jets_per_event_pythia_vs_herwig.pdf")
+    plt.savefig(output_path_jpe, bbox_inches='tight')
+    plt.close('all')
+    print(f"\nSaved: {output_path_jpe}")
+
+
+# --- Call it ---
+plot_jets_per_event()

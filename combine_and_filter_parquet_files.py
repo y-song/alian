@@ -11,12 +11,12 @@ generator = "herwig"  # "pythia" or "herwig"
 # =============================================
 
 if generator == "pythia":
-    jobid = "53423546"
+    jobid = "55555648"
     base_outputdir = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/pythia_otf/{jobid}"
 elif generator == "herwig":
     # jobid = "1006458" #hiccup
     # base_outputdir = f"/rstorage/generators/herwig_alice/tree_gen/{jobid}" #hiccup
-    jobid = "54380351" #perlmutter
+    jobid = "55293842" #perlmutter
     base_outputdir = f"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/generation/blianggi/herwiggen/tree_gen/{jobid}" #perlmutter
 
 jet_pts = [50, 100, 200, 500]
@@ -32,6 +32,9 @@ for i, jetpt in enumerate(jet_pts):
     outf_path_jetpt = f"{base_outputdir}/{jetpt}gev/"
     comb_output_path = f"{outf_path_jetpt}JetsForAnalysisCombined.parquet"
     filtered_output_path = f"{outf_path_jetpt}FilteredJetsForAnalysisCombined.parquet"
+    # Narrower window: jetpt --> jetpt*1.1
+    upper_narrow = int(jetpt * 1.1)
+    filtered_narrow_output_path = f"{outf_path_jetpt}FilteredJetsForAnalysisCombined_{jetpt}_{upper_narrow}.parquet"
 
     # Check that input files exist before attempting to merge
     input_files = glob.glob(f"{outf_path_jetpt}/**/JetsForAnalysis.parquet", recursive=True)
@@ -54,7 +57,7 @@ for i, jetpt in enumerate(jet_pts):
         result = conn.execute(f"SELECT COUNT(*) FROM '{comb_output_path}'").fetchone()
         print(f"Combined file created with {result[0]} rows")
 
-    # Step 2: Filter the combined file by jet pt window
+    # Step 2: Filter the combined file by jet pt window (jetpt --> jetpt*1.2)
     print(f"Filtering into {filtered_output_path}...")
     conn.execute(f"""
         COPY (
@@ -64,6 +67,18 @@ for i, jetpt in enumerate(jet_pts):
     """)
     result = conn.execute(f"SELECT COUNT(*) FROM '{filtered_output_path}'").fetchone()
     print(f"Done! Filtered data saved to {filtered_output_path}")
+    print(f"Number of rows kept: {result[0]}")
+
+    # Step 3: Filter the combined file by narrower jet pt window (jetpt --> jetpt*1.1)
+    print(f"Filtering into {filtered_narrow_output_path}...")
+    conn.execute(f"""
+        COPY (
+            SELECT * FROM '{comb_output_path}'
+            WHERE jet_pt >= {jetpt} AND jet_pt <= {jetpt * 1.1}
+        ) TO '{filtered_narrow_output_path}' (FORMAT 'PARQUET')
+    """)
+    result = conn.execute(f"SELECT COUNT(*) FROM '{filtered_narrow_output_path}'").fetchone()
+    print(f"Done! Filtered data saved to {filtered_narrow_output_path}")
     print(f"Number of rows kept: {result[0]}")
 
 conn.close()
