@@ -97,9 +97,19 @@ def main():
 
     canvas2 = ROOT.TCanvas("c2", "Integrated Yield", 800, 600)
     canvas2.SetLogy()
+    canvas2.SetGrid()
 
     h_integrated.SetLineColor(ROOT.kBlack)
     h_integrated.Draw("HIST")
+
+    text_box = ROOT.TPaveText(0.45, 0.67, 0.77, 0.8, "NDC")
+    text_box.AddText("ALICE pp #sqrt{s} =5.36 TeV")
+    text_box.AddText("LHC24 ppref pass 1, JE derived")
+    text_box.AddText("anti-k_{T} R=0.4, |#eta_{jet}|<0.5")
+    text_box.SetFillColor(0)          # White background
+    text_box.SetBorderSize(0)         # Thin border line
+    text_box.SetTextAlign(12)         # Center alignment for text (horizontal and vertical)
+    text_box.Draw()
 
     canvas2.SaveAs("/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/data_checks/study_jetpt_integrated.pdf")
     print("Integrated yield plot saved as study_jetpt_integrated.pdf")
