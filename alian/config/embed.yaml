@@ -40,15 +40,16 @@ oo:
 bkg_estimator:
   max_eta: 0.9
   # grid median
-  bge_rho_grid_size: 0.5
+  bge_rho_grid_size: 0.6
   # jet median
-  bge_jet_R: 0.2
+  bge_jet_R: 0.3
 
 # ---- analysis parameters -----------------------------------------------------
 analysis:
   pt_min_pp_jet: 10.0      # minimum pp jet pT to include [GeV]
   pt_min_combined_jet: 10.0
   max_match_dR: 0.4        # maximum delta-R for truth<->embedded jet matching
+  perpcone_R: 0.3
 
 output:
   bins:
@@ -56,9 +57,15 @@ output:
     delta_pT:   ['lin', -80,  80, 160]
     rho:        ['lin',   0, 100, 100]
     delta_rho:  ['lin', -20,  20,  80]
-    area:       ['lin', -0.2,  2,  44]
+    area:       ['lin', -0.2,  2,  88]
     centrality: ['lin',   0, 100, 100]
   histograms:
+    area_grid: [1, "area_grid",
+      "Event grid area;grid area;event count",
+      area]
+    area_jet_median: [1, "area_jet_median",
+      "{k}_{T} jet area;{k}_{T} jet area;jet count",
+      area]
     # combined jet pT vs pp jet pT (y=0 when no match found)
     combined_pT_pp_jet_pT: [2, "combined_pT_pp_jet_pT",
       "Combined jet #it{p}_{T} vs pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{combined} (GeV)",

@@ -114,7 +114,6 @@ class EmbeddingAnalysis:
         bge_jet_selector = (
             fj.SelectorAbsEtaMax(max_eta - bge_jet_R)
             * sel_not(fj.SelectorNHardest(2))
-            * sel_not(fj.SelectorIsPureGhost())
         )
         bge_jet_def  = fj.JetDefinition(fj.kt_algorithm, bge_jet_R)
         bge_area_def = fj.AreaDefinition(
@@ -180,10 +179,12 @@ class EmbeddingAnalysis:
         self.bge_grid.set_particles(combined)
         rho_grid = self.bge_grid.rho()
         sigma_grid = self.bge_grid.sigma()
+        self.hists['area_grid'].Fill(self.bge_grid.mean_area())
 
         self.bge_jet.set_particles(combined)
         rho_jet = self.bge_jet.rho()
         sigma_jet = self.bge_jet.sigma()
+        [self.hists['area_jet_median'].Fill(j.area()) for j in self.bge_jet.jets_used()]
 
         # --- cluster combined event with jet areas ---
         combined_jets = self.combined_jet_finder.find_jets(combined, use_area=True)
@@ -206,7 +207,7 @@ class EmbeddingAnalysis:
             else:
                 pt_sub_grid = match.pt() - rho_grid * match.area()
                 pt_sub_jet  = match.pt() - rho_jet  * match.area()
-                perpcone_rho = self._find_perpcone_rho(match, combined)
+                perpcone_rho = self._find_perpcone_rho(match, combined, coneR=self.perpcone_R)
 
             self.hists['delta_pT_grid_pp_jet_pT'].Fill(pp_j.pt(), pt_sub_grid - pp_j.pt())
             self.hists['delta_pT_jet_pp_jet_pT'].Fill(pp_j.pt(), pt_sub_jet  - pp_j.pt())
@@ -251,13 +252,15 @@ class EmbeddingAnalysis:
         return best
     
     def _find_perpcone_rho(self, ref_jet, combined, coneR=0.4):
-        perpcone = fj.PseudoJet()
-        perpcone.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + np.pi/2, ref_jet.m())
+        perpcone1 = fj.PseudoJet()
+        perpcone1.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + np.pi/2, ref_jet.m())
+        perpcone2 = fj.PseudoJet()
+        perpcone2.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() - np.pi/2, ref_jet.m())
         perpcone_pt = 0
         for part in combined:
-          if perpcone.delta_R(part) <= coneR:
+          if perpcone1.delta_R(part) <= coneR or perpcone2.delta_R(part) <= coneR:
             perpcone_pt += part.perp()
-        return perpcone_pt / (np.pi*coneR*coneR)
+        return perpcone_pt / (2*np.pi*coneR*coneR)
 
     # -----------------------------------------------------------------------
     # output / timing
