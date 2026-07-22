@@ -6,3 +6,11 @@ tracks:
   - py
   - pz
   - energy
+hard_partons:
+  branches:
+  - eventID
+  - px
+  - py
+  - pz
+  - energy
+  - label

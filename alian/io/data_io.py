@@ -76,6 +76,8 @@ class Run3FileInput(yasp.GenericObject):
                         pbar_total.update(1)
                         yield self.event
                         self.event_count += 1
+                        if (self.event_count % 10000 == 0):
+                            print("Event:", self.event_count, "/", self.n_events)
                         if self.event_count >= self.n_events:
                             pbar_files.close()
                             pbar_total.close()
@@ -174,9 +176,9 @@ class Run2FileInput(yasp.GenericObject):
                     break
 
 class FlatFileInput(yasp.GenericObject):
-    """Read a single flat ROOT file where each row is a track, grouped by eventID.
- 
-    Expected tstruct.yaml format:
+    """Read a "flat" ROOT file with two trees, grouped by eventID.
+
+    Expected flat_tstruct.yaml format:
         tracks:
           branches:
             - eventID
@@ -185,55 +187,79 @@ class FlatFileInput(yasp.GenericObject):
             - pz
             - energy
             - label
+        hard_partons:
+          branches:
+            - eventID
+            - px
+            - py
+            - pz
+            - energy
+            - label
     """
- 
-    def __init__(self, file_list, yaml_file, **kwargs):
+
+    def __init__(self, file_path, yaml_file, **kwargs):
         super(FlatFileInput, self).__init__(**kwargs)
-        self.file_list = file_list
-        if isinstance(self.file_list, str):
-            if self.file_list.endswith(".txt"):
-                with open(self.file_list, "r") as file:
-                    self.file_list = file.read().splitlines()
-            else:
-                self.file_list = [self.file_list]
-        with open(yaml_file, 'r') as f:
-            tree_structure = yaml.safe_load(f)
-        self.tree_name = list(tree_structure.keys())[0]
-        self.branches  = tree_structure[self.tree_name]['branches']
+        self.file_path = file_path
+        self.setup_trees_and_branches(yaml_file)
         self.event_count = 0
         self.n_events = kwargs.get('n_events', -1)
         if self.name is None:
             self.name = "FlatFileInput"
+
+    def setup_trees_and_branches(self, yaml_file):
+        with open(yaml_file, 'r') as f:
+            tree_structure = yaml.safe_load(f)
+
+        self.particle_tree_name = 'tracks'
+        self.parton_tree_name = 'hard_partons'
+        self.branches = tree_structure[self.particle_tree_name]['branches']
  
-    def add_generic_ebye_info(self, event_id, group):
+    def add_generic_ebye_info(self, event_id, group, parton_info):
         self.event.event_id   = event_id
         self.event.track_count = len(group)
         self.event.counter    = self.event_count
+        # Store parton info as event-level attributes (scalars)
+        for key, val in parton_info.items():
+            setattr(self.event, key, val)
  
-    def next_event(self, disable_bar=False):
-        total = self.n_events
-        pbar_files = tqdm(total=len(self.file_list), desc="Files", position=0)
-        self.event = yasp.GenericObject()
-        for root_file_path in self.file_list:
-            print("Loading file:", root_file_path)
-            df = uproot.open(f"{root_file_path}:{self.tree_name}").arrays(
-                self.branches, library="pd"
-            )
-            grouped = df.groupby("eventID")
-            
-            with tqdm(total=len(grouped), desc="Events", unit="ev", position=1, disable=disable_bar) as pbar:
-                for event_id, group in grouped:
-                    self.event.data = {col: group[col].to_numpy() for col in group.columns}
-                    self.add_generic_ebye_info(event_id, group)
-                    pbar.update(1)
-                    yield self.event
-                    self.event_count += 1
-                    if total > 0 and self.event_count >= total:
-                        pbar_files.close()
-                        return
+    def next_event(self, disable_bar=False, smoothing=0.3):
+        # Open the ROOT file
+        file = uproot.open(self.file_path)
 
-            pbar_files.update(1)
-        pbar_files.close()
+        # Access both trees
+        particle_tree = file[self.particle_tree_name]
+        parton_tree = file[self.parton_tree_name]
+
+        # Read particle tree as DataFrame
+        df_particle = particle_tree.arrays(self.branches, library="pd")
+
+        # Read parton tree as numpy arrays and build lookup dict
+        parton_arrays = parton_tree.arrays(self.branches, library="np")
+
+        # Build parton lookup: {eventID: {px_parton1: val, py_parton1: val, ...}}
+        parton_data = {}
+        for i in range(0, len(parton_arrays['eventID']), 2):  # Step by 2 (2 partons per event)
+            event_id = parton_arrays['eventID'][i]
+            parton_data[event_id] = {}
+            for col in self.branches:
+                if col != 'eventID':
+                    parton_data[event_id][f'{col}_parton1'] = parton_arrays[col][i]
+                    parton_data[event_id][f'{col}_parton2'] = parton_arrays[col][i+1]
+
+        # Group by eventID
+        grouped = df_particle.groupby("eventID")
+        total = len(grouped) if self.n_events < 0 else min(self.n_events, len(grouped))
+
+        self.event = yasp.GenericObject()
+        with tqdm(total=total, desc="Events", unit="ev", disable=disable_bar, smoothing=smoothing) as pbar:
+            for event_id, group in grouped:
+                self.event.data = {col: group[col].to_numpy() for col in group.columns}
+                self.add_generic_ebye_info(event_id, group, parton_data.get(event_id, {}))
+                yield self.event
+                self.event_count += 1
+                pbar.update(1)
+                if self.event_count >= total:
+                    return
 
 def get_default_tree_structure(file_list, lhc_run=3):
     if isinstance(file_list, str):

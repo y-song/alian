@@ -1,14 +1,13 @@
 from time import perf_counter
 
-from alian.io.data_io import FlatFileInput
 from ROOT import TFile
 import heppyy
-
-from .event import FlatEvent, get_selected_tracks_from_pxpypze
 import heppyy.util.fastjet_cppyy
 from cppyy.gbl import fastjet as fj
 from cppyy.gbl import std
 
+from alian.io.data_io import FlatFileInput
+from .event import FlatEvent, get_selected_tracks_from_pxpypze, get_partons
 from .jet_finder import JetFinder
 from .logs import set_up_logger
 from .output import Output
@@ -139,6 +138,7 @@ class AnalysisBaseFlat:
     def build_event_objs(self, ev):
         """Build selected tracks and optionally find jets."""
         self.tracks = get_selected_tracks_from_pxpypze(ev, self.selector.track)
+        self.partons = get_partons(ev)
         if self.load_jets:
             self.jets = self.jet_finder.find_jets(self.tracks)
 

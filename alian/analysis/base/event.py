@@ -35,7 +35,7 @@ class FlatEvent:
         self._pz         = ev.data["pz"]
         self._energy     = ev.data["energy"]
         self._label      = ev.data["label"]
-        
+
 def get_tracks(ev):
     """Get all tracks from an event (no track selections applied)."""
     return alian.numpy_ptetaphi_to_tracks(
@@ -77,6 +77,26 @@ def get_selected_tracks_from_pxpypze(ev, selector):
         ]
     )
     return std.vector[fj.PseudoJet]([t for t in tracks if selector.selects(t)])
+
+def get_partons(ev):
+    """Get the two hard partons from an event (stored as event-level scalars)."""
+    parton1 = fj.PseudoJet(
+        float(ev.px_parton1),
+        float(ev.py_parton1),
+        float(ev.pz_parton1),
+        float(ev.energy_parton1)
+    )
+    parton1.set_user_index(int(ev.label_parton1))
+
+    parton2 = fj.PseudoJet(
+        float(ev.px_parton2),
+        float(ev.py_parton2),
+        float(ev.pz_parton2),
+        float(ev.energy_parton2)
+    )
+    parton2.set_user_index(int(ev.label_parton2))
+
+    return fj.sorted_by_pt(std.vector[fj.PseudoJet]([parton1, parton2]))
 
 def get_clusters(ev):
     """Get all clusters from an event (no cluster selections applied)."""
