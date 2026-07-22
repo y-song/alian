@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+
+''' HOW TO RUN:
+  - Default (z=0.1, 0.2 and maxkt):
+  python data_process_jets.py input.parquet output.root
+  - Specific z-cuts (e.g., 0.15 and 0.25) and maxkt:
+  python data_process_jets.py input.parquet output.root --zcuts 0.15 0.25
+  - Only z=0.1, no maxkt:
+  python data_process_jets.py input.parquet output.root --zcuts 0.1 --no-maxkt
+'''
+
 import sys
 import math
 import numpy as np
@@ -7,6 +17,7 @@ import fastjet as fj
 import fjcontrib
 import ecorrel
 import ROOT
+import argparse
 
 ROOT.gROOT.SetBatch(True)
 ROOT.TH1.SetDefaultSumw2()
@@ -17,7 +28,6 @@ class DataAnalysis:
     def __init__(self):
         self.jet_R = 0.4
         self.jet_def_ca = fj.JetDefinition(fj.cambridge_algorithm, 1.0)
-        self.cut_configs = [("sd", 0.1), ("maxkt", None)]
         self.trk_thrd = 1
         self.dphi_cut = -9999
         self.deta_cut = -9999
@@ -106,11 +116,11 @@ class DataAnalysis:
                 hist_ptRL.Fill(rl_value * avg_pt, weight_value)
 
     # ---------- main ----------
-    def run(self, infile, outfile):
+    def run(self, infile, outfile, zcuts=[0.1, 0.2], use_maxkt=True):
         df = pd.read_parquet(infile)
         root_outfile = ROOT.TFile(outfile, "RECREATE")
 
-        nbins = 25
+        nbins = 75 #25
         xmin, xmax = 0.001, 1.0
         ptrl_xmin, ptrl_xmax = 0.1, 100
         log_bins = np.logspace(np.log10(xmin), np.log10(xmax), nbins + 1)
@@ -120,6 +130,11 @@ class DataAnalysis:
         radkt_bins = np.linspace(-5, 5, nbins + 1)
 
         avg_jet_pts = {}
+
+        # Determine which cut configurations to use
+        active_cuts = [("sd", z) for z in zcuts]
+        if use_maxkt:
+            active_cuts.append(("maxkt", None))
 
         for (lo, hi) in self.pt_slices:
             sl_tag = self.slice_tag(lo, hi)
@@ -134,7 +149,7 @@ class DataAnalysis:
 
             grouped_jets = df_slice.groupby(['event_id', 'jet_id'])
 
-            for cut_mode, cut_value in self.cut_configs:
+            for cut_mode, cut_value in active_cuts:
                 cut_tag = self.format_cut_tag(cut_mode, cut_value)
                 tag = f"{sl_tag}_{cut_tag}"
 
@@ -309,5 +324,13 @@ class DataAnalysis:
 
 
 if __name__ == "__main__":
-    infile, outfile = sys.argv[1], sys.argv[2]
-    DataAnalysis().run(infile, outfile)
+    parser = argparse.ArgumentParser(description="Process jets and generate EEC histograms.")
+    parser.add_argument("infile", help="Input Parquet file")
+    parser.add_argument("outfile", help="Output ROOT file")
+    parser.add_argument("--zcuts", type=float, nargs='+', default=[0.1, 0.2],
+                        help="Specify z-cut values for SD selection (e.g., --zcuts 0.1 0.2)")
+    parser.add_argument("--no-maxkt", action="store_true",
+                        help="Disable maxkt selection")
+
+    args = parser.parse_args()
+    DataAnalysis().run(args.infile, args.outfile, zcuts=args.zcuts, use_maxkt=not args.no_maxkt)

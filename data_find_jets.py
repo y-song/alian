@@ -5,6 +5,7 @@ import uproot
 import awkward as ak
 import fastjet as fj
 import pandas as pd
+import argparse
 
 # --- Selection bits ---
 SEL8_BIT = 0
@@ -67,7 +68,7 @@ CBT_FLAGS = ["kFT0Bad", "kITSBad", "kTPCBadTracking", "kTPCBadPID"]
 RCT_MASK_CBT = make_rct_mask(CBT_FLAGS)
 
 
-def process(infile, outfile):
+def process(infile, outfile, jet_pt_min=JET_PT_MIN):
 
     # anti-kt jet definition
     jetdef = fj.JetDefinition(fj.antikt_algorithm, JET_R)
@@ -162,7 +163,7 @@ def process(infile, outfile):
             ]
 
             cluster = fj.ClusterSequence(pj_particles, jetdef)
-            jets = fj.sorted_by_pt(cluster.inclusive_jets(JET_PT_MIN))
+            jets = fj.sorted_by_pt(cluster.inclusive_jets(jet_pt_min))
 
             for jet in jets:
                 jeta = jet.eta()
@@ -207,9 +208,15 @@ def process(infile, outfile):
     print(f"  events sel8:                 {n_events_sel}")
     print(f"  events sel8+rct:             {n_events_rct}")
     print(f"  global trks (pt>={PT_MIN}, |eta|<={ETA_MAX}): {n_tracks_sel}")
-    print(f"  jets saved (anti-kt R={JET_R}, pt>={JET_PT_MIN}, |eta|<{JET_ETA_MAX:.2f}): {n_jets_sel}")
+    print(f"  jets saved (anti-kt R={JET_R}, pt>={jet_pt_min}, |eta|<{JET_ETA_MAX:.2f}): {n_jets_sel}")
 
 
 if __name__ == "__main__":
-    infile, outfile = sys.argv[1], sys.argv[2]
-    process(infile, outfile)
+    parser = argparse.ArgumentParser(description="Find and save jets from ALICE data.")
+    parser.add_argument("infile", help="Input ROOT file")
+    parser.add_argument("outfile", help="Output Parquet file")
+    parser.add_argument("--ptmin", type=float, default=JET_PT_MIN,
+                        help=f"Minimum jet pT to save (default: {JET_PT_MIN})")
+
+    args = parser.parse_args()
+    process(args.infile, args.outfile, jet_pt_min=args.ptmin)
