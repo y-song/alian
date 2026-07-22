@@ -171,8 +171,10 @@ class DataAnalysis:
 
                 hist_rad_wwjetpt = ROOT.TH1D(f"hist_rad_{tag}_wwjetpt", "EEC; R_{L}", nbins, log_bins)
                 hist_rad_wwradpt = ROOT.TH1D(f"hist_rad_{tag}_wwradpt", "EEC; R_{L}", nbins, log_bins)
+                hist_rad_wwnullpt = ROOT.TH1D(f"hist_rad_{tag}_wwnullpt", "EEC; R_{L}", nbins, log_bins)
                 hist_rad_ptRL_wwjetpt = ROOT.TH1D(f"hist_rad_ptRL_{tag}_wwjetpt", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
                 hist_rad_ptRL_wwradpt = ROOT.TH1D(f"hist_rad_ptRL_{tag}_wwradpt", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                hist_rad_ptRL_wwnullpt = ROOT.TH1D(f"hist_rad_ptRL_{tag}_wwnullpt", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
 
                 hist_AA_wwjetpt = ROOT.TH1D(f"hist_AA_{tag}_wwjetpt", "AxA; R_{L}", nbins, log_bins)
                 hist_BB_wwjetpt = ROOT.TH1D(f"hist_BB_{tag}_wwjetpt", "BxB", nbins, log_bins)
@@ -308,6 +310,7 @@ class DataAnalysis:
                 for h in [hist_jetpt_all, hist_jetpt_cut, hist_radiatorpt, hist_radiatorkt,
                           hist_full, hist_full_ptRL,
                           hist_rad_wwjetpt, hist_rad_ptRL_wwjetpt, hist_rad_wwradpt, hist_rad_ptRL_wwradpt,
+                          hist_rad_wwnullpt, hist_rad_ptRL_wwnullpt,
                           hist_AA_wwjetpt, hist_AA_ptRL_wwjetpt, hist_BB_wwjetpt, hist_BB_ptRL_wwjetpt,
                           hist_AB_wwjetpt, hist_AB_ptRL_wwjetpt,
                           hist_AA_wwradpt, hist_AA_ptRL_wwradpt, hist_BB_wwradpt, hist_BB_ptRL_wwradpt,
