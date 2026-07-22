@@ -111,12 +111,18 @@ class DataAnalysis:
         for index in range(eec_result.correlator(2).rs().size()):
             rl_value = eec_result.correlator(2).rs()[index]
             weight_value = eec_result.correlator(2).weights()[index]
-            hist.Fill(rl_value, weight_value)
+            if weight >= 0:
+                hist.Fill(rl_value, weight_value)
+            else:
+                hist.Fill(rl_value)
             if hist_ptRL is not None and avg_pt is not None:
-                hist_ptRL.Fill(rl_value * avg_pt, weight_value)
+                if weight >= 0:
+                    hist_ptRL.Fill(rl_value * avg_pt, weight_value)
+                else:
+                    hist_ptRL.Fill(rl_value * avg_pt)
 
     # ---------- main ----------
-    def run(self, infile, outfile, zcuts=[0.1, 0.2], use_maxkt=True):
+    def run(self, infile, outfile, zcuts=[0.1, 0.2], use_maxkt=True, unweighted=False):
         df = pd.read_parquet(infile)
         root_outfile = ROOT.TFile(outfile, "RECREATE")
 
@@ -130,6 +136,8 @@ class DataAnalysis:
         radkt_bins = np.linspace(-5, 5, nbins + 1)
 
         avg_jet_pts = {}
+
+        self.unweighted = unweighted
 
         # Determine which cut configurations to use
         active_cuts = [("sd", z) for z in zcuts]
@@ -158,6 +166,8 @@ class DataAnalysis:
 
                 hist_full = ROOT.TH1D(f"hist_full_{tag}", "EEC; R_{L}", nbins, log_bins)
                 hist_full_ptRL = ROOT.TH1D(f"hist_full_ptRL_{tag}", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                hist_full_wwnullpt = ROOT.TH1D(f"hist_full_{tag}_wwnullpt", "EEC; R_{L}", nbins, log_bins)
+                hist_full_ptRL_wwnullpt = ROOT.TH1D(f"hist_full_ptRL_{tag}_wwnullpt", "EEC; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
 
                 hist_rad_wwjetpt = ROOT.TH1D(f"hist_rad_{tag}_wwjetpt", "EEC; R_{L}", nbins, log_bins)
                 hist_rad_wwradpt = ROOT.TH1D(f"hist_rad_{tag}_wwradpt", "EEC; R_{L}", nbins, log_bins)
@@ -178,9 +188,17 @@ class DataAnalysis:
                 hist_BB_ptRL_wwradpt = ROOT.TH1D(f"hist_BB_ptRL_{tag}_wwradpt", "BxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
                 hist_AB_ptRL_wwradpt = ROOT.TH1D(f"hist_AB_ptRL_{tag}_wwradpt", "AxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
 
+                hist_AA_wwnullpt = ROOT.TH1D(f"hist_AA_{tag}_wwnullpt", "AxA; R_{L}", nbins, log_bins)
+                hist_BB_wwnullpt = ROOT.TH1D(f"hist_BB_{tag}_wwnullpt", "BxB", nbins, log_bins)
+                hist_AB_wwnullpt = ROOT.TH1D(f"hist_AB_{tag}_wwnullpt", "AxB", nbins, log_bins)
+                hist_AA_ptRL_wwnullpt = ROOT.TH1D(f"hist_AA_ptRL_{tag}_wwnullpt", "AxA; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                hist_BB_ptRL_wwnullpt = ROOT.TH1D(f"hist_BB_ptRL_{tag}_wwnullpt", "BxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+                hist_AB_ptRL_wwnullpt = ROOT.TH1D(f"hist_AB_ptRL_{tag}_wwnullpt", "AxB; <p_{T}>R_{L} [GeV/c]", nbins, ptrl_log_bins)
+
                 hist_radiatorpt = ROOT.TH1D(f"radiator_pt_{tag}", "radiator p_{T}; p_{T,radiator}", len(radpt_bins) - 1, radpt_bins)
                 hist_radiatorkt = ROOT.TH1D(f"radiator_lnkt_{tag}", "radiator ln k_{T}; ln(k_{T,radiator})", nbins, radkt_bins)
-                hist_rg = ROOT.TH1D(f"hist_rg_{tag}", "R_{g} = #DeltaR_{AB}; R_{g}", nbins, log_bins)
+                if cut_mode == "sd":
+                    hist_rg = ROOT.TH1D(f"hist_rg_{tag}", "R_{g} = #DeltaR_{AB}; R_{g}", nbins, log_bins)
 
                 n_max = 60
                 hist_nA_nB = ROOT.TH2D(f"hist_nA_nB_{tag}", "N in A vs B; N_{A}; N_{B}", n_max, -0.5, n_max - 0.5, n_max, -0.5, n_max - 0.5)
@@ -200,8 +218,8 @@ class DataAnalysis:
                 for (event_idx, jet_id), jet_constituents in grouped_jets:
                     if event_idx % 10000 == 0:
                         print(f"[{tag}] event {event_idx}")
-                    if num_jets_passed_cut > 100:
-                        break  # limit number of jets processed for testing
+                    # if num_jets_passed_cut > 100:
+                    #     break  # limit number of jets processed for testing
 
                     c_pt = jet_constituents['c_pt'].to_numpy()
                     c_eta = jet_constituents['c_eta'].to_numpy()
@@ -240,7 +258,8 @@ class DataAnalysis:
                     hist_jetpt_cut.Fill(jet.perp())
                     hist_radiatorpt.Fill(parent_radiator.perp())
                     hist_radiatorkt.Fill(np.log(selected_d.kt()))
-                    hist_rg.Fill(selected_d.Delta())
+                    if cut_mode == "sd":
+                        hist_rg.Fill(selected_d.Delta())
 
                     n_A = self.count_constituents(subjet_a)
                     n_B = self.count_constituents(subjet_b)
@@ -252,18 +271,22 @@ class DataAnalysis:
                     hist_combAB.Fill(n_A * n_B * 2)
                     hist_combTotal.Fill((n_A + n_B) ** 2)
 
-                    for label, sj, h_jw, h_rw, h_jw_ptRL, h_rw_ptRL in [
-                        ("full", jet, hist_full, None, hist_full_ptRL, None),
-                        ("rad", parent_radiator, hist_rad_wwjetpt, hist_rad_wwradpt, hist_rad_ptRL_wwjetpt, hist_rad_ptRL_wwradpt),
-                        ("A", subjet_a, hist_AA_wwjetpt, hist_AA_wwradpt, hist_AA_ptRL_wwjetpt, hist_AA_ptRL_wwradpt),
-                        ("B", subjet_b, hist_BB_wwjetpt, hist_BB_wwradpt, hist_BB_ptRL_wwjetpt, hist_BB_ptRL_wwradpt),
+                    for label, sj, h_jw, h_rw, h_nw, h_jw_ptRL, h_rw_ptRL, h_nw_ptRL in [
+                        ("full", jet, hist_full, None, hist_full_wwnullpt, hist_full_ptRL, None, hist_full_ptRL_wwnullpt),
+                        ("rad", parent_radiator, hist_rad_wwjetpt, hist_rad_wwradpt, hist_rad_wwnullpt, hist_rad_ptRL_wwjetpt, hist_rad_ptRL_wwradpt, hist_rad_ptRL_wwnullpt),
+                        ("A", subjet_a, hist_AA_wwjetpt, hist_AA_wwradpt, hist_AA_wwnullpt, hist_AA_ptRL_wwjetpt, hist_AA_ptRL_wwradpt, hist_AA_ptRL_wwnullpt),
+                        ("B", subjet_b, hist_BB_wwjetpt, hist_BB_wwradpt, hist_BB_wwnullpt, hist_BB_ptRL_wwjetpt, hist_BB_ptRL_wwradpt, hist_BB_ptRL_wwnullpt),
                     ]:
                         self.FillHists(label, sj, h_jw, jet.perp(), hist_ptRL=h_jw_ptRL, avg_pt=avg_jet_pt)
                         if label != "full":
                             self.FillHists(label, sj, h_rw, parent_radiator.perp(), hist_ptRL=h_rw_ptRL, avg_pt=avg_jet_pt)
+                        if self.unweighted:
+                            self.FillHists(label, sj, h_nw, -1, hist_ptRL=h_nw_ptRL, avg_pt=avg_jet_pt)
 
                     self.FillHists("AxB", subjet_a, hist_AB_wwjetpt, jet.perp(), hist_ptRL=hist_AB_ptRL_wwjetpt, avg_pt=avg_jet_pt, sj_B=subjet_b)
                     self.FillHists("AxB", subjet_a, hist_AB_wwradpt, parent_radiator.perp(), hist_ptRL=hist_AB_ptRL_wwradpt, avg_pt=avg_jet_pt, sj_B=subjet_b)
+                    if self.unweighted:
+                        self.FillHists("AxB", subjet_a, hist_AB_wwnullpt, -1, hist_ptRL=hist_AB_ptRL_wwnullpt, avg_pt=avg_jet_pt, sj_B=subjet_b)
 
                 # normalize / format
                 # self.FormatHist(hist_full, num_jets_passed_cut)
@@ -289,7 +312,9 @@ class DataAnalysis:
                           hist_AB_wwjetpt, hist_AB_ptRL_wwjetpt,
                           hist_AA_wwradpt, hist_AA_ptRL_wwradpt, hist_BB_wwradpt, hist_BB_ptRL_wwradpt,
                           hist_AB_wwradpt, hist_AB_ptRL_wwradpt,
-                          hist_CAB_wwjetpt, hist_CAB_wwradpt, hist_CAB_ptRL_wwjetpt, hist_CAB_ptRL_wwradpt,
+                          hist_AA_wwnullpt, hist_AA_ptRL_wwnullpt, hist_BB_wwnullpt, hist_BB_ptRL_wwnullpt,
+                          hist_AB_wwnullpt, hist_AB_ptRL_wwnullpt,
+                          hist_CAB_wwjetpt, hist_CAB_wwradpt, hist_CAB_ptRL_wwjetpt, hist_CAB_ptRL_wwradpt, # can probably remove CAB, because needs to be properly combined/normalized first
                           hist_nA_nB, hist_nTotalUnGroomed, hist_nTotalGroomed,
                           hist_combAA, hist_combBB, hist_combAB, hist_combTotal]:
                     h.Write()
@@ -329,8 +354,8 @@ if __name__ == "__main__":
     parser.add_argument("outfile", help="Output ROOT file")
     parser.add_argument("--zcuts", type=float, nargs='+', default=[0.1, 0.2],
                         help="Specify z-cut values for SD selection (e.g., --zcuts 0.1 0.2)")
-    parser.add_argument("--no-maxkt", action="store_true",
-                        help="Disable maxkt selection")
+    parser.add_argument("--no-maxkt", action="store_true", help="Disable maxkt selection")
+    parser.add_argument("--add-noweight", action="store_true", help="Also look at no weight EECs (saved _wwnullpt)")
 
     args = parser.parse_args()
-    DataAnalysis().run(args.infile, args.outfile, zcuts=args.zcuts, use_maxkt=not args.no_maxkt)
+    DataAnalysis().run(args.infile, args.outfile, zcuts=args.zcuts, use_maxkt=not args.no_maxkt, unweighted=args.add_noweight)
