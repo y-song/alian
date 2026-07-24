@@ -209,10 +209,8 @@ class FlatFileInput(yasp.GenericObject):
     def setup_trees_and_branches(self, yaml_file):
         with open(yaml_file, 'r') as f:
             tree_structure = yaml.safe_load(f)
-
-        self.particle_tree_name = 'tracks'
-        self.parton_tree_name = 'hard_partons'
-        self.branches = tree_structure[self.particle_tree_name]['branches']
+        self.particle_branches = tree_structure['tracks']['branches']
+        self.parton_branches = tree_structure['partons']['branches']
  
     def add_generic_ebye_info(self, event_id, group, parton_info):
         self.event.event_id   = event_id
@@ -226,22 +224,30 @@ class FlatFileInput(yasp.GenericObject):
         # Open the ROOT file
         file = uproot.open(self.file_path)
 
-        # Access both trees
-        particle_tree = file[self.particle_tree_name]
-        parton_tree = file[self.parton_tree_name]
+        particle_tree = file['tracks']
+        df_particle = particle_tree.arrays(self.particle_branches, library="pd")
 
-        # Read particle tree as DataFrame
-        df_particle = particle_tree.arrays(self.branches, library="pd")
+        # Detect parton tree name
+        all_trees = file.keys()
+        # Extract base names (remove ;cycle)
+        base_trees = [k.split(';')[0] for k in all_trees]
 
-        # Read parton tree as numpy arrays and build lookup dict
-        parton_arrays = parton_tree.arrays(self.branches, library="np")
+        if 'hard_partons' in base_trees:
+            parton_tree_name = [k for k in all_trees if k.startswith('hard_partons')][0]
+        elif 'partons' in base_trees:
+            parton_tree_name = [k for k in all_trees if k.startswith('partons')][0]
+        else:
+            raise KeyError(f"Neither 'hard_partons' nor 'partons' found in {self.file_path}. Available: {all_trees}")
+
+        parton_tree = file[parton_tree_name]
+        parton_arrays = parton_tree.arrays(self.parton_branches, library="np")
 
         # Build parton lookup: {eventID: {px_parton1: val, py_parton1: val, ...}}
         parton_data = {}
         for i in range(0, len(parton_arrays['eventID']), 2):  # Step by 2 (2 partons per event)
             event_id = parton_arrays['eventID'][i]
             parton_data[event_id] = {}
-            for col in self.branches:
+            for col in self.parton_branches:
                 if col != 'eventID':
                     parton_data[event_id][f'{col}_parton1'] = parton_arrays[col][i]
                     parton_data[event_id][f'{col}_parton2'] = parton_arrays[col][i+1]
