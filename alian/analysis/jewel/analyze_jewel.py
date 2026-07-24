@@ -109,6 +109,7 @@ class AnalyzeJewel(AnalysisBaseFlat):
                     # j.set_user_index(p.user_index())
                     matched_jets.push_back(j)
                     self.hists["parton_pT_jet_pT"].Fill(j.perp(), p.perp())
+                    break
 
         return fj.sorted_by_pt(matched_jets)
     
