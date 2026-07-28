@@ -108,12 +108,14 @@ class EmbeddingAnalysis:
 
         grid_size = bge_cfg.get('bge_rho_grid_size', 0.5)
         self.bge_grid = fj.GridMedianBackgroundEstimator(max_eta, grid_size)
+        print("bge_grid:\n", self.bge_grid.description())
 
         bge_jet_R = bge_cfg.get('bge_jet_R', 0.2)
         sel_not = getattr(fj, "operator!")
         bge_jet_selector = (
             fj.SelectorAbsEtaMax(max_eta - bge_jet_R)
             * sel_not(fj.SelectorNHardest(2))
+            # * sel_not(fj.SelectorIsPureGhost())
         )
         bge_jet_def  = fj.JetDefinition(fj.kt_algorithm, bge_jet_R)
         bge_area_def = fj.AreaDefinition(
@@ -122,6 +124,7 @@ class EmbeddingAnalysis:
         self.bge_jet = fj.JetMedianBackgroundEstimator(
             bge_jet_selector, bge_jet_def, bge_area_def
         )
+        print("bge_jet:\n", self.bge_jet.description())
 
         # --- embedded jet finder (needs jet areas for area subtraction) ---
         combined_jf_opts = {**JetFinder._defaults, **oo_cfg.get('jet_finder', {})}
@@ -195,9 +198,14 @@ class EmbeddingAnalysis:
         self.hists['cent_rho_jet'].Fill(rho_jet, oo_centrality)
 
         # --- fill histograms per pp jet ---
-        for pp_j in pp_jets:    
+        # Keep track of which combined jets have been matched to avoid 1-to-many matching
+        available_combined_jets = list(combined_jets)
+        for pp_j in pp_jets:
 
-            match = self._find_match(pp_j, combined_jets)
+            match = self._find_match(pp_j, available_combined_jets)
+            if match is not None:
+                available_combined_jets.remove(match)
+
             self.hists['combined_pT_pp_jet_pT'].Fill(pp_j.pt(), match.pt() if match is not None else 0.0)
             self.hists['combined_A_pp_jet_pT'].Fill(pp_j.pt(), match.area() if match is not None else -0.1)
 
