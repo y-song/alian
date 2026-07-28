@@ -2,7 +2,7 @@ selections:
   event:
     event_sel: sel8Full
     cent_min: 0.
-    cent_max: 100.
+    cent_max: 10.
   track:
     pt_min: 0.150
     track_sel: globalTrack
@@ -10,13 +10,13 @@ selections:
 jet_finder:
   R: 0.4
   alg: antikt
-  pT_min: 10
+  pT_min: 20
 
 bkg_estimator:
   max_eta: 0.9
-  type: grid                 # 'grid' (GridMedianBackgroundEstimator) or 'jet' (JetMedianBackgroundEstimator)
+  type: jet                 # 'grid' (GridMedianBackgroundEstimator) or 'jet' (JetMedianBackgroundEstimator)
   bge_rho_grid_size: 0.5    # only used when type: grid
-  bge_jet_R: 0.2             # only used when type: jet (kt jet R for background clustering)
+  bge_jet_R: 0.4            # only used when type: jet (kt jet R for background clustering)
 
 analysis:
   pt_min_eec: 1.0
@@ -25,10 +25,10 @@ analysis:
 
 output:
   bins:
-    event: ['lin', 0, 1, 1]
+    event: ['lin', 0, 3, 3]
     centrality: ['lin', 0, 100, 100]
     multiplicity: ['lin', 0, 5000, 5000]
-    track_pT: ['log', 0.1, 20, 300]
+    track_pT: ['lin', 0, 20, 300]
     jet_pT: ['lin', 0, 200, 100]
     jet_eta: ['lin', -1., 1., 40]
     RL: ['log', 1.0e-4, 1.0, 51]
@@ -36,17 +36,21 @@ output:
     zg: ['lin', -1.0, 0.5, 30]
   histograms:
     # define histograms with bins described in `bins`
-    # event: [1, "event", "Event count;;Counts", event]
+    event: [1, "event", "Event count;;Counts", event]
     cent_mult: [2, "cent_mult", "Centrality vs multiplicity;multiplicity;centrality", multiplicity, centrality]
     cent_ntrack: [2, "cent_ntrack", "Centrality vs N(tracks);N(tracks);centrality", multiplicity, centrality]
     cent_rho: [2, "cent_rho", "Centrality vs #rho;#rho (GeV);centrality", centrality, centrality]
     sigma_rho: [2, "sigma_rho", "#sigma vs #rho;#rho (GeV);#sigma (GeV)", centrality, centrality]
-    track_pT: [1, "track_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);dN/d#it{p}_{T}", track_pT]
+    track_pT: [1, "track_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
+    track_in_jet_pT: [1, "track_in_jet_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
+    track_in_jet_event_pT: [1, "track_in_jet_event_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
     jet_pT: [1, "jet_pT", "Jet #it{p}_{T} spectrum;jet #it{p}_{T} (GeV);Counts", jet_pT]
     jet_eta: [1, "jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", jet_eta]
     jet_rhoA_pT: [2, "jet_rhoA_pT", "Jet #Delta#it{p}_{T} vs #it{p}_{T};jet #it{p}_{T} (GeV);jet #Delta#it{p}_{T} = #rhoA (GeV)", jet_pT, jet_pT]
     jet_A_pT: [2, "jet_A_pT", "Jet area vs #it{p}_{T};jet #it{p}_{T} (GeV);jet area", jet_pT, jet_eta]
     jet_pT_sub_pT: [2, "jet_pT_sub_pT", "Background subtracted jet #it{p}_{T} vs unsubtracted jet #it{p}_{T};jet #it{p}_{T} (GeV);jet #it{p}_{T}^{sub} (GeV)", jet_pT, jet_pT]
+    jet_pT_sub_post_selection: [1, "jet_pT_sub_post_selection", "Jet #it{p}_{T} spectrum (post selection);jet #it{p}_{T}^{sub} (GeV);Counts", jet_pT]
+    jet_pT_sub_pT_post_selection: [2, "jet_pT_sub_pT_post_selection", "Background subtracted jet #it{p}_{T} vs unsubtracted jet #it{p}_{T} (post selection);jet #it{p}_{T} (GeV);jet #it{p}_{T}^{sub} (GeV)", jet_pT, jet_pT]
     eec: [2, "eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     sdjet_eec: [2, "sdjet_eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_aa: [2, "eec_aa", "EEC;SD jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]

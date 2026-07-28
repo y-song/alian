@@ -14,9 +14,6 @@ fj = heppyy.load_cppyy('fastjet')
 
 class Analyze(AnalysisBase):
     _defaults = {
-        'pt_min_eec': 1.0,
-        'pt_min_jet': 20.0,
-        'z_cut': 0.1,
         'n_rho_grid_diag_events': 10,
     }
 
@@ -81,6 +78,10 @@ class Analyze(AnalysisBase):
             pt_sub = j.pt() - j.area()*self.rho
             if (pt_sub < self.pt_min_jet):
                 break
+            if (j.area() < 0.56*np.pi*self.jet_finder.R*self.jet_finder.R):
+                break
+            self.hists['jet_pT_sub_post_selection'].Fill(j.pt()-j.area()*self.rho)
+            self.hists['jet_pT_sub_pT_post_selection'].Fill(j.pt(), j.pt()-j.area()*self.rho)
             self.do_eec(j, "eec")
             lund_seq = self.lund_gen.result(j)
             l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
