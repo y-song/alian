@@ -134,10 +134,16 @@ TH1D *DivideByBinWidth(TH1D *input_hist)
 // divide by bin width, and normalize by njets. Returns nullptr if histogram not found.
 TH1D *LoadAndProcess(TFile *f, const char *histName, double pt_lo, double pt_hi, double scale=1.0)
 {
-    TH1 *h_JetPt = (TH1 *)f->Get("jet_pT");
+    TH2 *h_JetPt_SubPt = (TH2 *)f->Get("jet_pT_sub_pT_post_selection");
+    TH2 *h_JetPt_SubPt_cut = (TH2 *)h_JetPt_SubPt->Clone(Form("%s_cut", h_JetPt_SubPt->GetName()));
+    h_JetPt_SubPt_cut->GetYaxis()->SetRangeUser(pt_lo, pt_hi);
+    TH1D *h_JetPt = h_JetPt_SubPt_cut->ProjectionX(Form("%s_proj", h_JetPt_SubPt_cut->GetName()));
     std::cout << "Number of jets from pT " << pt_lo + 1 << "-" << pt_hi << ": ";
     double njets = h_JetPt->Integral((int)h_JetPt->FindBin(pt_lo), (int)h_JetPt->FindBin(pt_hi));
     std::cout << njets << std::endl;
+    TCanvas *c_test = new TCanvas();
+    h_JetPt->Draw();
+    c_test->SaveAs(Form("output/jet_pt_check_%i_%i.pdf", (int)pt_lo, (int)pt_hi));
     
     TH2 *h2 = (TH2 *)f->Get(histName);
     if (!h2) {
