@@ -14,6 +14,7 @@ GLOBAL_TRACK_BIT = 1
 # --- Kinematic cuts ---
 PT_MIN  = 0.15   # GeV/c (150 MeV)
 ETA_MAX = 0.9    # |eta| < 0.9
+MAX_TRACK_PT = 100.0  # GeV/c; jets with a constituent above this are rejected
 
 # --- Jet settings ---
 JET_R       = 0.4
@@ -172,6 +173,9 @@ def process(infile, outfile, jet_pt_min=JET_PT_MIN):
                     continue
 
                 constits = jet.constituents()
+                if any(c.pt() > MAX_TRACK_PT for c in constits):
+                    continue
+
                 # nc = len(constits)
 
                 for c in constits:
