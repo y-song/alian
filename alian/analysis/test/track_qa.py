@@ -71,13 +71,16 @@ class TrackQA(AnalysisBase):
         self.hists['cent_rho'].Fill(self.rho, self.event.centrality)
         self.hists['sigma_rho'].Fill(self.rho, self.sigma)
         [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
+        [self.hists['track_eta'].Fill(t.eta()) for t in self.tracks]
+        [self.hists['track_eta_runnumber'].Fill(self.event.run_number-564300, t.eta()) for t in self.tracks]
         if len(self.jets) == 0:
             return
         self.hists['event'].Fill(1.5)
         [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
         [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]
+        [self.hists['jet_eta_runnumber'].Fill(self.event.run_number-564300, j.eta()) for j in self.jets]
         [self.hists['jet_rhoA_pT'].Fill(j.pt(), j.area()*self.rho) for j in self.jets]
-        [self.hists['jet_A_pT'].Fill(j.pt(), j.area()) for j in self.jets]
+        [self.hists['jet_A'].Fill(j.area()) for j in self.jets]
         [self.hists['jet_pT_sub_pT'].Fill(j.pt(), j.pt()-j.area()*self.rho) for j in self.jets]
         has_acceptable_jet = False
         for j in self.jets:
