@@ -71,8 +71,8 @@ class Analyze(AnalysisBase):
         [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
         [self.hists['jet_pT'].Fill(j.pt()) for j in self.jets]
         [self.hists['jet_eta'].Fill(j.eta()) for j in self.jets]
+        [self.hists['jet_A'].Fill(j.area()) for j in self.jets]
         [self.hists['jet_rhoA_pT'].Fill(j.pt(), j.area()*self.rho) for j in self.jets]
-        [self.hists['jet_A_pT'].Fill(j.pt(), j.area()) for j in self.jets]
         [self.hists['jet_pT_sub_pT'].Fill(j.pt(), j.pt()-j.area()*self.rho) for j in self.jets]
         for j in self.jets:
             pt_sub = j.pt() - j.area()*self.rho
@@ -80,6 +80,8 @@ class Analyze(AnalysisBase):
                 break
             if (j.area() < 0.56*np.pi*self.jet_finder.R*self.jet_finder.R):
                 break
+            self.hists['jet_eta_post_selection'].Fill(j.eta())
+            self.hists['jet_A_post_selection'].Fill(j.area())
             self.hists['jet_pT_sub_post_selection'].Fill(j.pt()-j.area()*self.rho)
             self.hists['jet_pT_sub_pT_post_selection'].Fill(j.pt(), j.pt()-j.area()*self.rho)
             self.do_eec(j, "eec")
