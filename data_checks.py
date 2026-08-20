@@ -110,7 +110,7 @@ def draw_event_display(iev_global, ev_eta, ev_phi, ev_pt, jets,
 
     # Frame in (eta, phi). phi from fastjet is in [0, 2pi).
     frame = ROOT.TH2F(f"frame_{iev_global}",
-                      f"Event {iev_global} display;#eta;#phi",
+                      f"Event {iev_global} display;#eta;#varphi",
                       100, -1.2, 1.2, 100, 0.0, 2 * np.pi)
     frame.SetStats(0)
     frame.Draw()
@@ -180,12 +180,12 @@ def process(infile, outfile):
     h_pt  = ROOT.TH1D("h_pt",  "global track p_{T};p_{T} [GeV/c];counts", 200, 0.0, 20.0)
     # h_pt_ext  = ROOT.TH1D("h_pt_ext",  "global track p_{T};p_{T} [GeV/c];counts", len(bins_pt_QA)-1, bins_pt_QA)
     h_eta = ROOT.TH1D("h_eta", "global track #eta;#eta;counts",            80, -1.0, 1.0)
-    h_phi = ROOT.TH1D("h_phi", "global track #phi;#phi;counts",            80, 0, 2*np.pi) #-np.pi, np.pi)
+    h_phi = ROOT.TH1D("h_phi", "global track #varphi;#varphi;counts",            80, 0, 2*np.pi) #-np.pi, np.pi)
 
     # Jet histograms
     h_jet_pt  = ROOT.TH1D("h_jet_pt",  "jet p_{T};p_{T}^{jet} [GeV/c];counts", 1000, 0.0, 100.0)
     h_jet_eta = ROOT.TH1D("h_jet_eta", "jet #eta;#eta^{jet};counts",            80, -1.0, 1.0)
-    h_jet_phi = ROOT.TH1D("h_jet_phi", "jet #phi;#phi^{jet};counts",            80, 0, 2*np.pi)
+    h_jet_phi = ROOT.TH1D("h_jet_phi", "jet #varphi;#varphi^{jet};counts",            80, 0, 2*np.pi)
     h_jet_n   = ROOT.TH1D("h_jet_n",   "number of jets per event;N_{jets};events", 20, 0, 20)
 
     h_trackpt_jetpt = ROOT.TH2D("h_trackpt_jetpt", "track p_{T} vs jet p_{T};p_{T}^{jet} [GeV/c];p_{T}^{track} [GeV/c]", 200, 0, 20, 200, 0, 20)
@@ -219,6 +219,10 @@ def process(infile, outfile):
     h_tracketa_trackpt_jettrig_fid  = ROOT.TH2D("h_tracketa_trackpt_jettrig_fid", "track #eta vs track p_{T} (constituents, fiducial jets);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
     h_tracketa_trackpt_edge = ROOT.TH2D("h_tracketa_trackpt_edge", "track #eta vs track p_{T} (constituents, jets>8 GeV outside fiducial);p_{T}^{track} [GeV/c];#eta^{track}", 200, 0, 20, 80, -1.0, 1.0)
 
+    # look at tracks in R=0.6 jets
+    h_trackpt_R06_trig = ROOT.TH1D("h_trackpt_R06_trig", "track p_{T} in R=0.6 jets > 8 GeV;p_{T} [GeV/c];counts", 200, 0.0, 20.0)
+    h_trackpt_R06_trig_fid = ROOT.TH1D("h_trackpt_R06_trig_fid", "track p_{T} in R=0.6 jets > 8 GeV, fiducial;p_{T} [GeV/c];counts", 200, 0.0, 20.0)
+    
     # --- NEW: high-pt (> 10 GeV) tracks NOT in any jet ---
     h_highpt_nojet_eta_pt = ROOT.TH2D(
         "h_highpt_nojet_eta_pt",
@@ -226,7 +230,7 @@ def process(infile, outfile):
         200, 0, 20, 80, -1.0, 1.0)
     h_highpt_nojet_eta_phi = ROOT.TH2D(
         "h_highpt_nojet_eta_phi",
-        "high-p_{T} non-jet track #eta vs #phi;#phi^{track};#eta^{track}",
+        "high-p_{T} non-jet track #eta vs #varphi;#varphi^{track};#eta^{track}",
         80, 0, 2 * np.pi, 80, -1.0, 1.0)
     # Delta R of high-pt non-jet track to leading jet and to closest jet
     h_highpt_nojet_dR_leadjet = ROOT.TH1D(
@@ -244,7 +248,7 @@ def process(infile, outfile):
 
     # hCHECK_trackpt_evt_withjetsabove8gev_all = ROOT.TH1D("hCHECK_trackpt_evt_withjetsabove8gev_all",  "track p_{T};p_{T} [GeV/c], events with jets > 8 GeV, all;counts", 200, 0.0, 20.0) # magenta
 
-    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_trackpt_jetpt_edge, h_tracketa_jetpt_edge, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_pt_jettrig_noetarestr, h_tracketa_trackpt_fid, h_tracketa_trackpt_jettrig_fid, h_tracketa_trackpt_edge, h_highpt_nojet_eta_pt, h_highpt_nojet_eta_phi, h_highpt_nojet_dR_leadjet, h_highpt_nojet_dR_closestjet, h_pt_R06_trig, h_pt_R06_trig_fid, h_jet_pt_R06, h_jet_pt_R04_with_R06, h_jet_pt_R06_fid, h_jet_pt_R04_with_R04_fid, h_jet_pt_R04_with_R06_fid): #h_pt_ext, h_trackpt_jetpt_ext
+    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_trackpt_jetpt_edge, h_tracketa_jetpt_edge, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_pt_jettrig_noetarestr, h_tracketa_trackpt_fid, h_tracketa_trackpt_jettrig_fid, h_tracketa_trackpt_edge, h_trackpt_R06_trig, h_trackpt_R06_trig_fid, h_highpt_nojet_eta_pt, h_highpt_nojet_eta_phi, h_highpt_nojet_dR_leadjet, h_highpt_nojet_dR_closestjet, h_pt_R06_trig, h_pt_R06_trig_fid, h_jet_pt_R06, h_jet_pt_R04_with_R06, h_jet_pt_R06_fid, h_jet_pt_R04_with_R04_fid, h_jet_pt_R04_with_R06_fid): #h_pt_ext, h_trackpt_jetpt_ext
         h.Sumw2()
 
     # for h in (hCHECK_trackpt_jetsabove8gev_fid, hCHECK_trackpt_jetsabove8gev_edge, hCHECK_trackpt_jetsabove8gev_all, hCHECK_trackpt_evt_withjetsabove8gev_all):
@@ -362,8 +366,12 @@ def process(infile, outfile):
                 h_pt_R06_trig.FillN(len(ev_pt), ev_pt.astype(np.float64), w_ev)
                 for j06 in jets_06:
                     h_jet_pt_R06.Fill(j06.pt())
+                    for c_R06 in j06.constituents(): # fill in track pt here
+                        h_trackpt_R06_trig.Fill(c_R06.pt())
                     if abs(j06.eta()) < JET_ETA_MAX_R06:
                         h_jet_pt_R06_fid.Fill(j06.pt())
+                        for c_R06 in j06.constituents():
+                            h_trackpt_R06_trig_fid.Fill(c_R06.pt())
                 for j04 in jets:
                     h_jet_pt_R04_with_R06.Fill(j04.pt())
                     if abs(j04.eta()) < JET_ETA_MAX:
@@ -564,6 +572,7 @@ def process(infile, outfile):
     h_pt_jettrig.Write(); h_eta_jettrig.Write(); h_jet_n_jettrig.Write(); h_jet_n_above_below_jettrig.Write()
     h_pt_jettrig_noetarestr.Write()
     h_tracketa_trackpt_fid.Write(); h_tracketa_trackpt_jettrig_fid.Write(); h_tracketa_trackpt_edge.Write()
+    h_trackpt_R06_trig.Write(); h_trackpt_R06_trig_fid.Write()
     h_highpt_nojet_eta_pt.Write(); h_highpt_nojet_eta_phi.Write()
     h_highpt_nojet_dR_leadjet.Write(); h_highpt_nojet_dR_closestjet.Write()
     h_pt_R06_trig.Write(); h_pt_R06_trig_fid.Write();h_jet_pt_R06.Write(); h_jet_pt_R04_with_R06.Write()

@@ -114,31 +114,11 @@ def main():
     canvas2.SaveAs("/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/data_checks/study_jetpt_integrated.pdf")
     print("Integrated yield plot saved as study_jetpt_integrated.pdf")
 
-    # --- Normalized integrated yield (fraction above threshold) ---
-    # Total number of jets = all bins + overflow (+ underflow, usually 0 here).
-    total = h_pt.Integral(1, n_bins) + overflow
-    underflow = h_pt.GetBinContent(0)
-    total += underflow  # include underflow in the denominator for completeness
+    canvas2.SetLogx()
+    h_integrated.GetXaxis().SetRangeUser(5, 500)
+    canvas2.SaveAs("/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/data_checks/study_jetpt_integrated_logx.pdf")
+    print("Integrated yield plot saved as study_jetpt_integrated_logx.pdf")
 
-    h_integrated_norm = h_integrated.Clone("h_integrated_norm")
-    h_integrated_norm.SetTitle(
-        "Normalized Integrated Jet Yield;"
-        "p_{T} threshold [GeV/c];Fraction with p_{T} > threshold"
-    )
-
-    if total > 0:
-        h_integrated_norm.Scale(1.0 / total)
-    else:
-        print("Warning: total yield is zero, skipping normalization.")
-
-    canvas3 = ROOT.TCanvas("c3", "Normalized Integrated Yield", 800, 600)
-    canvas3.SetLogy()
-
-    h_integrated_norm.SetLineColor(ROOT.kBlack)
-    h_integrated_norm.Draw("HIST")
-
-    canvas3.SaveAs("/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/plots/data_checks/study_jetpt_integrated_norm.pdf")
-    print("Normalized integrated yield plot saved as study_jetpt_integrated_norm.pdf")
 
 if __name__ == "__main__":
     main()
