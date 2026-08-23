@@ -18,7 +18,7 @@
 ROOT.TH1.SetDefaultSumw2()
 ROOT.TH2.SetDefaultSumw2()
 
-void unfold1D(const TString& rm_file="preunfold.root", const TString& data_file="preunfold_data.root",
+void unfold1D(const TString& rm_file="response_merged.root", const TString& data_file="preunfold_data.root",
             const TString& outfile="unfolded.root",
             int iter=9, bool do_purity=false) {
     // Set ROOT to batch mod
@@ -34,7 +34,7 @@ void unfold1D(const TString& rm_file="preunfold.root", const TString& data_file=
 
     // DATA
     TFile* f_data = new TFile(data_file);
-    TH1D* h1_raw = (TH1D*) f_data->Get("raw1D");
+    TH1D* h1_raw = (TH1D*) f_data->Get("groomed_sd0.1_jet_pt_raw1D"); //raw1D
     // do not close these, if think its because the program reads directly from the files and does NOT copy it into memory
 
     // purity and efficiency correction
