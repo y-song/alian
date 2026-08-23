@@ -56,14 +56,23 @@ class DataAnalysis:
         self.unweighted = False
 
         # histogram axes
-        self.nbins = 25  # 75
-        xmin, xmax = 0.001, 1.0
+        self.RL_NBINS = 25  # 75
+        RL_MIN, RL_MAX = 0.01, 1.0
+        self.RL_BINS = np.logspace(np.log10(RL_MIN), np.log10(RL_MAX), self.RL_NBINS + 1)
+        
         ptrl_xmin, ptrl_xmax = 0.1, 100
-        self.log_bins = np.logspace(np.log10(xmin), np.log10(xmax), self.nbins + 1)
-        self.ptrl_log_bins = np.logspace(np.log10(ptrl_xmin), np.log10(ptrl_xmax), self.nbins + 1)
+        self.ptrl_log_bins = np.logspace(np.log10(ptrl_xmin), np.log10(ptrl_xmax), self.RL_NBINS + 1)
         self.pt_bins = np.linspace(0, 500, 501)       # flat 0-500 GeV jet pt
         self.radpt_bins = np.linspace(0, 500, 501)    # flat 0-500 GeV radiator pt
-        self.radkt_bins = np.linspace(-5, 5, self.nbins + 1)
+        self.radkt_bins = np.linspace(-5, 5, self.RL_NBINS + 1)
+
+        # RAW DATA BINS FOR UNFOLDING
+        self.JETPT_UNF_BINS = np.array([10, 20, 40, 60, 80, 100, 120, 150, 200, 500], dtype=np.float64)
+
+        W_NBINS = 20 #30 #100
+        W_MIN, W_MAX = 0.0, 0.3 #1.0 #0.3
+        W_BINS = np.logspace(-5,-0.5,W_NBINS+1) #0.00001 - 0.316227766 # W_BINS = np.linspace(W_MIN, W_MAX, W_NBINS + 1)
+
 
         # (object, weight) combinations that are actually computed/stored
         self.objects = ["full", "rad", "AA", "BB", "AB"]
@@ -104,6 +113,7 @@ class DataAnalysis:
     def slice_tag(self, lo, hi):
         return f"{self.slice_prefix}{lo}_{hi}"
 
+    # takes in a pt value, and returns which pt bins that pt value falls into (multiple bins possible if they overlap)
     def slices_for_pt(self, pt):
         """All slices a given pt falls into (slices may overlap)."""
         if pt is None:
@@ -201,8 +211,8 @@ class DataAnalysis:
         return f"hist_{obj}_{tag}_{wlabel}", f"hist_{obj}_ptRL_{tag}_{wlabel}"
 
     def book_hists(self, tag, cut_mode):
-        nbins = self.nbins
-        log_bins = self.log_bins
+        nbins = self.RL_NBINS
+        rl_log_bins = self.RL_BINS
         ptrl_log_bins = self.ptrl_log_bins
         h = {}
 
@@ -212,7 +222,7 @@ class DataAnalysis:
                 if obj == "full" and wlabel == "wwradpt":
                     continue  # the full jet is never radiator-pt weighted
                 name_rl, name_ptrl = self.hist_names(obj, tag, wlabel)
-                h[f"{obj}_{wlabel}"] = ROOT.TH1D(name_rl, f"{titles[obj]}; R_{{L}}", nbins, log_bins)
+                h[f"{obj}_{wlabel}"] = ROOT.TH1D(name_rl, f"{titles[obj]}; R_{{L}}", nbins, rl_log_bins)
                 h[f"{obj}_ptRL_{wlabel}"] = ROOT.TH1D(
                     name_ptrl, f"{titles[obj]}; <p_{{T}}>R_{{L}} [GeV/c]", nbins, ptrl_log_bins)
 
@@ -225,7 +235,7 @@ class DataAnalysis:
         h['radiatorkt'] = ROOT.TH1D(f"radiator_lnkt_{tag}", "radiator ln k_{T}; ln(k_{T,radiator})",
                                     nbins, self.radkt_bins)
         if cut_mode == "sd":
-            h['rg'] = ROOT.TH1D(f"hist_rg_{tag}", "R_{g} = #DeltaR_{AB}; R_{g}", nbins, log_bins)
+            h['rg'] = ROOT.TH1D(f"hist_rg_{tag}", "R_{g} = #DeltaR_{AB}; R_{g}", nbins, rl_log_bins)
 
         n_max = 60
         h['nA_nB'] = ROOT.TH2D(f"hist_nA_nB_{tag}", "N in A vs B; N_{A}; N_{B}",
@@ -255,7 +265,7 @@ class DataAnalysis:
                 avgs[((lo, hi), cut)] = avg
         return avgs
 
-    def average_pts_groomed(self, grouped, active_cuts, report_every=20000):
+    def average_pts_groomed(self, grouped, active_cuts, report_every=20000, njet_cutoff=-1):
         """Pre-pass: cluster + Lund only (no EEC) to get <pt_groomed> per (slice, cut)."""
         sums = defaultdict(float)
         counts = defaultdict(int)
@@ -269,6 +279,8 @@ class DataAnalysis:
             njets += 1
             if njets % report_every == 0:
                 print(f"[pre-pass] {njets} jets")
+            if njets >= njet_cutoff and njet_cutoff >= 0:
+                break
             lund_plane_elements = lund_gen.result(jet)
             for cut_mode, cut_value in active_cuts:
                 _, parent_radiator, subjets = self.get_split(lund_plane_elements, cut_mode, cut_value)
@@ -283,7 +295,7 @@ class DataAnalysis:
 
     # ---------- main ----------
     def run(self, infile, outfile, zcuts=[0.1, 0.2], use_maxkt=True, unweighted=False,
-            binning="ungroomed", slice_prefix=None):
+            binning="ungroomed", slice_prefix=None, njet_cutoff=-1):
 
         self.binning = binning
         self.unweighted = unweighted
@@ -318,7 +330,7 @@ class DataAnalysis:
 
         # ---- averages used for the ptRL scaling ----
         if binning == "groomed":
-            avg_pts = self.average_pts_groomed(grouped_jets, active_cuts)
+            avg_pts = self.average_pts_groomed(grouped_jets, active_cuts, njet_cutoff=njet_cutoff)
         else:
             avg_pts = self.average_pts_ungroomed(df, active_cuts)
 
@@ -328,6 +340,33 @@ class DataAnalysis:
                 if key in avg_pts:
                     print(f"[{self.slice_tag(lo, hi)}_{self.format_cut_tag(*cut)}] "
                           f"<pt> = {avg_pts[key]:.2f}  ({binning})")
+
+        # Make raw distributions for unfolding
+        raw1Dhists = {}
+        raw3Dhists = {}
+        if binning == "groomed":
+            for cut in active_cuts:
+                raw1Dhist = ROOT.TH1D(f"groomed_{self.format_cut_tag(*cut)}_jet_pt_raw1D", "groomed jet p_{T}; p_{T,gr. jet}", len(self.pt_bins) - 1, self.pt_bins)
+                raw1Dhists[cut] = raw1Dhist
+                for obj in self.objects:
+                    raw3Dhist = ROOT.TH3D(f"{obj}_{self.format_cut_tag(*cut)}_raw", 
+                                          f"raw {obj} EEC;p_{T,gr. jet};R_{L};weight", 
+                                          len(self.JETPT_UNF_BINS) - 1, self.JETPT_UNF_BINS,
+                                          self.RL_NBINS, self.RL_BINS,
+                                          self.W_NBINS, self.W_BINS)
+                    raw3Dhists[(cut, obj)] = raw3Dhist
+        else:
+            for cut in active_cuts:
+                raw1Dhist = ROOT.TH1D(f"ungroomed_{self.format_cut_tag(*cut)}_jet_pt_raw1D", "ungroomed jet p_{T}; p_{T,jet}", len(self.pt_bins) - 1, self.pt_bins)
+                raw1Dhists[cut] = raw1Dhist
+                for obj in self.objects:
+                    raw3Dhist = ROOT.TH3D(f"{obj}_{self.format_cut_tag(*cut)}_raw", 
+                                          f"raw {obj} EEC;p_{T, jet};R_{L};weight", 
+                                          len(self.JETPT_UNF_BINS) - 1, self.JETPT_UNF_BINS,
+                                          self.RL_NBINS, self.RL_BINS,
+                                          self.W_NBINS, self.W_BINS)
+                    raw3Dhists[(cut, obj)] = raw3Dhist
+        
 
         # ---- book everything up front ----
         root_outfile = ROOT.TFile(outfile, "RECREATE")
@@ -347,6 +386,9 @@ class DataAnalysis:
             njets += 1
             if njets % 20000 == 0:
                 print(f"[main] {njets} jets (event {event_idx})")
+            
+            if njets >= njet_cutoff and njet_cutoff >= 0:
+                break
 
             jet_pt_stored = float(jet_constituents['jet_pt'].iloc[0])
 
@@ -364,6 +406,7 @@ class DataAnalysis:
                     for cut in active_cuts:
                         counters[(sl, cut)]['num_jets'] += 1
                         hists[(sl, cut)]['jetpt_all'].Fill(jet.perp())
+                        raw1Dhists[cut].Fill(jet.perp()) # for unfolding
 
             lund_plane_elements = lund_gen.result(jet)
 
@@ -414,6 +457,7 @@ class DataAnalysis:
                         # no meaningful "all jets" population in groomed mode
                         c['num_jets'] += 1
                         h['jetpt_all'].Fill(jet.perp())
+                        raw1Dhists[cut].Fill(parent_radiator.perp()) # for unfolding
 
                     c['num_jets_passed_cut'] += 1
                     c['sum_jetpt_passed_cut'] += jet.perp()
@@ -440,10 +484,21 @@ class DataAnalysis:
                                              h[f"{obj}_ptRL_{wlabel}"],
                                              avg_pt,
                                              weighted=(wlabel != "wwnullpt"))
+                        if wlabel == "wwradpt":
+                            for rl_value, weight_value in pairs:
+                                if binning == "groomed":
+                                    raw3Dhists[(cut, obj)].Fill(parent_radiator.perp(), rl_value, weight_value)
+                                else:
+                                    raw3Dhists[(cut, obj)].Fill(jet.perp(), rl_value, weight_value)
 
         print(f"[main] done, {njets} jets processed")
 
         # ---- normalize / format / write ----
+        for cut in active_cuts:
+            raw1Dhists[cut].Write()
+            for obj in self.objects:
+                raw3Dhists[(cut, obj)].Write()
+
         for (lo, hi) in self.pt_slices:
             for cut in active_cuts:
                 sl = (lo, hi)
@@ -524,6 +579,7 @@ if __name__ == "__main__":
     parser.add_argument("--slice-prefix", default=None,
                         help="Override the slice tag prefix (default: 'jetpt' for ungroomed "
                              "binning, 'gjetpt' for groomed binning)")
+    parser.add_argument("--njetcutoff", type=int, default=-1, help="Number of jets to run")
 
     args = parser.parse_args()
     DataAnalysis().run(args.infile, args.outfile,
@@ -531,4 +587,5 @@ if __name__ == "__main__":
                        use_maxkt=not args.no_maxkt,
                        unweighted=args.add_noweight,
                        binning=args.binning,
-                       slice_prefix=args.slice_prefix)
+                       slice_prefix=args.slice_prefix,
+                       njet_cutoff=args.njetcutoff)

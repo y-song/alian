@@ -63,15 +63,15 @@ RL_NBINS = 25
 RL_MIN, RL_MAX = 0.01, 1.0
 RL_BINS = np.logspace(np.log10(RL_MIN), np.log10(RL_MAX), RL_NBINS + 1)
 
-W_NBINS = 30 #100
+W_NBINS = 20 #30 #100
 W_MIN, W_MAX = 0.0, 0.3 #1.0 #0.3
-W_BINS = np.linspace(W_MIN, W_MAX, W_NBINS + 1)
+W_BINS = np.logspace(-5,-0.5,W_NBINS+1) #0.00001 - 0.316227766 # W_BINS = np.linspace(W_MIN, W_MAX, W_NBINS + 1)
 
 # Lund Plane binning
 LUND_KT_BINS = np.linspace(np.log10(0.01), np.log10(1000), 40) # log10(kt) (linearly: -2 --> 3)
 LUND_RD_BINS = np.linspace(np.log10(1), np.log10(1e4), 40)    # log10(R/dR) (linearly: 0 --> 4)
 
-EEC_LABELS = ["AA", "AB", "BB", "rad"]
+EEC_LABELS = ["full_ungroomed", "AA", "AB", "BB", "rad"]
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +412,10 @@ def main():
 
     for r in range(len(jets)):
 
+        # make cuts on jets
+        # don't need because you can just see the groomed jet pt distribution in the histogram
+        # if jets[r].jetpt < 10 or jets[r].jetpt > 200: #Limit jets binned in ungroomed jet pt to 10-200 gev
+
         # Fill jet eff/pur before looking at matched jets -- IN ORIGINAL JET PT
         if str(levels[r]) == "part":
             h_all_gen_jet_eff_den_ungroomed.Fill(jets[r].jet_pt, float(jets[r].mc_weight))
@@ -441,6 +445,11 @@ def main():
                 continue  # both must pass SD to enter the response
 
             groomed_jet = jet_splitting.pair()
+
+            # don't need because you can just see the groomed jet pt distribution in the histogram
+            # # make cuts on unmatched jets - keep groomed jet pt between 10 and 200 gev
+            # if groomed_jet.perp() < 10 or groomed_jet.perp() > 200:
+            #     continue
 
             if str(levels[r]) == "part":
                 h_all_gen_jet_eff_den_groomed.Fill(groomed_jet.perp(), float(jets[r].mc_weight))
@@ -504,6 +513,25 @@ def main():
         det_A, det_B = det_sub
         part_A, part_B = part_sub
 
+        # ---- weighting scale = radiator.perp() (per your request), also the groomed jet pt ----
+        det_scale = det_rad.perp()
+        part_scale = part_rad.perp()
+
+        # jet pt used for response pt axes
+        det_ptjet = det_jet.perp()
+        part_ptjet = part_jet.perp()
+
+        # ---- fill 2D jet pt and groomed pt responses (one per matched pair) ----
+        h_resp_jetpt.Fill(det_ptjet, part_ptjet, mc_weight)
+        h_resp_groomed.Fill(det_scale, part_scale, mc_weight)
+        response1D.Fill(det_scale, part_scale, mc_weight)
+        n_pairs += 1 # number of matched jets (det/part)
+
+
+        # make cuts on matched jets - keep groomed jet pt between 10 and 200 gev
+        if det_ptjet < 10 or det_ptjet > 200 or part_ptjet < 10 or part_ptjet > 200:
+            continue
+
         # Study matched splittings and splittings eff/pur
         h_lund_all_gen.Fill(math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()), mc_weight)
         h_lund_all_rec.Fill(math.log10(JET_R/det_d.Delta()), math.log10(det_d.kt()), mc_weight)
@@ -513,20 +541,6 @@ def main():
             h_lund_matched_gen.Fill(math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()), mc_weight)
             h_lund_matched_rec.Fill(math.log10(JET_R/det_d.Delta()), math.log10(det_d.kt()), mc_weight)
 
-        # ---- weighting scale = radiator.perp() (per your request), also the groomed jet pt ----
-        det_scale = det_rad.perp()
-        part_scale = part_rad.perp()
-
-        # jet pt used for response pt axes
-        det_ptjet = det_jet.perp()
-        part_ptjet = part_jet.perp()
-
-
-        # ---- fill 2D jet pt and groomed pt responses (one per matched pair) ----
-        h_resp_jetpt.Fill(det_ptjet, part_ptjet, mc_weight)
-        h_resp_groomed.Fill(det_scale, part_scale, mc_weight)
-        response1D.Fill(det_scale, part_scale, mc_weight)
-        n_pairs += 1 # number of matched jets (det/part)
 
         # ---- selected constituents per subjet ----
         det_cA = selected_constituents(det_A, TRK_THRD)
@@ -538,8 +552,15 @@ def main():
         det_crad = selected_constituents(det_rad, TRK_THRD)
         part_crad = selected_constituents(part_rad, TRK_THRD)
 
+        # ungroomed jet constituents
+        det_full = selected_constituents(det_jet, TRK_THRD)
+        part_full = selected_constituents(part_jet, TRK_THRD)
+
+
         # ---- compute EEC pairs at both levels (radiator-pt weighted) ----
         eec_sets = {
+            "full_ungroomed": (compute_eec_pairs(det_full, det_jet.perp()),
+                               compute_eec_pairs(part_full, part_jet.perp())),
             "AA":  (compute_eec_pairs(det_cA, det_scale),
                     compute_eec_pairs(part_cA, part_scale)),
             "BB":  (compute_eec_pairs(det_cB, det_scale),
@@ -553,7 +574,7 @@ def main():
         # ---- pair-level match and fill 6D ----
         for lab, (det_pairs, part_pairs) in eec_sets.items():
             matched, tr_unmatched, det_unmatched = match_eec_pairs(det_pairs, part_pairs)
-
+                
             # update pair counters
             n_det_pairs_total[lab] += len(det_pairs)
             n_part_pairs_total[lab] += len(part_pairs)
@@ -598,44 +619,44 @@ def main():
 
     print(f"Filled response from {n_pairs} matched jet pairs passing SD at both levels.")
 
-    # Divide appropriate histograms to get efficiency/purity
-    # A. jets
-    h_jet_eff_ungroomed = h_match_gen_jet_eff_num_ungroomed.Clone("jet_efficiency_ungroomed")
-    h_jet_eff_ungroomed.Divide(h_all_gen_jet_eff_den_ungroomed)
-    h_jet_eff_ungroomed.SetTitle("Ungroomed Jet Efficiency")
+    # # Divide appropriate histograms to get efficiency/purity
+    # # A. jets
+    # h_jet_eff_ungroomed = h_match_gen_jet_eff_num_ungroomed.Clone("jet_efficiency_ungroomed")
+    # h_jet_eff_ungroomed.Divide(h_all_gen_jet_eff_den_ungroomed)
+    # h_jet_eff_ungroomed.SetTitle("Ungroomed Jet Efficiency")
     
-    h_jet_pur_ungroomed = h_match_rec_jet_pur_num_ungroomed.Clone("jet_purity_ungroomed")
-    h_jet_pur_ungroomed.Divide(h_all_rec_jet_pur_den_ungroomed)
-    h_jet_pur_ungroomed.SetTitle("Ungroomed Jet Purity")
+    # h_jet_pur_ungroomed = h_match_rec_jet_pur_num_ungroomed.Clone("jet_purity_ungroomed")
+    # h_jet_pur_ungroomed.Divide(h_all_rec_jet_pur_den_ungroomed)
+    # h_jet_pur_ungroomed.SetTitle("Ungroomed Jet Purity")
 
-    h_jet_eff_groomed = h_match_gen_jet_eff_num_groomed.Clone("jet_efficiency_groomed")
-    h_jet_eff_groomed.Divide(h_all_gen_jet_eff_den_groomed)
-    h_jet_eff_groomed.SetTitle("Groomed Jet Efficiency")
+    # h_jet_eff_groomed = h_match_gen_jet_eff_num_groomed.Clone("jet_efficiency_groomed")
+    # h_jet_eff_groomed.Divide(h_all_gen_jet_eff_den_groomed)
+    # h_jet_eff_groomed.SetTitle("Groomed Jet Efficiency")
 
-    h_jet_pur_groomed = h_match_rec_jet_pur_num_groomed.Clone("jet_purity_groomed")
-    h_jet_pur_groomed.Divide(h_all_rec_jet_pur_den_groomed)
-    h_jet_pur_groomed.SetTitle("Groomed Jet Purity")
+    # h_jet_pur_groomed = h_match_rec_jet_pur_num_groomed.Clone("jet_purity_groomed")
+    # h_jet_pur_groomed.Divide(h_all_rec_jet_pur_den_groomed)
+    # h_jet_pur_groomed.SetTitle("Groomed Jet Purity")
 
-    # B. splittings
-    h_lund_eff = h_lund_matched_gen.Clone("lund_split_efficiency")
-    h_lund_eff.Divide(h_lund_all_gen)
-    h_lund_eff.SetTitle("Lund Plane SD z_{cut}=0.1 Splittings Efficiency")
+    # # B. splittings
+    # h_lund_eff = h_lund_matched_gen.Clone("lund_split_efficiency")
+    # h_lund_eff.Divide(h_lund_all_gen)
+    # h_lund_eff.SetTitle("Lund Plane SD z_{cut}=0.1 Splittings Efficiency")
 
-    h_lund_pur = h_lund_matched_rec.Clone("lund_split_purity")
-    h_lund_pur.Divide(h_lund_all_rec)
-    h_lund_pur.SetTitle("Lund Plane SD z_{cut}=0.1 Splittings Purity")
+    # h_lund_pur = h_lund_matched_rec.Clone("lund_split_purity")
+    # h_lund_pur.Divide(h_lund_all_rec)
+    # h_lund_pur.SetTitle("Lund Plane SD z_{cut}=0.1 Splittings Purity")
     
-    # C. pairs
-    h_pair_eff = {}
-    h_pair_pur = {}
-    for lab in EEC_LABELS:
-        h_pair_eff[lab] = h_match_gen_pair_eff_num[lab].Clone(f"pair_efficiency_{lab}")
-        h_pair_eff[lab].Divide(h_all_gen_pair_eff_den[lab])
-        h_pair_eff[lab].SetTitle(f"Pair Efficiency {lab}")
+    # # C. pairs
+    # h_pair_eff = {}
+    # h_pair_pur = {}
+    # for lab in EEC_LABELS:
+    #     h_pair_eff[lab] = h_match_gen_pair_eff_num[lab].Clone(f"pair_efficiency_{lab}")
+    #     h_pair_eff[lab].Divide(h_all_gen_pair_eff_den[lab])
+    #     h_pair_eff[lab].SetTitle(f"Pair Efficiency {lab}")
 
-        h_pair_pur[lab] = h_match_rec_pair_pur_num[lab].Clone(f"pair_purity_{lab}")
-        h_pair_pur[lab].Divide(h_all_rec_pair_pur_den[lab])
-        h_pair_pur[lab].SetTitle(f"Pair Purity {lab}")
+    #     h_pair_pur[lab] = h_match_rec_pair_pur_num[lab].Clone(f"pair_purity_{lab}")
+    #     h_pair_pur[lab].Divide(h_all_rec_pair_pur_den[lab])
+    #     h_pair_pur[lab].SetTitle(f"Pair Purity {lab}")
 
 
     # -----------------------------------------------------------------------
@@ -660,15 +681,15 @@ def main():
     h_all_gen_jet_eff_den_ungroomed.Write()
     h_match_rec_jet_pur_num_ungroomed.Write()
     h_all_rec_jet_pur_den_ungroomed.Write()
-    h_jet_eff_ungroomed.Write()
-    h_jet_pur_ungroomed.Write()
+    # h_jet_eff_ungroomed.Write()
+    # h_jet_pur_ungroomed.Write()
 
     h_match_gen_jet_eff_num_groomed.Write()
     h_all_gen_jet_eff_den_groomed.Write()
     h_match_rec_jet_pur_num_groomed.Write()
     h_all_rec_jet_pur_den_groomed.Write()
-    h_jet_eff_groomed.Write()
-    h_jet_pur_groomed.Write()
+    # h_jet_eff_groomed.Write()
+    # h_jet_pur_groomed.Write()
 
     for lab in EEC_LABELS:
         h_match_gen_pair_eff_num[lab].Write()
@@ -676,15 +697,15 @@ def main():
         h_match_rec_pair_pur_num[lab].Write()
         h_all_rec_pair_pur_den[lab].Write()
 
-        h_pair_eff[lab].Write()
-        h_pair_pur[lab].Write()
+    #     h_pair_eff[lab].Write()
+    #     h_pair_pur[lab].Write()
 
     h_lund_matched_gen.Write()
     h_lund_matched_rec.Write()
     h_lund_all_gen.Write()
     h_lund_all_rec.Write()
-    h_lund_eff.Write()
-    h_lund_pur.Write()
+    # h_lund_eff.Write()
+    # h_lund_pur.Write()
 
     # Write scalar efficiency and purity
     # Jet level

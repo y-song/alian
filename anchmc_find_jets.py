@@ -28,7 +28,7 @@ ROOT.TH2.SetDefaultSumw2()
 # ---------------------------------------------------------------------------
 JET_R = 0.4
 JET_ETA_MAX = 0.9 - JET_R          # fiducial jet |eta| acceptance
-JET_PT_MIN = 5.0                    # minimum jet pt to keep (GeV) -- tune as needed
+JET_PT_MIN = 8.0                   # minimum jet pt to keep (GeV) -- tune as needed
 PTHAT_OUTLIER_FACTOR = 4.0         # reject events with pt_jet / pThat > this
 MATCH_DR_MAX = 0.6 * JET_R         # geometric matching radius (dR)
 
@@ -52,7 +52,7 @@ def make_pseudojets(pt, eta, phi, label, mass=PION_MASS):
     return pjets
 
 
-def cluster_jets(pt, eta, phi, label, jet_def, pt_min, eta_max):
+def cluster_jets(pt, eta, phi, label, jet_def, pt_min, eta_max, highjetcut=False):
     consts = make_pseudojets(pt, eta, phi, label)
     if len(consts) == 0:
         return []
@@ -62,6 +62,14 @@ def cluster_jets(pt, eta, phi, label, jet_def, pt_min, eta_max):
     for j in jets:
         j_eta = j.eta()
         if abs(j_eta) >= eta_max:
+            continue
+        highpttrack = False
+        if highjetcut:
+            for c in j.constituents():
+                if c.pt() > 100:
+                    highpttrack = True
+                    break
+        if highpttrack:
             continue
         cparts = j.constituents()
         out.append({
@@ -273,7 +281,7 @@ def main():
             pmask = (p_pt >= 0.15) & (np.abs(p_eta) <= 0.9)
             p_pt, p_eta, p_phi, p_id = p_pt[pmask], p_eta[pmask], p_phi[pmask], p_id[pmask]
     
-            det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, jet_def, JET_PT_MIN, JET_ETA_MAX)
+            det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, jet_def, JET_PT_MIN, JET_ETA_MAX, highjetcut=True)
             part_jets = cluster_jets(p_pt, p_eta, p_phi, p_id, jet_def, JET_PT_MIN, JET_ETA_MAX)
 
             # ---- pt,jet / pThat outlier rejection (event-level veto) ----
