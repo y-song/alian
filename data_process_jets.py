@@ -350,7 +350,7 @@ class DataAnalysis:
                 raw1Dhists[cut] = raw1Dhist
                 for obj in self.objects:
                     raw3Dhist = ROOT.TH3D(f"{obj}_{self.format_cut_tag(*cut)}_raw", 
-                                          f"raw {obj} EEC;p_{T,gr. jet};R_{L};weight", 
+                                          f"raw {obj} EEC;p_{{T,gr. jet}};R_{{L}};weight", 
                                           len(self.JETPT_UNF_BINS) - 1, self.JETPT_UNF_BINS,
                                           self.RL_NBINS, self.RL_BINS,
                                           self.W_NBINS, self.W_BINS)
@@ -361,7 +361,7 @@ class DataAnalysis:
                 raw1Dhists[cut] = raw1Dhist
                 for obj in self.objects:
                     raw3Dhist = ROOT.TH3D(f"{obj}_{self.format_cut_tag(*cut)}_raw", 
-                                          f"raw {obj} EEC;p_{T, jet};R_{L};weight", 
+                                          f"raw {obj} EEC;p_{{T, jet}};R_{{L}};weight", 
                                           len(self.JETPT_UNF_BINS) - 1, self.JETPT_UNF_BINS,
                                           self.RL_NBINS, self.RL_BINS,
                                           self.W_NBINS, self.W_BINS)

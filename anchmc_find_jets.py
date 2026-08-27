@@ -179,6 +179,8 @@ def main():
         "part_jet_phi":  Hist1D("part_jet_phi",  "Particle jet #phi;#phi;counts",            64, 0, 2*np.pi),
         "matched_det_pt":  Hist1D("matched_det_pt",  "Matched det jet p_{T};p_{T} (GeV);counts",  100, 0, 200),
         "matched_part_pt": Hist1D("matched_part_pt", "Matched part jet p_{T};p_{T} (GeV);counts", 100, 0, 200),
+        "track_eff_num":   Hist1D("track_eff_num",   "Matched Tracks;p_{T} (GeV);counts",       100, 0, 100),
+        "track_eff_den":   Hist1D("track_eff_den",   "All MC Particles;p_{T} (GeV);counts",      100, 0, 100),
     }
     resp_bins = np.linspace(0, 200, 101)
     resp = np.zeros((len(resp_bins) - 1, len(resp_bins) - 1), dtype=np.float64)
@@ -280,6 +282,32 @@ def main():
             p_id  = ak.to_numpy(chunk["mc_particle_partID"][ie])
             pmask = (p_pt >= 0.15) & (np.abs(p_eta) <= 0.9)
             p_pt, p_eta, p_phi, p_id = p_pt[pmask], p_eta[pmask], p_phi[pmask], p_id[pmask]
+
+            # ---- Single track efficiency calculation ----
+            # Track is "matched" if its label exists in the selected MC particle set
+            # Since d_lab are the labels of selected detector tracks,
+            # and p_id are the labels of selected MC particles,
+            # we check which d_lab are in p_id.
+            mc_labels_set = set(p_id)
+            for lab in d_lab:
+                if lab in mc_labels_set:
+                    # Find the pT of the matching MC particle
+                    # (Usually label is unique per event)
+                    idx = np.where(p_id == lab)[0]
+                    if len(idx) > 0:
+                        # Fill numerator with the detector track pT (or MC pT, but det pT is standard)
+                        # Since we are looping over d_lab, we need the index of the track.
+                        pass
+
+            # Correct way to fill:
+            for i in range(len(d_lab)):
+                label = d_lab[i]
+                pt = d_pt[i]
+                if label in mc_labels_set:
+                    h["track_eff_num"].fill(pt, weight)
+
+            # Denominator is all MC particles that pass the same cuts
+            h["track_eff_den"].fill_array(p_pt, weight)
     
             det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, jet_def, JET_PT_MIN, JET_ETA_MAX, highjetcut=True)
             part_jets = cluster_jets(p_pt, p_eta, p_phi, p_id, jet_def, JET_PT_MIN, JET_ETA_MAX)

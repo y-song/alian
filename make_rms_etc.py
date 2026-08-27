@@ -1,7 +1,10 @@
 '''
-The response matrices needed for this analysis: jet pt, RL, weight
-sd? radiator pt?
-how is the lund plane corrected?
+Add: single  particle efFICIENCY
+Add: pt differential
+NOTE: if we wanted to look in bins of ungroomed jet pt, but calculate weight with groomed jet pt, would 4D unfolding be needed??
+In this script:
+groomed version uses (groomed jet pt, RL, radiator for weight)
+ungroomed version uses (ungroomed jet pt, RL, radiator for weight) (so groomed jet pt is included inherently in the weight)
 '''
 
 #!/usr/bin/env python3
@@ -265,26 +268,35 @@ def main():
     # -----------------------------------------------------------------------
     # Output histograms
     # -----------------------------------------------------------------------
+    VERSIONS = ["groomed", "ungroomed"]
     jetpt_edges = array.array("d", JETPT_BINS)
 
-    h_resp_jetpt = ROOT.TH2D("resp_jetpt", "jet p_{T} det vs part;p_{T}^{det};p_{T}^{part}",
-                             len(JETPT_BINS) - 1, jetpt_edges,
-                             len(JETPT_BINS) - 1, jetpt_edges)
-    h_resp_groomed = ROOT.TH2D("resp_groomed_jetpt",
-                               "groomed jet p_{T} det vs part;p_{T,g}^{det};p_{T,g}^{part}",
-                               len(JETPT_BINS) - 1, jetpt_edges,
-                               len(JETPT_BINS) - 1, jetpt_edges)
+    h_resp_jetpt = {}
+    for v in VERSIONS:
+        title = "groomed jet p_{T} det vs part" if v == "groomed" else "jet p_{T} det vs part"
+        xaxis = "p_{T,g}^{det}" if v == "groomed" else "p_{T}^{det}"
+        yaxis = "p_{T,g}^{part}" if v == "groomed" else "p_{T}^{part}"
+        h_resp_jetpt[v] = ROOT.TH2D(f"resp_jetpt_{v}", f"{title};{xaxis};{yaxis}",
+                                     len(JETPT_BINS) - 1, jetpt_edges,
+                                     len(JETPT_BINS) - 1, jetpt_edges)
 
-    # 1D response matrix - groomed
-    h1_reco = ROOT.TH1D("h1jetpt_reco", "h1jetpt_reco", len(JETPT_BINS) - 1, jetpt_edges)
-    h1_reco.GetXaxis().SetTitle('p^{det}_{T,gr. ch jet}')
-    h1_reco.GetYaxis().SetTitle('Counts')
-    h1_gen = ROOT.TH1D("h1jetpt_gen", "h1jetpt_gen", len(JETPT_BINS) - 1, jetpt_edges)
-    h1_gen.GetXaxis().SetTitle('p^{part}_{T,gr. ch jet}')
-    h1_gen.GetYaxis().SetTitle('Counts')
+    # 1D response matrix
+    h1_reco = {}
+    h1_gen = {}
+    response1D = {}
+    for v in VERSIONS:
+        label_suffix = "gr. ch jet" if v == "groomed" else "ch jet"
+        h1_reco[v] = ROOT.TH1D(f"h1jetpt_reco_{v}", f"h1jetpt_reco_{v}", len(JETPT_BINS) - 1, jetpt_edges)
+        h1_reco[v].GetXaxis().SetTitle(f'p^{{det}}_{{T,{label_suffix}}}')
+        h1_reco[v].GetYaxis().SetTitle('Counts')
 
-    response1D = ROOT.RooUnfoldResponse(h1_reco, h1_gen)
-    response1D.SetName("roounfold_response_1D")
+        h1_gen[v] = ROOT.TH1D(f"h1jetpt_gen_{v}", f"h1jetpt_gen_{v}", len(JETPT_BINS) - 1, jetpt_edges)
+        h1_gen[v].GetXaxis().SetTitle(f'p^{{part}}_{{T,{label_suffix}}}')
+        h1_gen[v].GetYaxis().SetTitle('Counts')
+
+        res = ROOT.RooUnfoldResponse(h1_reco[v], h1_gen[v])
+        res.SetName(f"roounfold_response_1D_{v}")
+        response1D[v] = res
 
     # 6D THnSparse per EEC:  axes = pt_det, pt_part, RL_det, RL_part, w_det, w_part
     nbins6 = np.array([len(JETPT_BINS) - 1, len(JETPT_BINS) - 1,
@@ -292,66 +304,67 @@ def main():
     xmin6 = np.array([JETPT_BINS[0], JETPT_BINS[0], RL_MIN, RL_MIN, W_MIN, W_MIN], dtype=np.float64)
     xmax6 = np.array([JETPT_BINS[-1], JETPT_BINS[-1], RL_MAX, RL_MAX, W_MAX, W_MAX], dtype=np.float64)
 
-    resp6 = {}
-    roounfold_resp6 = {}
-    reco_3 = {}
-    reco_unmatched_3 = {}
-    gen_3 = {}
-    gen_unmatched_3 = {}
-    for lab in EEC_LABELS:
-        hs = ROOT.THnSparseD(
-            f"resp6_{lab}",
-            f"6D response {lab};p_{{T}}^{{det}};p_{{T}}^{{part}};R_{{L}}^{{det}};R_{{L}}^{{part}};w^{{det}};w^{{part}}",
-            6,
-            array.array("i", nbins6.tolist()),
-            array.array("d", xmin6.tolist()),
-            array.array("d", xmax6.tolist()),
-        )
-        # set variable bin edges on the axes that need them
-        hs.GetAxis(0).Set(len(JETPT_BINS) - 1, jetpt_edges)  # pt_det
-        hs.GetAxis(1).Set(len(JETPT_BINS) - 1, jetpt_edges)  # pt_part
-        hs.GetAxis(2).Set(RL_NBINS, array.array("d", RL_BINS.tolist()))  # RL_det (log)
-        hs.GetAxis(3).Set(RL_NBINS, array.array("d", RL_BINS.tolist()))  # RL_part (log)
-        hs.GetAxis(4).Set(W_NBINS, array.array("d", W_BINS.tolist()))    # w_det
-        hs.GetAxis(5).Set(W_NBINS, array.array("d", W_BINS.tolist()))    # w_part
-        hs.Sumw2()
-        resp6[lab] = hs
+    resp6 = {v: {} for v in VERSIONS}
+    roounfold_resp6 = {v: {} for v in VERSIONS}
+    reco_3 = {v: {} for v in VERSIONS}
+    reco_unmatched_3 = {v: {} for v in VERSIONS}
+    gen_3 = {v: {} for v in VERSIONS}
+    gen_unmatched_3 = {v: {} for v in VERSIONS}
 
-        # same response matrices, but in ROOT.RooUnfoldResponse form, order: jetpt, RL, weight (det), jetpt, RL, weight (part)
-        h3_reco = ROOT.TH3D(f"{lab}_reco", f"{lab}_reco", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
-        h3_gen = ROOT.TH3D(f"{lab}_gen", f"{lab}_gen", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
-        h3_reco.GetXaxis().SetTitle('p^{det}_{T,gr. ch jet}'); h3_reco.GetYaxis().SetTitle('R_{L}^{det}'); h3_reco.GetZaxis().SetTitle('weight^{det}')
-        h3_gen.GetXaxis().SetTitle('p^{part}_{T,gr. ch jet}'); h3_gen.GetYaxis().SetTitle('R_{L}^{part}'); h3_gen.GetZaxis().SetTitle('weight^{part}')
-        hresponse = ROOT.RooUnfoldResponse(h3_reco, h3_gen, f"{lab}_roounfold_response", f"{lab}_roounfold_response")
-        roounfold_resp6[lab] = hresponse
-        
-        h3_reco_unmatched = ROOT.TH3D(f"{lab}_reco_unmatched", f"{lab}_reco_unmatched", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
-        h3_gen_unmatched = ROOT.TH3D(f"{lab}_gen_unmatched", f"{lab}_gen_unmatched", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
-        h3_reco_unmatched.GetXaxis().SetTitle('p^{det}_{T,gr. ch jet}'); h3_reco_unmatched.GetYaxis().SetTitle('R_{L}^{det}'); h3_reco_unmatched.GetZaxis().SetTitle('weight^{det}')
-        h3_gen_unmatched.GetXaxis().SetTitle('p^{part}_{T,gr. ch jet}'); h3_gen_unmatched.GetYaxis().SetTitle('R_{L}^{part}'); h3_gen_unmatched.GetZaxis().SetTitle('weight^{part}')
-        
-        reco_3[lab] = h3_reco
-        reco_unmatched_3[lab] = h3_reco_unmatched
-        gen_3[lab] = h3_gen
-        gen_unmatched_3[lab] = h3_gen_unmatched
+    for v in VERSIONS:
+        label_suffix = "gr. ch jet" if v == "groomed" else "ch jet"
+        for lab in EEC_LABELS:
+            hs = ROOT.THnSparseD(
+                f"resp6_{v}_{lab}",
+                f"6D response {v} {lab};p_{{T}}^{{det}};p_{{T}}^{{part}};R_{{L}}^{{det}};R_{{L}}^{{part}};w^{{det}};w^{{part}}",
+                6,
+                array.array("i", nbins6.tolist()),
+                array.array("d", xmin6.tolist()),
+                array.array("d", xmax6.tolist()),
+            )
+            # set variable bin edges on the axes that need them
+            hs.GetAxis(0).Set(len(JETPT_BINS) - 1, jetpt_edges)  # pt_det
+            hs.GetAxis(1).Set(len(JETPT_BINS) - 1, jetpt_edges)  # pt_part
+            hs.GetAxis(2).Set(RL_NBINS, array.array("d", RL_BINS.tolist()))  # RL_det (log)
+            hs.GetAxis(3).Set(RL_NBINS, array.array("d", RL_BINS.tolist()))  # RL_part (log)
+            hs.GetAxis(4).Set(W_NBINS, array.array("d", W_BINS.tolist()))    # w_det
+            hs.GetAxis(5).Set(W_NBINS, array.array("d", W_BINS.tolist()))    # w_part
+            hs.Sumw2()
+            resp6[v][lab] = hs
 
+            # same response matrices, but in ROOT.RooUnfoldResponse form, order: jetpt, RL, weight (det), jetpt, RL, weight (part)
+            h3_reco = ROOT.TH3D(f"{v}_{lab}_reco", f"{v}_{lab}_reco", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
+            h3_gen = ROOT.TH3D(f"{v}_{lab}_gen", f"{v}_{lab}_gen", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
+            h3_reco.GetXaxis().SetTitle(f'p^{{det}}_{{T,{label_suffix}}}'); h3_reco.GetYaxis().SetTitle('R_{L}^{det}'); h3_reco.GetZaxis().SetTitle('weight^{det}')
+            h3_gen.GetXaxis().SetTitle(f'p^{{part}}_{{T,{label_suffix}}}'); h3_gen.GetYaxis().SetTitle('R_{L}^{part}'); h3_gen.GetZaxis().SetTitle('weight^{part}')
+            hresponse = ROOT.RooUnfoldResponse(h3_reco, h3_gen, f"{v}_{lab}_roounfold_response", f"{v}_{lab}_roounfold_response")
+            roounfold_resp6[v][lab] = hresponse
 
-    # -----------------------------------------------------------------------
-    # Read parquet, regroup jets by (event, level)
-    # -----------------------------------------------------------------------
-    jets = ak.from_parquet(args.input)
+            h3_reco_unmatched = ROOT.TH3D(f"{v}_{lab}_reco_unmatched", f"{v}_{lab}_reco_unmatched", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
+            h3_gen_unmatched = ROOT.TH3D(f"{v}_{lab}_gen_unmatched", f"{v}_{lab}_gen_unmatched", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
+            h3_reco_unmatched.GetXaxis().SetTitle(f'p^{{det}}_{{T,{label_suffix}}}'); h3_reco_unmatched.GetYaxis().SetTitle('R_{L}^{det}'); h3_reco_unmatched.GetZaxis().SetTitle('weight^{det}')
+            h3_gen_unmatched.GetXaxis().SetTitle(f'p^{{part}}_{{T,{label_suffix}}}'); h3_gen_unmatched.GetYaxis().SetTitle('R_{L}^{part}'); h3_gen_unmatched.GetZaxis().SetTitle('weight^{part}')
+
+            reco_3[v][lab] = h3_reco
+            reco_unmatched_3[v][lab] = h3_reco_unmatched
+            gen_3[v][lab] = h3_gen
+            gen_unmatched_3[v][lab] = h3_gen_unmatched
+
+    # --- pT-differential versions ---
+    n_bins_pt = len(JETPT_BINS) - 1
 
     # --- Differential Efficiency/Purity Histograms ---
     # Jet level (pT)
-    h_match_gen_jet_eff_num_ungroomed = ROOT.TH1D("jet_match_gen_eff_num_ungroomed", "Matched Gen, Ungroomed Jet Eff Num", len(JETPT_BINS)-1, jetpt_edges)
-    h_all_gen_jet_eff_den_ungroomed = ROOT.TH1D("jet_all_gen_eff_den_ungroomed", "Total Gen, Ungroomed Jet Eff Den", len(JETPT_BINS)-1, jetpt_edges)
-    h_match_rec_jet_pur_num_ungroomed = ROOT.TH1D("jet_match_rec_pur_num_ungroomed", "Matched Rec, Ungroomed Jet Pur Num", len(JETPT_BINS)-1, jetpt_edges)
-    h_all_rec_jet_pur_den_ungroomed = ROOT.TH1D("jet_all_rec_pur_den_ungroomed", "Total Rec, Ungroomed Jet Pur Den", len(JETPT_BINS)-1, jetpt_edges)
+    h_match_gen_jet_eff_num = {v: ROOT.TH1D(f"jet_match_gen_eff_num_{v}", f"Matched Gen, {v.capitalize()} Jet Eff Num", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
+    h_all_gen_jet_eff_den = {v: ROOT.TH1D(f"jet_all_gen_eff_den_{v}", f"Total Gen, {v.capitalize()} Jet Eff Den", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
+    h_match_rec_jet_pur_num = {v: ROOT.TH1D(f"jet_match_rec_pur_num_{v}", f"Matched Rec, {v.capitalize()} Jet Pur Num", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
+    h_all_rec_jet_pur_den = {v: ROOT.TH1D(f"jet_all_rec_pur_den_{v}", f"Total Rec, {v.capitalize()} Jet Pur Den", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
 
-    h_match_gen_jet_eff_num_groomed = ROOT.TH1D("jet_match_gen_eff_num_groomed", "Matched Gen, Groomed Jet Eff Num", len(JETPT_BINS)-1, jetpt_edges)
-    h_all_gen_jet_eff_den_groomed = ROOT.TH1D("jet_all_gen_eff_den_groomed", "Total Gen, Groomed Jet Eff Den", len(JETPT_BINS)-1, jetpt_edges)
-    h_match_rec_jet_pur_num_groomed = ROOT.TH1D("jet_match_rec_pur_num_groomed", "Matched Rec, Groomed Jet Pur Num", len(JETPT_BINS)-1, jetpt_edges)
-    h_all_rec_jet_pur_den_groomed = ROOT.TH1D("jet_all_rec_pur_den_groomed", "Total Rec, Groomed Jet Pur Den", len(JETPT_BINS)-1, jetpt_edges)
+    # Splitting Efficiency/Purity & Lund Plane (2D: ln(kT) vs ln(R/dR))
+    h_lund_matched_gen = ROOT.TH2D("lund_matched_gen", "Lund Plane Matched Gen;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
+    h_lund_matched_rec = ROOT.TH2D("lund_matched_rec", "Lund Plane Matched Rec;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
+    h_lund_all_gen = ROOT.TH2D("lund_all_gen", "Lund Plane All Gen;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
+    h_lund_all_rec = ROOT.TH2D("lund_all_rec", "Lund Plane All Rec;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
 
     # Pair level (RL)
     h_match_gen_pair_eff_num = {}
@@ -364,25 +377,27 @@ def main():
         h_match_rec_pair_pur_num[lab] = ROOT.TH1D(f"pair_match_rec_pur_num_{lab}", f"Matched Rec, Pair Pur Num {lab}", RL_NBINS, RL_BINS)
         h_all_rec_pair_pur_den[lab] = ROOT.TH1D(f"pair_all_rec_pur_den_{lab}", f"Total Rec, Pair Pur Den {lab}", RL_NBINS, RL_BINS)
 
-    # # Set log scale for RL bins (approximate by re-binning or using a log-axis if ROOT allows,
-    # # but here we'll use linear bins for simplicity or manually fill).
-    # # Better: just use TH1D with linear bins and remember they are log-spaced.
-    # # Actually, let's fix the RL histograms to use the log bins defined above.
-    # for lab in EEC_LABELS:
-    #     for h in [h_pair_eff_num[lab], h_pair_eff_den[lab], h_pair_pur_num[lab], h_pair_pur_den[lab]]:
-    #         # ROOT TH1D doesn't natively support log-spacing in constructor.
-    #         # We use a trick: create a TH1D and then manually set bins if needed,
-    #         # or just use linear spacing and let the user log-scale the axis.
-    #         # To be precise, we use the RL_BINS from our config.
-    #         pass
-
-    # Splitting Efficiency/Purity & Lund Plane (2D: ln(kT) vs ln(R/dR))
-    h_lund_matched_gen = ROOT.TH2D("lund_matched_gen", "Lund Plane Matched Gen;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
-    h_lund_matched_rec = ROOT.TH2D("lund_matched_rec", "Lund Plane Matched Rec;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
-    h_lund_all_gen = ROOT.TH2D("lund_all_gen", "Lund Plane All Gen;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
-    h_lund_all_rec = ROOT.TH2D("lund_all_rec", "Lund Plane All Rec;ln(R/#Delta R);ln(k_{T})", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS)
 
 
+    # Lund plane differential
+    h_lund_all_gen_pt = {a: ROOT.TH2D(f"h_lund_all_gen_pt{b}-{c}", f"Lund all gen pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_all_rec_pt = {a: ROOT.TH2D(f"h_lund_all_rec_pt{b}-{c}", f"Lund all rec pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_matched_gen_pt = {a: ROOT.TH2D(f"h_lund_matched_gen_pt{b}-{c}", f"Lund matched gen pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_matched_rec_pt = {a: ROOT.TH2D(f"h_lund_matched_rec_pt{b}-{c}", f"Lund matched rec pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+
+    # Pair efficiency/purity differential
+    h_match_gen_pair_eff_num_pt = {a: {lab: ROOT.TH1D(f"pair_match_gen_eff_num_pt{b}-{c}_{lab}", f"Matched Gen, Pair Eff Num pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_all_gen_pair_eff_den_pt = {a: {lab: ROOT.TH1D(f"pair_all_gen_eff_den_pt{b}-{c}_{lab}", f"Total Gen, Pair Eff Den pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_match_rec_pair_pur_num_pt = {a: {lab: ROOT.TH1D(f"pair_match_rec_pur_num_pt{b}-{c}_{lab}", f"Matched Rec, Pair Pur Num pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_all_rec_pair_pur_den_pt = {a: {lab: ROOT.TH1D(f"pair_all_rec_pur_den_pt{b}-{c}_{lab}", f"Total Rec, Pair Pur Den pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+
+
+    # -----------------------------------------------------------------------
+    # Read parquet, regroup jets by (event, level)
+    # -----------------------------------------------------------------------
+    jets = ak.from_parquet(args.input)
+
+    
     # --- Global Jet Totals for scalar eff/pur (keeping the previous requested feature) ---
     n_part_jets_total = len(jets[jets.level == "part"])
     n_det_jets_total = len(jets[jets.level == "det"])
@@ -416,45 +431,63 @@ def main():
         # don't need because you can just see the groomed jet pt distribution in the histogram
         # if jets[r].jetpt < 10 or jets[r].jetpt > 200: #Limit jets binned in ungroomed jet pt to 10-200 gev
 
-        # Fill jet eff/pur before looking at matched jets -- IN ORIGINAL JET PT
-        if str(levels[r]) == "part":
-            h_all_gen_jet_eff_den_ungroomed.Fill(jets[r].jet_pt, float(jets[r].mc_weight))
-            counter1 += 1
-            if bool(jets[r].is_matched):
-                h_match_gen_jet_eff_num_ungroomed.Fill(jets[r].jet_pt, float(jets[r].mc_weight))
-                counter2 += 1
-        if str(levels[r]) == "det":
-            h_all_rec_jet_pur_den_ungroomed.Fill(jets[r].jet_pt, float(jets[r].mc_weight))
-            counter3 += 1
-            if bool(jets[r].is_matched):
-                h_match_rec_jet_pur_num_ungroomed.Fill(jets[r].jet_pt, float(jets[r].mc_weight))
-                counter4 += 1
-        
-        # Fill jet eff/pur before looking at matched jets -- IN GROOMED JET PT
-        if not bool(jets[r].is_matched):
+        # Fill jet eff/pur before looking at matched jets
+        if "ungroomed" in VERSIONS:
+            if str(levels[r]) == "part":
+                h_all_gen_jet_eff_den["ungroomed"].Fill(jets[r].jet_pt, float(jets[r].mc_weight))
+                counter1 += 1
+                if bool(jets[r].is_matched):
+                    h_match_gen_jet_eff_num["ungroomed"].Fill(jets[r].jet_pt, float(jets[r].mc_weight))
+                    counter2 += 1
+            if str(levels[r]) == "det":
+                h_all_rec_jet_pur_den["ungroomed"].Fill(jets[r].jet_pt, float(jets[r].mc_weight))
+                counter3 += 1
+                if bool(jets[r].is_matched):
+                    h_match_rec_jet_pur_num["ungroomed"].Fill(jets[r].jet_pt, float(jets[r].mc_weight))
+                    counter4 += 1
+
+        # For groomed versions, we only fill denominators for unmatched jets here
+        # to avoid rebuilding matched jets twice.
+        if "groomed" in VERSIONS and not bool(jets[r].is_matched):
             jet_consts = build_pseudojets(jets[r].const_pt, jets[r].const_eta, jets[r].const_phi, jets[r].const_label)
             jet, cs = recluster_ca(jet_consts)
-            if jet is None:
-                continue
-            
-            lund_gen = fjcontrib.LundGenerator(jet_def_ca)
-            jet_lund = lund_gen.result(jet)
+            if jet is not None:
+                lund_gen = fjcontrib.LundGenerator(jet_def_ca)
+                jet_lund = lund_gen.result(jet)
+                jet_splitting = select_split_sd(jet_lund, SD_ZCUT)
+                if jet_splitting is not None:
+                    groomed_jet = jet_splitting.pair()
+                    if str(levels[r]) == "part":
+                        h_all_gen_jet_eff_den["groomed"].Fill(groomed_jet.perp(), float(jets[r].mc_weight))
+                    if str(levels[r]) == "det":
+                        h_all_rec_jet_pur_den["groomed"].Fill(groomed_jet.perp(), float(jets[r].mc_weight))
 
-            jet_splitting = select_split_sd(jet_lund, SD_ZCUT)
-            if jet_splitting is None:
-                continue  # both must pass SD to enter the response
+        # ---- pT-differential Lund plane ---
+        # use ungroomed pT for binning
+        bin_pt = np.digitize(jets[r].jet_pt, JETPT_BINS) - 1
+        if 0 <= bin_pt < n_bins_pt:
+            # Rebuild for Lund plane
+            jet_consts_lund = build_pseudojets(jets[r].const_pt, jets[r].const_eta, jets[r].const_phi, jets[r].const_label)
+            jet_l, _ = recluster_ca(jet_consts_lund)
+            if jet_l is not None:
+                l_gen = fjcontrib.LundGenerator(jet_def_ca)
+                l_lund = l_gen.result(jet_l)
+                for d in l_lund:
+                    val_rd = math.log10(JET_R/d.Delta())
+                    val_kt = math.log10(d.kt())
+                    if str(levels[r]) == "part":
+                        h_lund_all_gen_pt[bin_pt].Fill(val_rd, val_kt, float(jets[r].mc_weight))
+                    if str(levels[r]) == "det":
+                        h_lund_all_rec_pt[bin_pt].Fill(val_rd, val_kt, float(jets[r].mc_weight))
 
-            groomed_jet = jet_splitting.pair()
-
-            # don't need because you can just see the groomed jet pt distribution in the histogram
-            # # make cuts on unmatched jets - keep groomed jet pt between 10 and 200 gev
-            # if groomed_jet.perp() < 10 or groomed_jet.perp() > 200:
-            #     continue
-
-            if str(levels[r]) == "part":
-                h_all_gen_jet_eff_den_groomed.Fill(groomed_jet.perp(), float(jets[r].mc_weight))
-            if str(levels[r]) == "det":
-                h_all_rec_jet_pur_den_groomed.Fill(groomed_jet.perp(), float(jets[r].mc_weight))
+                # If matched, also fill matched Lund planes
+                if bool(jets[r].is_matched):
+                    if str(levels[r]) == "part":
+                        for d in l_lund:
+                            h_lund_matched_gen_pt[bin_pt].Fill(math.log10(JET_R/d.Delta()), math.log10(d.kt()), float(jets[r].mc_weight))
+                    if str(levels[r]) == "det":
+                        for d in l_lund:
+                            h_lund_matched_rec_pt[bin_pt].Fill(math.log10(JET_R/d.Delta()), math.log10(d.kt()), float(jets[r].mc_weight))
 
 
         # Now continue to looking for matched jets
@@ -499,11 +532,12 @@ def main():
         det_rad = det_d.pair()
         part_rad = part_d.pair()
 
-        # Some more eff/purity histogram filling here
-        h_match_gen_jet_eff_num_groomed.Fill(part_rad.perp(), mc_weight)
-        h_all_gen_jet_eff_den_groomed.Fill(part_rad.perp(), mc_weight)
-        h_match_rec_jet_pur_num_groomed.Fill(det_rad.perp(), mc_weight)
-        h_all_rec_jet_pur_den_groomed.Fill(det_rad.perp(), mc_weight)
+        # Fill groomed efficiency/purity for matched jets
+        if "groomed" in VERSIONS:
+            h_match_gen_jet_eff_num["groomed"].Fill(part_rad.perp(), mc_weight)
+            h_all_gen_jet_eff_den["groomed"].Fill(part_rad.perp(), mc_weight)
+            h_match_rec_jet_pur_num["groomed"].Fill(det_rad.perp(), mc_weight)
+            h_all_rec_jet_pur_den["groomed"].Fill(det_rad.perp(), mc_weight)
 
         # Get subjets of the chosen radiator
         det_sub = sorted(det_rad.pieces(), key=lambda x: x.pt(), reverse=True)
@@ -522,9 +556,26 @@ def main():
         part_ptjet = part_jet.perp()
 
         # ---- fill 2D jet pt and groomed pt responses (one per matched pair) ----
-        h_resp_jetpt.Fill(det_ptjet, part_ptjet, mc_weight)
-        h_resp_groomed.Fill(det_scale, part_scale, mc_weight)
-        response1D.Fill(det_scale, part_scale, mc_weight)
+        for v in VERSIONS:
+            d_pt = det_scale if v == "groomed" else det_ptjet
+            p_pt = part_scale if v == "groomed" else part_ptjet
+            h_resp_jetpt[v].Fill(d_pt, p_pt, mc_weight)
+            h1_reco[v].Fill(d_pt, mc_weight)
+            h1_gen[v].Fill(p_pt, mc_weight)
+            response1D[v].Fill(d_pt, p_pt, mc_weight)
+
+        # ---- pT-differential Response and Pair Metrics ----
+        # use ungroomed pT for binning the differential file
+        bin_pt = np.digitize(det_ptjet, JETPT_BINS) - 1
+        if 0 <= bin_pt < n_bins_pt:
+            for v in VERSIONS:
+                fill_det_jetpt = det_scale if v == "groomed" else det_ptjet
+                fill_part_jetpt = part_scale if v == "groomed" else part_ptjet
+                for lab in EEC_LABELS:
+                    # Note: Actual filling of these is done in the EEC loop below for efficiency
+                    # but we can pre-calculate the bin here.
+                    pass
+
         n_pairs += 1 # number of matched jets (det/part)
 
 
@@ -589,30 +640,54 @@ def main():
                 h_match_rec_pair_pur_num[lab].Fill(dpair[0], mc_weight)
                 h_match_gen_pair_eff_num[lab].Fill(ppair[0], mc_weight)
 
-            hs = resp6[lab]
-            hru_response = roounfold_resp6[lab]
-            for dpair, ppair in matched:
-                rl_det, w_det = dpair[0], dpair[1]
-                rl_part, w_part = ppair[0], ppair[1]
-                x = array.array("d", [det_scale, part_scale, # groomed jet pt
-                                      rl_det, rl_part, w_det, w_part])
-                hs.Fill(x, mc_weight)
+            # fill differential pair eff/pur
+            bin_pt_pairs = np.digitize(det_ptjet, JETPT_BINS) - 1 # use det jet pt for binning
+            if 0 <= bin_pt_pairs < n_bins_pt:
+                for dpair in det_pairs:
+                    h_all_rec_pair_pur_den_pt[bin_pt_pairs][lab].Fill(dpair[0], mc_weight)
+                for ppair in part_pairs:
+                    h_all_gen_pair_eff_den_pt[bin_pt_pairs][lab].Fill(ppair[0], mc_weight)
+                for dpair, ppair in matched:
+                    h_match_rec_pair_pur_num_pt[bin_pt_pairs][lab].Fill(dpair[0], mc_weight)
+                    h_match_gen_pair_eff_num_pt[bin_pt_pairs][lab].Fill(ppair[0], mc_weight)
 
-                hru_response.Fill(det_scale, rl_det, w_det, part_scale, rl_part, w_part, mc_weight)
-                reco_3[lab].Fill(det_scale, rl_det, w_det, mc_weight)
-                gen_3[lab].Fill(part_scale, rl_part, w_part, mc_weight)
-                reco_unmatched_3[lab].Fill(det_scale, rl_det, w_det, mc_weight)
-                gen_unmatched_3[lab].Fill(part_scale, rl_part, w_part, mc_weight)
-        
-            for dpair in det_unmatched:
-                rl_det, w_det = dpair[0], dpair[1]
-                reco_unmatched_3[lab].Fill(det_scale, rl_det, w_det, mc_weight)
-            
-            for tpair in tr_unmatched: 
-                rl_part, w_part = tpair[0], tpair[1]
-                # if rl_part >= 0 and rl_part < RL_MAX:
-                hru_response.Miss(part_scale, rl_part, w_part, mc_weight) 
-                gen_unmatched_3[lab].Fill(part_scale, rl_part, w_part, mc_weight)
+            for v in VERSIONS:
+                fill_det_jetpt = det_scale if v == "groomed" else det_ptjet
+                fill_part_jetpt = part_scale if v == "groomed" else part_ptjet
+
+                hs = resp6[v][lab]
+                hru_response = roounfold_resp6[v][lab]
+                for dpair, ppair in matched:
+                    rl_det, w_det = dpair[0], dpair[1]
+                    rl_part, w_part = ppair[0], ppair[1]
+                    x = array.array("d", [fill_det_jetpt, fill_part_jetpt, # groomed jet pt
+                                        rl_det, rl_part, w_det, w_part])
+                    hs.Fill(x, mc_weight)
+
+                    hru_response.Fill(fill_det_jetpt, rl_det, w_det, fill_part_jetpt, rl_part, w_part, mc_weight)
+                    reco_3[v][lab].Fill(fill_det_jetpt, rl_det, w_det, mc_weight)
+                    gen_3[v][lab].Fill(fill_part_jetpt, rl_part, w_part, mc_weight)
+                    reco_unmatched_3[v][lab].Fill(fill_det_jetpt, rl_det, w_det, mc_weight)
+                    gen_unmatched_3[v][lab].Fill(fill_part_jetpt, rl_part, w_part, mc_weight)
+
+
+                for dpair in det_unmatched:
+                    rl_det, w_det = dpair[0], dpair[1]
+                    reco_unmatched_3[v][lab].Fill(fill_det_jetpt, rl_det, w_det, mc_weight)
+
+                    # bin_pt_resp = np.digitize(det_ptjet, JETPT_BINS) - 1
+                    # if 0 <= bin_pt_resp < n_bins_pt:
+                    #     reco_unmatched_3_pt[bin_pt_resp][v][lab].Fill(rl_det, w_det, mc_weight)
+
+                for tpair in tr_unmatched:
+                    rl_part, w_part = tpair[0], tpair[1]
+                    # if rl_part >= 0 and rl_part < RL_MAX:
+                    hru_response.Miss(fill_part_jetpt, rl_part, w_part, mc_weight)
+                    gen_unmatched_3[v][lab].Fill(fill_part_jetpt, rl_part, w_part, mc_weight)
+
+                    # bin_pt_resp = np.digitize(det_ptjet, JETPT_BINS) - 1
+                    # if 0 <= bin_pt_resp < n_bins_pt:
+                    #     gen_unmatched_3_pt[bin_pt_resp][v][lab].Fill(rl_part, w_part, mc_weight)
 
             
         
@@ -664,32 +739,35 @@ def main():
     # -----------------------------------------------------------------------
     fout = ROOT.TFile(args.output, "RECREATE")
     fout.cd()
-    h_resp_jetpt.Write()
-    h_resp_groomed.Write()
-    response1D.Write()
-    for lab in EEC_LABELS:
-        resp6[lab].Write()
-        roounfold_resp6[lab].Write()
 
-        reco_3[lab].Write()
-        reco_unmatched_3[lab].Write()
-        gen_3[lab].Write()
-        gen_unmatched_3[lab].Write()
+    for v in VERSIONS:
+        h_resp_jetpt[v].Write()
+        response1D[v].Write()
+        for lab in EEC_LABELS:
+            resp6[v][lab].Write()
+            roounfold_resp6[v][lab].Write()
+
+            reco_3[v][lab].Write()
+            reco_unmatched_3[v][lab].Write()
+            gen_3[v][lab].Write()
+            gen_unmatched_3[v][lab].Write()
 
     # Write differential efficiency and purity - ungroomed and groomed jet pt
-    h_match_gen_jet_eff_num_ungroomed.Write()
-    h_all_gen_jet_eff_den_ungroomed.Write()
-    h_match_rec_jet_pur_num_ungroomed.Write()
-    h_all_rec_jet_pur_den_ungroomed.Write()
-    # h_jet_eff_ungroomed.Write()
-    # h_jet_pur_ungroomed.Write()
+    for v in VERSIONS:
+        h_match_gen_jet_eff_num[v].Write()
+        h_all_gen_jet_eff_den[v].Write()
+        h_match_rec_jet_pur_num[v].Write()
+        h_all_rec_jet_pur_den[v].Write()
+        # h_jet_eff.Write()
+        # h_jet_pur.Write()
 
-    h_match_gen_jet_eff_num_groomed.Write()
-    h_all_gen_jet_eff_den_groomed.Write()
-    h_match_rec_jet_pur_num_groomed.Write()
-    h_all_rec_jet_pur_den_groomed.Write()
-    # h_jet_eff_groomed.Write()
-    # h_jet_pur_groomed.Write()
+
+    h_lund_matched_gen.Write()
+    h_lund_matched_rec.Write()
+    h_lund_all_gen.Write()
+    h_lund_all_rec.Write()
+    # h_lund_eff.Write()
+    # h_lund_pur.Write()
 
     for lab in EEC_LABELS:
         h_match_gen_pair_eff_num[lab].Write()
@@ -700,12 +778,33 @@ def main():
     #     h_pair_eff[lab].Write()
     #     h_pair_pur[lab].Write()
 
-    h_lund_matched_gen.Write()
-    h_lund_matched_rec.Write()
-    h_lund_all_gen.Write()
-    h_lund_all_rec.Write()
-    # h_lund_eff.Write()
-    # h_lund_pur.Write()
+    # -----------------------------------------------------------------------
+    # Write pT-differential output
+    # -----------------------------------------------------------------------
+    # Strip .root extension if present and append _ptdifferential.root
+    output_diff_name = args.output.rsplit(".", 1)[0] + "_ptdifferential.root" if "." in args.output else args.output + "_ptdifferential.root"
+    fout_diff = ROOT.TFile(output_diff_name, "RECREATE")
+    fout_diff.cd()
+
+    for b in range(n_bins_pt):
+        # Lund plane
+        h_lund_all_gen_pt[b].Write()
+        h_lund_all_rec_pt[b].Write()
+        h_lund_matched_gen_pt[b].Write()
+        h_lund_matched_rec_pt[b].Write()
+
+        # Pair metrics
+        for lab in EEC_LABELS:
+            h_match_gen_pair_eff_num_pt[b][lab].Write()
+            h_all_gen_pair_eff_den_pt[b][lab].Write()
+            h_match_rec_pair_pur_num_pt[b][lab].Write()
+            h_all_rec_pair_pur_den_pt[b][lab].Write()
+
+
+    fout_diff.Close()
+
+    # Ensure we are back in the main output file for the summary
+    fout.cd()
 
     # Write scalar efficiency and purity
     # Jet level
