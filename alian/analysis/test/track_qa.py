@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ Example usage: 
-python analysis/test/track_qa.py -i /rstorage/alice/run3/data/LHC25ae/BerkeleyTrees/69/BerkeleyTree.root -c config/test.yaml -o output/test.root
+python analysis/test/track_qa.py -i /rstorage/alice/run3/data/LHC25ae_fix/BerkeleyTrees/69/BerkeleyTree.root -c config/test.yaml -o output/test.root
 """
 
 import argparse
@@ -72,7 +72,9 @@ class TrackQA(AnalysisBase):
         self.hists['sigma_rho'].Fill(self.rho, self.sigma)
         [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
         [self.hists['track_eta'].Fill(t.eta()) for t in self.tracks]
+        [self.hists['track_phi'].Fill(t.phi()) for t in self.tracks]
         [self.hists['track_eta_runnumber'].Fill(self.event.run_number-564300, t.eta()) for t in self.tracks]
+        [self.hists['track_phi_runnumber'].Fill(self.event.run_number-564300, t.phi()) for t in self.tracks]
         if len(self.jets) == 0:
             return
         self.hists['event'].Fill(1.5)
