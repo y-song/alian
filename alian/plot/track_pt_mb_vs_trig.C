@@ -204,7 +204,7 @@ void MakeComparisonPlot(TH1D *hTrig, TH1D *hMB, const char *canvasName, const ch
 
     ratio->Draw("E");
 
-    TLine *unityLine = new TLine(ratio->GetXaxis()->GetXmin(), 1.0, 20.0, 1.0);
+    TLine *unityLine = new TLine(20.0, 1.0, 100.0, 1.0);
 
     unityLine->SetLineColor(kGray + 2);
     unityLine->SetLineStyle(2);
@@ -224,9 +224,9 @@ void track_pt_mb_vs_trig()
     TFile *f = new TFile("/rstorage/youqi/1934255/AnalysisResultsFinal.root", "READ");
 
     // TH1D *h1 = (TH1D *)f->Get("track_pT");
-    TH1D *h2_trig = (TH1D *)f_trig->Get("track_in_jet_event_pT");
+    TH1D *h2_trig = (TH1D *)f_trig->Get("jet_pT");
     TH1D *h3_trig = (TH1D *)f_trig->Get("track_in_jet_pT");
-    TH1D *h2 = (TH1D *)f->Get("track_in_jet_event_pT");
+    TH1D *h2 = (TH1D *)f->Get("jet_pT");
     TH1D *h3 = (TH1D *)f->Get("track_in_jet_pT");
 
     /*
@@ -238,20 +238,20 @@ void track_pt_mb_vs_trig()
     /*
     * Use the rebinned h2_trig as the reference binning for h2.
     */
-    h2_trig->Rebin(6);
+    // h2_trig->Rebin(6);
     h2 = RebinToMatch(h2, h2_trig, "h2_rebinned");
 
-    h2_trig->GetXaxis()->SetRangeUser(0, 20);
+    h2_trig->GetXaxis()->SetRangeUser(20, 100);
     h3_trig->GetXaxis()->SetRangeUser(0, 20);
-    h2->GetXaxis()->SetRangeUser(0, 20);
+    h2->GetXaxis()->SetRangeUser(20, 100);
     h3->GetXaxis()->SetRangeUser(0, 20);
 
-    h2_trig->Scale(1.0 / h2_trig->Integral(0, 20));
+    h2_trig->Scale(1.0 / h2_trig->Integral(20, 100));
     h3_trig->Scale(1.0 / h3_trig->Integral(0, 20));
-    h2->Scale(1.0 / h2->Integral(0, 20));
+    h2->Scale(1.0 / h2->Integral(20, 100));
     h3->Scale(1.0 / h3->Integral(0, 20));
 
     gSystem->mkdir("output", kTRUE);
     MakeComparisonPlot(h3_trig, h3, "c_track_in_jet", "ratio_h3_trig_over_h3", "#splitline{JE triggered: All tracks in jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "#splitline{MB: All tracks in jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "output/track_in_jet_pt_mb_vs_trig.png");
-    MakeComparisonPlot(h2_trig, h2, "c_track_in_jet_event", "ratio_h2_trig_over_h2", "#splitline{JE triggered: All tracks in events containing jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "#splitline{MB: All tracks in events containing jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "output/track_in_jet_event_pt_mb_vs_trig.png");
+    MakeComparisonPlot(h2_trig, h2, "c_jet", "ratio_h2_trig_over_h2", "#splitline{JE triggered jets}{R = 0.4, p_{T}^{raw} > 20 GeV}", "#splitline{MB jets}{R = 0.4, p_{T}^{raw} > 20 GeV}", "output/jet_pt_mb_vs_trig.png");
 }
