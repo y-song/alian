@@ -73,6 +73,7 @@ class TrackQA(AnalysisBase):
         [self.hists['track_pT'].Fill(t.pt()) for t in self.tracks]
         [self.hists['track_eta'].Fill(t.eta()) for t in self.tracks]
         [self.hists['track_phi'].Fill(t.phi()) for t in self.tracks]
+        [self.hists['track_phi_eta'].Fill(t.eta(), t.phi()) for t in self.tracks]
         [self.hists['track_eta_runnumber'].Fill(self.event.run_number-564300, t.eta()) for t in self.tracks]
         [self.hists['track_phi_runnumber'].Fill(self.event.run_number-564300, t.phi()) for t in self.tracks]
         if len(self.jets) == 0:

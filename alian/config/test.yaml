@@ -2,7 +2,7 @@ selections:
   event:
     event_sel: sel8Full
     cent_min: 0.
-    cent_max: 10.
+    cent_max: 100.
   track:
     pt_min: 0.150
     track_sel: globalTrack
@@ -29,10 +29,11 @@ output:
     centrality: ['lin', 0, 100, 100]
     multiplicity: ['lin', 0, 5000, 5000]
     run_number: ['lin', 0, 150, 150]
-    track_pT: ['lin', 0, 20, 300]
+    track_pT: ['lin', 0, 30, 450]
     jet_pT: ['lin', 0, 200, 100]
-    jet_eta: ['lin', -1., 1., 40]
+    eta: ['lin', -1., 1., 40]
     jet_area: ['lin', 0, 1, 50]
+    phi: ['lin', 0, 6.28, 100]
     RL: ['log', 1.0e-4, 1.0, 51]
     Rg: ['lin', -1.0, 0.6, 32]
     zg: ['lin', -1.0, 0.5, 30]
@@ -44,17 +45,20 @@ output:
     cent_rho: [2, "cent_rho", "Centrality vs #rho;#rho (GeV);centrality", centrality, centrality]
     sigma_rho: [2, "sigma_rho", "#sigma vs #rho;#rho (GeV);#sigma (GeV)", centrality, centrality]
     track_pT: [1, "track_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
-    track_eta: [1, "track_eta", "Track #it{#eta};#it{#eta};Counts", jet_eta]
-    track_eta_runnumber: [2, "track_eta_runnumber", "Track #it{#eta} vs run number;run number-564300;#it{#eta}", run_number, jet_eta]
+    track_eta: [1, "track_eta", "Track #it{#eta};#it{#eta};Counts", eta]
+    track_phi: [1, "track_phi", "Track #it{#phi};#it{#phi};Counts", phi]
+    track_eta_runnumber: [2, "track_eta_runnumber", "Track #it{#eta} vs run number;run number-564300;#it{#eta}", run_number, eta]
+    track_phi_runnumber: [2, "track_phi_runnumber", "Track #it{#phi} vs run number;run number-564300;#it{#phi}", run_number, phi]
+    track_phi_eta: [2, "track_phi_eta", "Track #it{#phi} vs track #it{#eta};#it{#eta};#it{#phi}", eta, phi]
     track_in_jet_pT: [1, "track_in_jet_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
     track_in_jet_event_pT: [1, "track_in_jet_event_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
     jet_pT: [1, "jet_pT", "Jet #it{p}_{T} spectrum;jet #it{p}_{T} (GeV);Counts", jet_pT]
-    jet_eta: [1, "jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", jet_eta]
-    jet_eta_runnumber: [2, "jet_eta_runnumber", "Jet #it{#eta} vs run number;run number-564300;jet #it{#eta}", run_number, jet_eta]
+    jet_eta: [1, "jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", eta]
+    jet_eta_runnumber: [2, "jet_eta_runnumber", "Jet #it{#eta} vs run number;run number-564300;jet #it{#eta}", run_number, eta]
     jet_A: [1, "jet_A", "Jet area;jet area;Counts", jet_area]
     jet_rhoA_pT: [2, "jet_rhoA_pT", "Jet #Delta#it{p}_{T} vs #it{p}_{T};jet #it{p}_{T} (GeV);jet #Delta#it{p}_{T} = #rhoA (GeV)", jet_pT, jet_pT]
     jet_pT_sub_pT: [2, "jet_pT_sub_pT", "Background subtracted jet #it{p}_{T} vs unsubtracted jet #it{p}_{T};jet #it{p}_{T} (GeV);jet #it{p}_{T}^{sub} (GeV)", jet_pT, jet_pT]
-    jet_eta_post_selection: [1, "jet_eta_post_selection", "Jet #it{#eta} (post selection);jet #it{#eta};Counts", jet_eta]
+    jet_eta_post_selection: [1, "jet_eta_post_selection", "Jet #it{#eta} (post selection);jet #it{#eta};Counts", eta]
     jet_A_post_selection: [1, "jet_A_post_selection", "Jet area (post selection);jet area;Counts", jet_area]
     jet_pT_sub_post_selection: [1, "jet_pT_sub_post_selection", "Jet #it{p}_{T} spectrum (post selection);jet #it{p}_{T}^{sub} (GeV);Counts", jet_pT]
     jet_pT_sub_pT_post_selection: [2, "jet_pT_sub_pT_post_selection", "Background subtracted jet #it{p}_{T} vs unsubtracted jet #it{p}_{T} (post selection);jet #it{p}_{T} (GeV);jet #it{p}_{T}^{sub} (GeV)", jet_pT, jet_pT]

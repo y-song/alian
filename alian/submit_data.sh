@@ -1,16 +1,16 @@
 #!/bin/bash
 
 #SBATCH --job-name=oo_track_qa
-#SBATCH --partition=std
+#SBATCH --partition=quick
 #SBATCH --output=/home/youqi/temp/%A_%a.out
 #SBATCH --error=/home/youqi/temp/%A_%a.err
-#SBATCH --array=0-122
+#SBATCH --array=0-32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
-#SBATCH --time=05:00:00
+#SBATCH --time=04:00:00
 set -euo pipefail
 
-FILE_LIST=list/OO_fix.txt
+FILE_LIST=list/OO_mb.txt
 CONFIG=config/test.yaml
 ANALYSIS_CODE=analysis/test/track_qa.py
 OUTPUT_DIR=/rstorage/youqi/$SLURM_ARRAY_JOB_ID
