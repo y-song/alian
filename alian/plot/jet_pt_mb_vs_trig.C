@@ -18,7 +18,7 @@
 void SetStyle(Bool_t graypalette = true)
 {
     gStyle->Reset("Plain");
-    gStyle->SetOptTitle(1);
+    gStyle->SetOptTitle(0);
     gStyle->SetOptStat(0);
 
     if (graypalette)
@@ -68,8 +68,8 @@ void FormatHist(TLegend *l, TH1 *hist, TString text, int color)
 
 void addLegendInfo(TLegend *l, std::string pt_min, std::string pt_max, std::string jetR)
 {
-    l->SetTextSize(0.038);
-    l->AddEntry("NULL", "OO data, 0#minus100%", "h");
+    l->SetTextSize(0.05);
+    l->AddEntry("NULL", "#splitline{OO data, 0#minus100%}{anti-#it{k}_{T}, ch. jets, #it{R} = 0.4}", "h");
     l->SetBorderSize(0);
     l->SetFillStyle(0); // turn legend transparent
 }
@@ -191,7 +191,6 @@ void MakeComparisonPlot(TH1D *hTrig, TH1D *hMB, const char *canvasName, const ch
     ratio->GetYaxis()->SetLabelSize(0.085);
     ratio->GetYaxis()->SetNdivisions(505);
 
-    ratio->GetXaxis()->SetTitle("p_{T} (GeV/#it{c})");
     ratio->GetXaxis()->SetTitleOffset(1.05);
     ratio->GetXaxis()->SetTitleSize(0.085);
     ratio->GetXaxis()->SetLabelSize(0.085);
@@ -204,7 +203,7 @@ void MakeComparisonPlot(TH1D *hTrig, TH1D *hMB, const char *canvasName, const ch
 
     ratio->Draw("E");
 
-    TLine *unityLine = new TLine(ratio->GetXaxis()->GetXmin(), 1.0, 20.0, 1.0);
+    TLine *unityLine = new TLine(20.0, 1.0, 60.0, 1.0);
 
     unityLine->SetLineColor(kGray + 2);
     unityLine->SetLineStyle(2);
@@ -216,42 +215,44 @@ void MakeComparisonPlot(TH1D *hTrig, TH1D *hMB, const char *canvasName, const ch
     c->SaveAs(outputName);
 }
 
-void track_pt_mb_vs_trig()
+void jet_pt_mb_vs_trig()
 {
     SetStyle();
 
     TFile *f_trig = new TFile("/rstorage/youqi/1927065/AnalysisResultsFinal.root", "READ");
     TFile *f = new TFile("/rstorage/youqi/1934620/AnalysisResultsFinal.root", "READ");
 
-    // TH1D *h1 = (TH1D *)f->Get("track_pT");
-    TH1D *h2_trig = (TH1D *)f_trig->Get("track_in_jet_event_pT");
-    TH1D *h3_trig = (TH1D *)f_trig->Get("track_in_jet_pT");
-    TH1D *h2 = (TH1D *)f->Get("track_in_jet_event_pT");
-    TH1D *h3 = (TH1D *)f->Get("track_in_jet_pT");
+    TH2D *h1_trig = (TH2D *)f_trig->Get("jet_pT_sub_pT");
+    TH1D *h2_trig = (TH1D *)h1_trig->ProjectionY("h2_trig");
+    TH1D *h3_trig = (TH1D *)h1_trig->ProjectionX("h3_trig");
+    TH2D *h1 = (TH2D *)f->Get("jet_pT_sub_pT");
+    TH1D *h2 = (TH1D *)h1->ProjectionY("h2");
+    TH1D *h3 = (TH1D *)h1->ProjectionX("h3");
 
     /*
     * Use the rebinned h3_trig as the reference binning for h3.
     */
-    h3_trig->Rebin(6);
+    // h3_trig->Rebin(2);
     h3 = RebinToMatch(h3, h3_trig, "h3_rebinned");
 
     /*
     * Use the rebinned h2_trig as the reference binning for h2.
     */
-    h2_trig->Rebin(6);
+    // h2_trig->Rebin(2);
     h2 = RebinToMatch(h2, h2_trig, "h2_rebinned");
 
-    h2_trig->GetXaxis()->SetRangeUser(0, 20);
-    h3_trig->GetXaxis()->SetRangeUser(0, 20);
-    h2->GetXaxis()->SetRangeUser(0, 20);
-    h3->GetXaxis()->SetRangeUser(0, 20);
+    h2_trig->GetXaxis()->SetRangeUser(20, 60);
+    h3_trig->GetXaxis()->SetRangeUser(20, 60);
+    h2->GetXaxis()->SetRangeUser(20, 60);
+    h3->GetXaxis()->SetRangeUser(20, 60);
+    h2_trig->GetXaxis()->SetTitle("jet #it{p}_{T}#minus#it{#rho}A [GeV]");
 
-    h2_trig->Scale(1.0 / h2_trig->Integral(h2_trig->GetXaxis()->FindBin(10), h2_trig->GetXaxis()->FindBin(20)));
-    h3_trig->Scale(1.0 / h3_trig->Integral(h3_trig->GetXaxis()->FindBin(10), h3_trig->GetXaxis()->FindBin(20)));
-    h2->Scale(1.0 / h2->Integral(h2->GetXaxis()->FindBin(10), h2->GetXaxis()->FindBin(20)));
-    h3->Scale(1.0 / h3->Integral(h3->GetXaxis()->FindBin(10), h3->GetXaxis()->FindBin(20)));
+    h2_trig->Scale(1.0 / h2_trig->Integral(h2_trig->GetXaxis()->FindBin(30), h2_trig->GetXaxis()->FindBin(200)));
+    h3_trig->Scale(1.0 / h3_trig->Integral(h3_trig->GetXaxis()->FindBin(30), h3_trig->GetXaxis()->FindBin(200)));
+    h2->Scale(1.0 / h2->Integral(h2->GetXaxis()->FindBin(30), h2->GetXaxis()->FindBin(200)));
+    h3->Scale(1.0 / h3->Integral(h3->GetXaxis()->FindBin(30), h3->GetXaxis()->FindBin(200)));
 
     gSystem->mkdir("output", kTRUE);
-    MakeComparisonPlot(h3_trig, h3, "c_track_in_jet", "ratio_h3_trig_over_h3", "#splitline{JE triggered: All tracks in jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "#splitline{MB: All tracks in jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "output/track_in_jet_pt_mb_vs_trig.png");
-    MakeComparisonPlot(h2_trig, h2, "c_track_in_jet_event", "ratio_h2_trig_over_h2", "#splitline{JE triggered: All tracks in events containing jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "#splitline{MB: All tracks in events containing jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "output/track_in_jet_event_pt_mb_vs_trig.png");
+    MakeComparisonPlot(h3_trig, h3, "c_jet_raw", "ratio_h3_trig_over_h3", "JE triggered", "MB", "output/jet_raw_pt_mb_vs_trig.png");
+    MakeComparisonPlot(h2_trig, h2, "c_jet", "ratio_h2_trig_over_h2", "JE triggered", "MB", "output/jet_sub_pt_mb_vs_trig.png");
 }
