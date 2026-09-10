@@ -61,16 +61,17 @@ TH1D *GetRhoPDF(TH2 *h2, double cent_lo, double cent_hi, int color, const char *
     return h;
 }
 
-void plot_rho()
+void plot_rho(std::string file_name)
 {
     SetStyle();
 
-    TFile *f = new TFile("output/test.root", "READ");
+    std::string infile  = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    TFile *f = new TFile(infile.c_str(), "READ");
     TH2 *h_cent_rho = (TH2 *)f->Get("cent_rho");
 
-    TH1D *h_0_10   = GetRhoPDF(h_cent_rho, 0, 10, kBlack, "rho_cent_0_10");
+    TH1D *h_0_10   = GetRhoPDF(h_cent_rho, 0, 10, kBlue, "rho_cent_0_10");
     TH1D *h_10_30  = GetRhoPDF(h_cent_rho, 10, 30, kRed, "rho_cent_10_30");
-    TH1D *h_30_100 = GetRhoPDF(h_cent_rho, 30, 100, kBlue, "rho_cent_30_100");
+    TH1D *h_30_100 = GetRhoPDF(h_cent_rho, 30, 100, kBlack, "rho_cent_30_100");
 
     TCanvas *c = new TCanvas();
     c->cd();
@@ -78,10 +79,11 @@ void plot_rho()
     gPad->SetLogy();
     h_0_10->GetXaxis()->SetTitle("#rho (GeV)");
     h_0_10->GetYaxis()->SetTitle("Probability density");
+    h_0_10->GetXaxis()->SetRangeUser(0, 50);
     h_0_10->GetYaxis()->SetRangeUser(1e-5, 1);
     h_0_10->Draw("hist");
-    h_10_30->Draw("hist same");
-    h_30_100->Draw("hist same");
+    // h_10_30->Draw("hist same");
+    // h_30_100->Draw("hist same");
 
     TLegend *l = new TLegend(0.6, 0.65, 0.88, 0.85);
     l->AddEntry(h_0_10, "0#minus10%", "l");

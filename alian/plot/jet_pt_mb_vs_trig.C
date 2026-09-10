@@ -159,20 +159,20 @@ void MakeComparisonPlot(TH1D *hTrig, TH1D *hMB, const char *canvasName, const ch
     FormatHist(leg1, hTrig, trigLegend, kRed+2);
     FormatHist(leg1, hMB, mbLegend, kBlue + 2);
 
-    hTrig->GetYaxis()->SetTitle("Self-normalized counts");
-    hTrig->GetYaxis()->SetTitleOffset(0.95);
-    hTrig->GetYaxis()->SetTitleSize(0.055);
-    hTrig->GetYaxis()->SetLabelSize(0.05);
+    hMB->GetYaxis()->SetTitle("Self-normalized counts");
+    hMB->GetYaxis()->SetTitleOffset(0.95);
+    hMB->GetYaxis()->SetTitleSize(0.055);
+    hMB->GetYaxis()->SetLabelSize(0.05);
 
     /*
      * The x-axis is labeled only on the bottom panel because
      * the two panels touch.
      */
-    hTrig->GetXaxis()->SetTitleSize(0.0);
-    hTrig->GetXaxis()->SetLabelSize(0.0);
+    hMB->GetXaxis()->SetTitleSize(0.0);
+    hMB->GetXaxis()->SetLabelSize(0.0);
 
-    hTrig->Draw("E");
-    hMB->Draw("E SAME");
+    hMB->Draw("E");
+    hTrig->Draw("E SAME");
     leg1->Draw("SAME");
 
     pad2->cd();
@@ -219,8 +219,8 @@ void jet_pt_mb_vs_trig()
 {
     SetStyle();
 
-    TFile *f_trig = new TFile("/rstorage/youqi/1927065/AnalysisResultsFinal.root", "READ");
-    TFile *f = new TFile("/rstorage/youqi/1934620/AnalysisResultsFinal.root", "READ");
+    TFile *f_trig = new TFile("/rstorage/youqi/1934715/AnalysisResultsFinal.root", "READ");
+    TFile *f = new TFile("/rstorage/youqi/1934682/AnalysisResultsFinal.root", "READ");
 
     TH2D *h1_trig = (TH2D *)f_trig->Get("jet_pT_sub_pT");
     TH1D *h2_trig = (TH1D *)h1_trig->ProjectionY("h2_trig");

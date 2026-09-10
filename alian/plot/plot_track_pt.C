@@ -76,7 +76,7 @@ void FormatHist(TLegend *l, TH1 *hist, TString text, int color)
 void addLegendInfo(TLegend *l, string pt_min, string pt_max, string jetR)
 {
     l->SetTextSize(0.032);
-    l->AddEntry("NULL", "OO 0#minus10%", "h");
+    l->AddEntry("NULL", "OO JE derived, 0#minus100%", "h");
     l->SetBorderSize(0);
     l->SetFillStyle(0); // turn legend transparent
 }
@@ -85,7 +85,7 @@ void plot_track_pt()
 {
     SetStyle();
     
-    TFile *f = new TFile("~/temp/track_qa/AnalysisResultsFinal.root", "READ");
+    TFile *f = new TFile("/rstorage/youqi/1934255/AnalysisResultsFinal.root", "READ");
     TH1D *h1 = (TH1D *)f->Get("track_pT");
     TH1D *h2 = (TH1D *)f->Get("track_in_jet_event_pT");
     TH1D *h3 = (TH1D *)f->Get("track_in_jet_pT");
@@ -106,5 +106,5 @@ void plot_track_pt()
     h3->Draw("same");
     leg1->Draw("same");
 
-    c->SaveAs("output/oo_track_pt.png");
+    c->SaveAs("output/oo_mb_track_pt.png");
 }
