@@ -153,10 +153,11 @@ def process(infile, outfile, jet_pt_min=JET_PT_MIN):
                 continue
 
             # Massless four-vectors
+            mpion = 0.13957
             px = ev_pt * np.cos(ev_phi)
             py = ev_pt * np.sin(ev_phi)
             pz = ev_pt * np.sinh(ev_eta)
-            E  = np.sqrt(px**2 + py**2 + pz**2)
+            E  = np.sqrt((ev_pt*np.cosh(ev_eta))**2 + mpion**2) #np.sqrt(px**2 + py**2 + pz**2)
 
             pj_particles = [
                 fj.PseudoJet(float(px[i]), float(py[i]), float(pz[i]), float(E[i]))

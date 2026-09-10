@@ -269,9 +269,12 @@ def main():
     # Output histograms
     # -----------------------------------------------------------------------
     VERSIONS = ["groomed", "ungroomed"]
+    n_bins_pt = len(JETPT_BINS) - 1
     jetpt_edges = array.array("d", JETPT_BINS)
 
+
     h_resp_jetpt = {}
+    h_res_jetpt = {}
     for v in VERSIONS:
         title = "groomed jet p_{T} det vs part" if v == "groomed" else "jet p_{T} det vs part"
         xaxis = "p_{T,g}^{det}" if v == "groomed" else "p_{T}^{det}"
@@ -279,6 +282,10 @@ def main():
         h_resp_jetpt[v] = ROOT.TH2D(f"resp_jetpt_{v}", f"{title};{xaxis};{yaxis}",
                                      len(JETPT_BINS) - 1, jetpt_edges,
                                      len(JETPT_BINS) - 1, jetpt_edges)
+
+        # JES/JER: pT_part vs (pT_part - pT_det / pT_part)
+        h_res_jetpt[v] = ROOT.TH2D(f"res_jetpt_{v}", f"jetpt ((part-det)/part) {v};p_{{T}}^{{part}};(p_{{T}}^{{part}}-p_{{T}}^{{det}})/p_{{T}}^{{part}}",
+                                      50, 0, 500, 200, -1.0, 1.0)
 
     # 1D response matrix
     h1_reco = {}
@@ -371,6 +378,8 @@ def main():
     h_all_gen_pair_eff_den = {}
     h_match_rec_pair_pur_num = {}
     h_all_rec_pair_pur_den = {}
+    h_res_rl = {}
+    h_res_w = {}
     for lab in EEC_LABELS:
         h_match_gen_pair_eff_num[lab] = ROOT.TH1D(f"pair_match_gen_eff_num_{lab}", f"Matched Gen, Pair Eff Num {lab}", RL_NBINS, RL_BINS)
         h_all_gen_pair_eff_den[lab] = ROOT.TH1D(f"pair_all_gen_eff_den_{lab}", f"Total Gen, Pair Eff Den {lab}", RL_NBINS, RL_BINS)
@@ -378,18 +387,27 @@ def main():
         h_all_rec_pair_pur_den[lab] = ROOT.TH1D(f"pair_all_rec_pur_den_{lab}", f"Total Rec, Pair Pur Den {lab}", RL_NBINS, RL_BINS)
 
 
-
     # Lund plane differential
-    h_lund_all_gen_pt = {a: ROOT.TH2D(f"h_lund_all_gen_pt{b}-{c}", f"Lund all gen pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
-    h_lund_all_rec_pt = {a: ROOT.TH2D(f"h_lund_all_rec_pt{b}-{c}", f"Lund all rec pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
-    h_lund_matched_gen_pt = {a: ROOT.TH2D(f"h_lund_matched_gen_pt{b}-{c}", f"Lund matched gen pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
-    h_lund_matched_rec_pt = {a: ROOT.TH2D(f"h_lund_matched_rec_pt{b}-{c}", f"Lund matched rec pt:{b}-{c}", 100, 0, 1, 100, 0, 1) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_all_gen_pt = {a: ROOT.TH2D(f"h_lund_all_gen_pt{b}-{c}", f"Lund all gen pt:{b}-{c}", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_all_rec_pt = {a: ROOT.TH2D(f"h_lund_all_rec_pt{b}-{c}", f"Lund all rec pt:{b}-{c}", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_matched_gen_pt = {a: ROOT.TH2D(f"h_lund_matched_gen_pt{b}-{c}", f"Lund matched gen pt:{b}-{c}", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    h_lund_matched_rec_pt = {a: ROOT.TH2D(f"h_lund_matched_rec_pt{b}-{c}", f"Lund matched rec pt:{b}-{c}", len(LUND_RD_BINS)-1, LUND_RD_BINS, len(LUND_KT_BINS)-1, LUND_KT_BINS) for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
 
-    # Pair efficiency/purity differential
+    # Tracking efficiency/purity/residuals
+    h_trk_eff_num = ROOT.TH1D("trk_eff_num", "Track Efficiency Num;p_{T}", 250, 0, 250)
+    h_trk_eff_den = ROOT.TH1D("trk_eff_den", "Track Efficiency Den;p_{T}", 250, 0, 250)
+    h_trk_pur_num = ROOT.TH1D("trk_pur_num", "Track Purity Num;p_{T}", 250, 0, 250)
+    h_trk_pur_den = ROOT.TH1D("trk_pur_den", "Track Purity Den;p_{T}", 250, 0, 250)
+    h_trk_res_pt = ROOT.TH2D("trk_res_pt", "Track pT Residual;p_{T}^{part};(p_{T}^{part}-p_{T}^{det})/p_{T}^{part}", 250, 0, 250, 100, -1, 1)
+    
+    # Pair efficiency/purity/residuals
     h_match_gen_pair_eff_num_pt = {a: {lab: ROOT.TH1D(f"pair_match_gen_eff_num_pt{b}-{c}_{lab}", f"Matched Gen, Pair Eff Num pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
     h_all_gen_pair_eff_den_pt = {a: {lab: ROOT.TH1D(f"pair_all_gen_eff_den_pt{b}-{c}_{lab}", f"Total Gen, Pair Eff Den pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
     h_match_rec_pair_pur_num_pt = {a: {lab: ROOT.TH1D(f"pair_match_rec_pur_num_pt{b}-{c}_{lab}", f"Matched Rec, Pair Pur Num pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
     h_all_rec_pair_pur_den_pt = {a: {lab: ROOT.TH1D(f"pair_all_rec_pur_den_pt{b}-{c}_{lab}", f"Total Rec, Pair Pur Den pt:{b}-{c} {lab}", RL_NBINS, RL_BINS) for lab in EEC_LABELS} for a,(b,c) in enumerate(zip(JETPT_BINS, JETPT_BINS[1:]))}
+    for lab in EEC_LABELS:
+        h_res_rl[lab] = ROOT.TH2D(f"res_rl_{lab}", f"RL residual {lab};R_{{L}}^{{part}};(R_{{L}}^{{part}}-R_{{L}}^{{det}})/R_{{L}}^{{part}}", RL_NBINS, RL_BINS, 100, -1, 1)
+        h_res_w[lab] = ROOT.TH2D(f"res_w_{lab}", f"Weight residual {lab};w^{{part}};(w^{{part}}-w^{{det}})/w^{{part}}", W_NBINS, W_BINS, 100, -1, 1)
 
 
     # -----------------------------------------------------------------------
@@ -397,7 +415,11 @@ def main():
     # -----------------------------------------------------------------------
     jets = ak.from_parquet(args.input)
 
-    
+    # Exit early if the input file has no entries
+    if len(jets) == 0:
+        print(f"Warning: File '{args.input}' contains 0 jet entries. Exiting process.")
+        return
+
     # --- Global Jet Totals for scalar eff/pur (keeping the previous requested feature) ---
     n_part_jets_total = len(jets[jets.level == "part"])
     n_det_jets_total = len(jets[jets.level == "det"])
@@ -563,6 +585,8 @@ def main():
             h1_reco[v].Fill(d_pt, mc_weight)
             h1_gen[v].Fill(p_pt, mc_weight)
             response1D[v].Fill(d_pt, p_pt, mc_weight)
+            if p_pt > 0:
+                h_res_jetpt[v].Fill(p_pt, (p_pt - d_pt) / p_pt, mc_weight)
 
         # ---- pT-differential Response and Pair Metrics ----
         # use ungroomed pT for binning the differential file
@@ -580,17 +604,16 @@ def main():
 
 
         # make cuts on matched jets - keep groomed jet pt between 10 and 200 gev
-        if det_ptjet < 10 or det_ptjet > 200 or part_ptjet < 10 or part_ptjet > 200:
-            continue
+        if det_ptjet >= 10 and det_ptjet < 200 and part_ptjet >= 10 and part_ptjet < 200:
 
-        # Study matched splittings and splittings eff/pur
-        h_lund_all_gen.Fill(math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()), mc_weight)
-        h_lund_all_rec.Fill(math.log10(JET_R/det_d.Delta()), math.log10(det_d.kt()), mc_weight)
-        # print("split det:", math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()))
-        matched_splitting = match_splittings(det_B, part_B)
-        if matched_splitting:
-            h_lund_matched_gen.Fill(math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()), mc_weight)
-            h_lund_matched_rec.Fill(math.log10(JET_R/det_d.Delta()), math.log10(det_d.kt()), mc_weight)
+            # Study matched splittings and splittings eff/pur
+            h_lund_all_gen.Fill(math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()), mc_weight)
+            h_lund_all_rec.Fill(math.log10(JET_R/det_d.Delta()), math.log10(det_d.kt()), mc_weight)
+            # print("split det:", math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()))
+            matched_splitting = match_splittings(det_B, part_B)
+            if matched_splitting:
+                h_lund_matched_gen.Fill(math.log10(JET_R/part_d.Delta()), math.log10(part_d.kt()), mc_weight)
+                h_lund_matched_rec.Fill(math.log10(JET_R/det_d.Delta()), math.log10(det_d.kt()), mc_weight)
 
 
         # ---- selected constituents per subjet ----
@@ -607,6 +630,39 @@ def main():
         det_full = selected_constituents(det_jet, TRK_THRD)
         part_full = selected_constituents(part_jet, TRK_THRD)
 
+
+        # ---- track-level matching (efficiency, purity, residuals) ----
+        # match each detector track to the closest generator particle
+        matched_tracks = 0
+        if det_ptjet >= 10 and det_ptjet < 200 and part_ptjet >= 10 and part_ptjet < 200:
+
+            for dtrk in det_full:
+                best_dr = 0.1 # matching window
+                best_part = None
+                for ptrk in part_full:
+                    dr = dtrk.delta_R(ptrk)
+                    if dr < best_dr:
+                        best_dr = dr
+                        best_part = ptrk
+
+                h_trk_pur_den.Fill(dtrk.perp(), mc_weight)
+                if best_part:
+                    matched_tracks += 1
+                    h_trk_pur_num.Fill(dtrk.perp(), mc_weight)
+                    # track residual: (part - det) / part
+                    if best_part.perp() > 0:
+                        h_trk_res_pt.Fill(best_part.perp(), (best_part.perp() - dtrk.perp()) / best_part.perp(), mc_weight)
+
+            # efficiency: match generator particles to detector tracks
+            for ptrk in part_full:
+                h_trk_eff_den.Fill(ptrk.perp(), mc_weight)
+                is_matched = False
+                for dtrk in det_full:
+                    if dtrk.delta_R(ptrk) < 0.01: # tight window for efficiency
+                        is_matched = True
+                        break
+                if is_matched:
+                    h_trk_eff_num.Fill(ptrk.perp(), mc_weight)
 
         # ---- compute EEC pairs at both levels (radiator-pt weighted) ----
         eec_sets = {
@@ -630,26 +686,28 @@ def main():
             n_det_pairs_total[lab] += len(det_pairs)
             n_part_pairs_total[lab] += len(part_pairs)
             n_matched_pairs[lab] += len(matched)
-
-            # fill differential pair eff/pur
-            for dpair in det_pairs:
-                h_all_rec_pair_pur_den[lab].Fill(dpair[0], mc_weight)
-            for ppair in part_pairs:
-                h_all_gen_pair_eff_den[lab].Fill(ppair[0], mc_weight)
-            for dpair, ppair in matched:
-                h_match_rec_pair_pur_num[lab].Fill(dpair[0], mc_weight)
-                h_match_gen_pair_eff_num[lab].Fill(ppair[0], mc_weight)
-
-            # fill differential pair eff/pur
-            bin_pt_pairs = np.digitize(det_ptjet, JETPT_BINS) - 1 # use det jet pt for binning
-            if 0 <= bin_pt_pairs < n_bins_pt:
+            
+            if det_ptjet >= 10 and det_ptjet < 200 and part_ptjet >= 10 and part_ptjet < 200:
+                
+                # fill differential pair eff/pur
                 for dpair in det_pairs:
-                    h_all_rec_pair_pur_den_pt[bin_pt_pairs][lab].Fill(dpair[0], mc_weight)
+                    h_all_rec_pair_pur_den[lab].Fill(dpair[0], mc_weight)
                 for ppair in part_pairs:
-                    h_all_gen_pair_eff_den_pt[bin_pt_pairs][lab].Fill(ppair[0], mc_weight)
+                    h_all_gen_pair_eff_den[lab].Fill(ppair[0], mc_weight)
                 for dpair, ppair in matched:
-                    h_match_rec_pair_pur_num_pt[bin_pt_pairs][lab].Fill(dpair[0], mc_weight)
-                    h_match_gen_pair_eff_num_pt[bin_pt_pairs][lab].Fill(ppair[0], mc_weight)
+                    h_match_rec_pair_pur_num[lab].Fill(dpair[0], mc_weight)
+                    h_match_gen_pair_eff_num[lab].Fill(ppair[0], mc_weight)
+
+                # fill differential pair eff/pur
+                bin_pt_pairs = np.digitize(det_ptjet, JETPT_BINS) - 1 # use det jet pt for binning
+                if 0 <= bin_pt_pairs < n_bins_pt:
+                    for dpair in det_pairs:
+                        h_all_rec_pair_pur_den_pt[bin_pt_pairs][lab].Fill(dpair[0], mc_weight)
+                    for ppair in part_pairs:
+                        h_all_gen_pair_eff_den_pt[bin_pt_pairs][lab].Fill(ppair[0], mc_weight)
+                    for dpair, ppair in matched:
+                        h_match_rec_pair_pur_num_pt[bin_pt_pairs][lab].Fill(dpair[0], mc_weight)
+                        h_match_gen_pair_eff_num_pt[bin_pt_pairs][lab].Fill(ppair[0], mc_weight)
 
             for v in VERSIONS:
                 fill_det_jetpt = det_scale if v == "groomed" else det_ptjet
@@ -669,6 +727,12 @@ def main():
                     gen_3[v][lab].Fill(fill_part_jetpt, rl_part, w_part, mc_weight)
                     reco_unmatched_3[v][lab].Fill(fill_det_jetpt, rl_det, w_det, mc_weight)
                     gen_unmatched_3[v][lab].Fill(fill_part_jetpt, rl_part, w_part, mc_weight)
+
+                    if det_ptjet >= 10 and det_ptjet < 200 and part_ptjet >= 10 and part_ptjet < 200:
+                        if rl_part > 0:
+                            h_res_rl[lab].Fill(rl_part, (rl_part - rl_det) / rl_part, mc_weight)
+                        if w_part > 0:
+                            h_res_w[lab].Fill(w_part, (w_part - w_det) / w_part, mc_weight)
 
 
                 for dpair in det_unmatched:
@@ -742,6 +806,7 @@ def main():
 
     for v in VERSIONS:
         h_resp_jetpt[v].Write()
+        h_res_jetpt[v].Write()
         response1D[v].Write()
         for lab in EEC_LABELS:
             resp6[v][lab].Write()
@@ -769,11 +834,19 @@ def main():
     # h_lund_eff.Write()
     # h_lund_pur.Write()
 
+    h_trk_eff_num.Write()
+    h_trk_eff_den.Write()
+    h_trk_pur_num.Write()
+    h_trk_pur_den.Write()
+    h_trk_res_pt.Write()
+
     for lab in EEC_LABELS:
         h_match_gen_pair_eff_num[lab].Write()
         h_all_gen_pair_eff_den[lab].Write()
         h_match_rec_pair_pur_num[lab].Write()
         h_all_rec_pair_pur_den[lab].Write()
+        h_res_rl[lab].Write()
+        h_res_w[lab].Write()
 
     #     h_pair_eff[lab].Write()
     #     h_pair_pur[lab].Write()

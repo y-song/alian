@@ -39,6 +39,7 @@ ROOT.TH2.SetDefaultSumw2()
 class DataAnalysis:
     def __init__(self):
         self.jet_R = 0.4
+        self.jet_def_antikt = fj.JetDefinition(fj.antikt_algorithm, self.jet_R)
         self.jet_def_ca = fj.JetDefinition(fj.cambridge_algorithm, 1.0)
         self.trk_thrd = 1
         self.dphi_cut = -9999
@@ -69,9 +70,9 @@ class DataAnalysis:
         # RAW DATA BINS FOR UNFOLDING
         self.JETPT_UNF_BINS = np.array([10, 20, 40, 60, 80, 100, 120, 150, 200, 500], dtype=np.float64)
 
-        W_NBINS = 20 #30 #100
+        self.W_NBINS = 20 #30 #100
         W_MIN, W_MAX = 0.0, 0.3 #1.0 #0.3
-        W_BINS = np.logspace(-5,-0.5,W_NBINS+1) #0.00001 - 0.316227766 # W_BINS = np.linspace(W_MIN, W_MAX, W_NBINS + 1)
+        self.W_BINS = np.logspace(-5,-0.5,self.W_NBINS+1) #0.00001 - 0.316227766 # W_BINS = np.linspace(W_MIN, W_MAX, W_NBINS + 1)
 
 
         # (object, weight) combinations that are actually computed/stored
@@ -148,13 +149,14 @@ class DataAnalysis:
         c_pt = jet_constituents['c_pt'].to_numpy()
         c_eta = jet_constituents['c_eta'].to_numpy()
         c_phi = jet_constituents['c_phi'].to_numpy()
+        mpion = 0.13957
         px = c_pt * np.cos(c_phi)
         py = c_pt * np.sin(c_phi)
         pz = c_pt * np.sinh(c_eta)
-        E = np.sqrt(px**2 + py**2 + pz**2)
+        E = np.sqrt((c_pt*np.cosh(c_eta))**2 + mpion**2) #np.sqrt(px**2 + py**2 + pz**2)
         pj_particles = [fj.PseudoJet(float(px[k]), float(py[k]), float(pz[k]), float(E[k]))
                         for k in range(len(c_pt))]
-        cs = fj.ClusterSequence(pj_particles, self.jet_def_ca)
+        cs = fj.ClusterSequence(pj_particles, self.jet_def_antikt)
         jets = fj.sorted_by_pt(cs.inclusive_jets())
         if not jets:
             return cs, None
@@ -341,6 +343,12 @@ class DataAnalysis:
                     print(f"[{self.slice_tag(lo, hi)}_{self.format_cut_tag(*cut)}] "
                           f"<pt> = {avg_pts[key]:.2f}  ({binning})")
 
+        # Make raw distributions for inclusive QA
+        inclusiveQA = {}
+        for (lo,hi) in self.pt_slices:
+            inclusiveQA[f"pt{lo}_{hi}_wwjetpt"] = ROOT.TH1D(f"QA_hist_full_pt{lo}_{hi}_wwjetpt", "Inclusive EEC; R_{L}", self.RL_NBINS, self.RL_BINS)
+            inclusiveQA[f"pt{lo}_{hi}_wwnullpt"] = ROOT.TH1D(f"QA_hist_full_pt{lo}_{hi}_wwnullpt", "Inclusive EEC; R_{L}", self.RL_NBINS, self.RL_BINS)
+
         # Make raw distributions for unfolding
         raw1Dhists = {}
         raw3Dhists = {}
@@ -400,13 +408,21 @@ class DataAnalysis:
             # (including those failing the cut) can be counted.
             ungroomed_slices = self.slices_for_pt(jet_pt_stored)
             if binning == "ungroomed":
-                if not ungroomed_slices:
-                    continue
+                if not ungroomed_slices: #unneeded, never gets here
+                    continue #unneeded, never gets here
                 for sl in ungroomed_slices:
                     for cut in active_cuts:
                         counters[(sl, cut)]['num_jets'] += 1
                         hists[(sl, cut)]['jetpt_all'].Fill(jet.perp())
-                        raw1Dhists[cut].Fill(jet.perp()) # for unfolding
+            raw1Dhists[cut].Fill(jet.perp()) # for unfolding
+
+            # Fill QA for ALL inclusive jets (not just ones that pass SD)
+            if ungroomed_slices:
+                pairs = self.compute_correlator(jet, jet.perp())
+                for sl in ungroomed_slices:
+                    lo_temp, hi_temp = sl
+                    self.fill_correlator(pairs, inclusiveQA[f"pt{lo_temp}_{hi_temp}_wwjetpt"], None, 0, weighted=True)
+                    self.fill_correlator(pairs, inclusiveQA[f"pt{lo_temp}_{hi_temp}_wwnullpt"], None, 0, weighted=False)
 
             lund_plane_elements = lund_gen.result(jet)
 
@@ -500,6 +516,8 @@ class DataAnalysis:
                 raw3Dhists[(cut, obj)].Write()
 
         for (lo, hi) in self.pt_slices:
+            inclusiveQA[f"pt{lo}_{hi}_wwjetpt"].Write() #Saving QA inclusive plots
+            inclusiveQA[f"pt{lo}_{hi}_wwnullpt"].Write() #Saving QA inclusive plots
             for cut in active_cuts:
                 sl = (lo, hi)
                 h = hists[(sl, cut)]
