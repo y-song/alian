@@ -89,13 +89,29 @@ class TrackQA(AnalysisBase):
         for j in self.jets:
             pt_sub = j.pt() - j.area()*self.rho
             if (pt_sub < self.pt_min_jet):
-                break
+                continue
             has_acceptable_jet = True
             [self.hists['track_in_jet_pT'].Fill(t.pt()) for t in j.constituents()]
+            self.do_eec(j, "eec")
+            if (j.phi() > 0 and j.phi() < 2.0):
+                self.do_eec(j, "eec_low_phi")
+            elif (j.phi() > 3.2 and j.phi() < 4.8):
+                self.do_eec(j, "eec_high_phi")
         if has_acceptable_jet == False:
             return
         self.hists['event'].Fill(2.5)
         [self.hists['track_in_jet_event_pT'].Fill(t.pt()) for t in self.tracks]
+
+    def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None):
+        if ew_denom is None:
+            ew_denom = jet.pt() - jet.area()*self.rho
+        if jet_pt_bin is None:
+            jet_pt_bin = jet.pt() - jet.area()*self.rho
+        tracks = self.eec_trk_selector(jet.constituents())
+        for p1, p2 in itertools.permutations(tracks, 2):
+            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+            rl = delta_R(p1, p2)
+            self.hists[hist_name].Fill(jet_pt_bin, rl, ew)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run analysis on ROOT file using YAML configuration.")

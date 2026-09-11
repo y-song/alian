@@ -77,9 +77,9 @@ class Analyze(AnalysisBase):
         for j in self.jets:
             pt_sub = j.pt() - j.area()*self.rho
             if (pt_sub < self.pt_min_jet):
-                break
+                continue
             if (j.area() < 0.56*np.pi*self.jet_finder.R*self.jet_finder.R):
-                break
+                continue
             self.hists['jet_eta_post_selection'].Fill(j.eta())
             self.hists['jet_A_post_selection'].Fill(j.area())
             self.hists['jet_pT_sub_post_selection'].Fill(j.pt()-j.area()*self.rho)
