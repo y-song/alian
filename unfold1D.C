@@ -4,6 +4,11 @@
 #include <TH3.h>
 #include <TSystem.h>
 #include <TString.h>
+// gSystem->Load("libRooUnfold");
+// #include </global/cfs/cdirs/alice/blianggi/RooUnfold/build/RooUnfoldBayes.h>
+// #include </global/cfs/cdirs/alice/blianggi/RooUnfold/build/RooUnfoldResponse.h>
+#include </global/cfs/cdirs/alice/blianggi/mypyjetty/heppy/external/roounfold/roounfold-current/include/RooUnfoldBayes.h>
+#include </global/cfs/cdirs/alice/blianggi/mypyjetty/heppy/external/roounfold/roounfold-current/include/RooUnfoldResponse.h>
 
 // usage
 // FULLSIM / DATA
@@ -15,14 +20,21 @@
 // TEST
 // root -q "unfold1D.C(\"./output_mc/merged.root\", \"./output_data/AnalysisResults.root\", \"unfolded_1D_test.root\", 3, false)"
 
-ROOT.TH1.SetDefaultSumw2()
-ROOT.TH2.SetDefaultSumw2()
+// root -q unfold1D.C
 
-void unfold1D(const TString& rm_file="response_merged.root", const TString& data_file="preunfold_data.root",
-            const TString& outfile="unfolded.root",
-            int iter=9, bool do_purity=false) {
+// gSystem->Load("libRooUnfold");
+
+void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/response.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/57911278/response_groomed_forunfolding_merged.root", 
+              const TString& data_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/AnalysisResults.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/57879247/AnalysisResultsMerged_groomedbins.root",
+              const TString& outfile="/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/unfolding/unfolded1D.root",
+              int iter=9, bool do_purity=false) {
+    
+    // gSystem->Load("libRooUnfold");
+    // gSystem->Load("libRooUnfold.so");
+
     // Set ROOT to batch mod
     gROOT->SetBatch(true);
+    TH1::SetDefaultSumw2(true); // covers both 1D and 3D histogram since TH2 inherits from TH1
 
     // Error treatment for unfolding
     RooUnfold::ErrorTreatment errorTreatment = RooUnfold::kCovariance;
@@ -30,7 +42,7 @@ void unfold1D(const TString& rm_file="response_merged.root", const TString& data
     // Open inputs
     // RM
     TFile* f = new TFile(rm_file);
-    RooUnfoldResponse* response1D = (RooUnfoldResponse*) f->Get("response1D"); // response1D, reco1D_gen1D
+    RooUnfoldResponse* response1D = (RooUnfoldResponse*) f->Get("roounfold_response_1D_groomed"); // response1D, reco1D_gen1D
 
     // DATA
     TFile* f_data = new TFile(data_file);
@@ -43,16 +55,16 @@ void unfold1D(const TString& rm_file="response_merged.root", const TString& data
     if (do_purity)
     {
         cout<<"purity correction is running"<<endl;
-        TH1D* h1_reco = (TH1D*) f->Get("reco1D");
-        TH1D* h1_reco_unmatched = (TH1D*) f->Get("reco1D_unmatched");
+        TH1D* h1_reco = (TH1D*) f->Get("jet_match_rec_pur_num_groomed"); //"reco1D");
+        TH1D* h1_reco_unmatched = (TH1D*) f->Get("jet_all_rec_pur_den_groomed"); //"reco1D_unmatched");
         h1_reco->Sumw2(1);
         h1_reco_unmatched->Sumw2(1);
         purity = (TH1D*) h1_reco->Clone("purity");
         purity->Divide(h1_reco_unmatched); // (reco / reco_unmatched)
         // h1_raw->Multiply(purity);
 
-        TH1D* h1_gen = (TH1D*) f->Get("gen1D");
-        TH1D* h1_gen_unmatched = (TH1D*) f->Get("gen1D_unmatched");
+        TH1D* h1_gen = (TH1D*) f->Get("jet_match_gen_eff_num_groomed"); //"gen1D");
+        TH1D* h1_gen_unmatched = (TH1D*) f->Get("jet_all_gen_eff_den_groomed"); //"gen1D_unmatched");
         h1_gen->Sumw2(1);
         h1_gen_unmatched->Sumw2(1);
         efficiency = (TH1D*) h1_gen->Clone("efficiency");
