@@ -84,8 +84,13 @@ def build_pseudojets(const_pt, const_eta, const_phi, const_label):
     """Rebuild a vectorPJ from stored constituents; label -> user_index."""
     v = fj.vectorPJ()
     for pt, eta, phi, lab in zip(const_pt, const_eta, const_phi, const_label):
-        pj = fj.PseudoJet()
-        pj.reset_PtYPhiM(float(pt), float(eta), float(phi), PION_MASS)
+        # pj = fj.PseudoJet()
+        # pj.reset_PtYPhiM(float(pt), float(eta), float(phi), PION_MASS)
+        px, py = pt*math.cos(phi), pt*math.sin(phi)
+        pz = pt*math.sinh(eta)
+        E  = math.sqrt(px*px + py*py + pz*pz + PION_MASS*PION_MASS)
+        pj = fj.PseudoJet(px, py, pz, E)
+        # pj.reset_PtYPhiM(float(pt), float(eta), float(phi), PION_MASS)
         pj.set_user_index(int(lab))
         v.push_back(pj)
     return v
@@ -291,6 +296,7 @@ def main():
     h1_reco = {}
     h1_gen = {}
     response1D = {}
+    response1D_oldversion = {}
     for v in VERSIONS:
         label_suffix = "gr. ch jet" if v == "groomed" else "ch jet"
         h1_reco[v] = ROOT.TH1D(f"h1jetpt_reco_{v}", f"h1jetpt_reco_{v}", len(JETPT_BINS) - 1, jetpt_edges)
@@ -304,6 +310,12 @@ def main():
         res = ROOT.RooUnfoldResponse(h1_reco[v], h1_gen[v])
         res.SetName(f"roounfold_response_1D_{v}")
         response1D[v] = res
+
+        response_matrix = ROOT.TH2D(f"roounfold_response_TH2D_{v}", f"roounfold_response_TH2D_{v}",
+                           len(JETPT_BINS) - 1, jetpt_edges,
+                           len(JETPT_BINS) - 1, jetpt_edges)
+        res_oldversion = ROOT.RooUnfoldResponse(h1_reco[v], h1_gen[v], response_matrix, f"roounfold_response_1D_{v}_oldversion", f"roounfold_response_1D_{v}_oldversion")
+        response1D_oldversion[v] = res_oldversion
 
     # 6D THnSparse per EEC:  axes = pt_det, pt_part, RL_det, RL_part, w_det, w_part
     nbins6 = np.array([len(JETPT_BINS) - 1, len(JETPT_BINS) - 1,
@@ -585,6 +597,7 @@ def main():
             h1_reco[v].Fill(d_pt, mc_weight)
             h1_gen[v].Fill(p_pt, mc_weight)
             response1D[v].Fill(d_pt, p_pt, mc_weight)
+            response1D_oldversion[v].Fill(d_pt, p_pt, mc_weight)
             if p_pt > 0:
                 h_res_jetpt[v].Fill(p_pt, (p_pt - d_pt) / p_pt, mc_weight)
 
@@ -808,6 +821,7 @@ def main():
         h_resp_jetpt[v].Write()
         h_res_jetpt[v].Write()
         response1D[v].Write()
+        response1D_oldversion[v].Write()
         for lab in EEC_LABELS:
             resp6[v][lab].Write()
             roounfold_resp6[v][lab].Write()

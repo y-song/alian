@@ -54,15 +54,54 @@ PION_MASS  = 0.13957
 W_MIN_FILTER = 0.22
 W_MAX_FILTER = 0.25
 
+
+# (axis label, set of |PDG| codes)
+PID_CATEGORIES = [
+    ("#pi^{#pm}",     {211}),
+    ("K^{#pm}",       {321}),
+    ("p",             {2212}),
+    ("e^{#pm}",       {11}),
+    ("#mu^{#pm}",     {13}),
+    ("#gamma",        {22}),
+    ("K^{0}_{S,L}",   {310, 130}),
+    ("n",             {2112}),
+    ("#Lambda",       {3122}),
+    ("#Sigma,#Xi,#Omega", {3112, 3222, 3312, 3322, 3334}),
+    ("other",         set()),
+]
+
+_PID_BIN = {}
+for _i, (_lab, _codes) in enumerate(PID_CATEGORIES):
+    for _c in _codes:
+        _PID_BIN[_c] = _i
+N_PID     = len(PID_CATEGORIES)
+OTHER_BIN = N_PID - 1
+
+def pid_bin(pdg):
+    return _PID_BIN.get(abs(int(pdg)), OTHER_BIN)
+
+def make_pid_hist(name, title):
+    h = ROOT.TH2D(name, title, N_PID, 0, N_PID, N_PID, 0, N_PID)
+    for i, (lab, _) in enumerate(PID_CATEGORIES):
+        h.GetXaxis().SetBinLabel(i + 1, lab)
+        h.GetYaxis().SetBinLabel(i + 1, lab)
+    h.GetXaxis().SetLabelSize(0.05)
+    h.GetYaxis().SetLabelSize(0.05)
+    h.SetOption("COLZ TEXT")
+    return h
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 def build_pseudojets(const_pt, const_eta, const_phi, const_label):
     """Rebuild a vectorPJ from stored constituents; label -> user_index."""
     v = fj.vectorPJ()
-    for pt, eta, phi, lab in zip(const_pt, const_eta, const_phi, const_label):
-        pj = fj.PseudoJet()
-        pj.reset_PtYPhiM(float(pt), float(eta), float(phi), PION_MASS)
+    for pt, eta, phi, lab in zip(const_pt, const_eta, const_phi, const_label):        
+        px, py = pt*math.cos(phi), pt*math.sin(phi)
+        pz = pt*math.sinh(eta)
+        E  = math.sqrt(px*px + py*py + pz*pz + PION_MASS*PION_MASS)
+        pj = fj.PseudoJet(px, py, pz, E)
+        # pj.reset_PtYPhiM(float(pt), float(eta), float(phi), PION_MASS)
         pj.set_user_index(int(lab))
         v.push_back(pj)
     return v
@@ -153,14 +192,15 @@ def main():
     VERSIONS = ["det", "part"]
 
     h_pair_pt = {v: ROOT.TH2D(f"h_pair_pt_{v}", f"Pair p_{{T}}s {v};p_{{T,i}};p_{{T,j}}", 200, 0, 200, 200, 0, 200) for v in VERSIONS}
-    h_n_const_orig = {v: ROOT.TH1D(f"h_n_const_orig_{v}", f"Original constituents {v};N", 100, 0, 100) for v in VERSIONS}
-    h_n_const_groomed = {v: ROOT.TH1D(f"h_n_const_groomed_{v}", f"Groomed constituents {v};N", 100, 0, 100) for v in VERSIONS}
-    h_n_const_removed = {v: ROOT.TH1D(f"h_n_const_removed_{v}", f"Removed constituents {v};N", 100, 0, 100) for v in VERSIONS}
+    h_n_const_orig = {v: ROOT.TH1D(f"h_n_const_orig_{v}", f"Original constituents {v};N", 40, 0, 40) for v in VERSIONS}
+    h_n_const_groomed = {v: ROOT.TH1D(f"h_n_const_groomed_{v}", f"Groomed constituents {v};N", 40, 0, 40) for v in VERSIONS}
+    h_n_const_removed = {v: ROOT.TH1D(f"h_n_const_removed_{v}", f"Removed constituents {v};N", 40, 0, 40) for v in VERSIONS}
     h_jet_pt_orig = {v: ROOT.TH1D(f"h_jet_pt_orig_{v}", f"Original jet p_{{T}} {v};p_{{T}}", 200, 0, 200) for v in VERSIONS}
     h_jet_pt_groomed = {v: ROOT.TH1D(f"h_jet_pt_groomed_{v}", f"Groomed jet p_{{T}} {v};p_{{T}}", 200, 0, 200) for v in VERSIONS}
-    h_pair_pid = {v: ROOT.TH2D(f"h_pair_pid_{v}", f"Pair PID {v};abs(PID_{{i}});abs(PID_{{j}})", 401, 0, 401, 401, 0, 401) for v in VERSIONS}
+    # h_pair_pid = {v: ROOT.TH2D(f"h_pair_pid_{v}", f"Pair PID {v};abs(PID_{{i}});abs(PID_{{j}})", 401, 0, 401, 401, 0, 401) for v in VERSIONS}
+    h_pair_pid = {v: make_pid_hist(f"h_pair_pid_{v}", f"Pair species {v};subjet A;subjet B") for v in VERSIONS}
     h_pair_dr = {v: ROOT.TH1D(f"h_pair_dr_{v}", f"Pair #Delta R {v};#Delta R", 100, 0, 1.0) for v in VERSIONS}
-    h_pair_mass = {v: ROOT.TH1D(f"h_pair_mass_{v}", f"Pair Invariant Mass {v};Mass [GeV]", 100, 0, 10) for v in VERSIONS}
+    h_pair_mass = {v: ROOT.TH1D(f"h_pair_mass_{v}", f"Pair Invariant Mass {v};Mass [GeV]", 200, 0, 10) for v in VERSIONS}
 
     
     # -----------------------------------------------------------------------
@@ -185,7 +225,11 @@ def main():
 
     # Process each event once
     unique_events = np.unique(events)
-    for ev in unique_events:
+    for i, ev in enumerate(unique_events):
+
+        if i >= 10:
+            break
+        
         hNevents.Fill(0)
 
         # Find det jet for this event that is matched
@@ -232,7 +276,44 @@ def main():
             cB = selected_constituents(sjB, TRK_THRD)
 
             # Using radiator pt as scale for weights
+            print("  ==============================================")
+            print("particles A", cA)
+            print("particles B", cB)
+            pairs = compute_eec_pairs_indices(cA, rad.perp())
+            print("AA", pairs)
             pairs = compute_eec_pairs_indices(cA, rad.perp(), cB)
+            print("AB", pairs)
+
+            # --- select first ------------------------------------------
+            selected = [(rl, w, idxA, idxB) for rl, w, idxA, idxB in pairs
+                        if W_MIN_FILTER <= w <= W_MAX_FILTER]
+
+            if not selected:
+                continue          # no qualifying pair -> no jet-level fill
+
+            # Jet info
+            # Original constituents = everything that went into the jet - filtered by threshold
+            # n_orig = len(consts) # not filtered by threshold
+            csel = selected_constituents(jet, TRK_THRD)
+            n_orig = len(csel)
+
+            # Groomed constituents = everything in the radiator
+            crad = selected_constituents(rad, TRK_THRD)
+            n_groomed = len(crad)
+
+            h_n_const_orig[v].Fill(n_orig) #, mc_weight)
+            h_n_const_groomed[v].Fill(n_groomed) #, mc_weight)
+            h_n_const_removed[v].Fill(n_orig - n_groomed,) # mc_weight)
+
+            h_jet_pt_orig[v].Fill(jet.perp(), mc_weight)
+            h_jet_pt_groomed[v].Fill(rad.perp(), mc_weight)
+
+            # set up pdg info
+            has_pdg = "const_pdg" in jet_data.fields
+            const_pdg = np.asarray(jet_data.const_pdg) if has_pdg else None
+            # label -> row index, built once per jet
+            label_to_row = {int(l): i
+                            for i, l in enumerate(np.asarray(jet_data.const_label))}
 
             for rl, w, idxA, idxB in pairs:
                 if W_MIN_FILTER <= w <= W_MAX_FILTER:
@@ -241,22 +322,8 @@ def main():
                     pB = cB[idxB]
 
                     # Particle pTs
-                    h_pair_pt[v].Fill(pA.perp(), pB.perp(), mc_weight)
+                    h_pair_pt[v].Fill(pA.perp(), pB.perp()) #, mc_weight)
 
-                    # Jet info
-                    # Original constituents = everything that went into the jet (filtered by threshold if desired,
-                    # but let's use the full list as provided in parquet/recluster)
-                    n_orig = len(consts)
-                    # Groomed constituents = everything in the radiator
-                    crad = selected_constituents(rad, TRK_THRD)
-                    n_groomed = len(crad)
-
-                    h_n_const_orig[v].Fill(n_orig, mc_weight)
-                    h_n_const_groomed[v].Fill(n_groomed, mc_weight)
-                    h_n_const_removed[v].Fill(n_orig - n_groomed, mc_weight)
-
-                    h_jet_pt_orig[v].Fill(jet.perp(), mc_weight)
-                    h_jet_pt_groomed[v].Fill(rad.perp(), mc_weight)
 
                     # PID information
                     # We need to get the original index of the particle to look up PID in the parquet
@@ -266,40 +333,41 @@ def main():
                     # Better: find the particle in the original array.
 
                     # Let's try to find PID from the parquet if available
-                    if "const_pid" in jet_data.fields:
-                        # we need the index in the original const_pt array.
-                        # build_pseudojets just iterates, so the i-th PJ in v is the i-th in the input.
-                        # But cA is a subset of the radiator's constituents.
-                        # The radiator's constituents are a subset of the original jet's.
+                    if has_pdg:
+                        rA = label_to_row.get(pA.user_index())
+                        rB = label_to_row.get(pB.user_index())
+                        if rA is not None and rB is not None:
+                            h_pair_pid[v].Fill(pid_bin(const_pdg[rA]) + 0.5,
+                                            pid_bin(const_pdg[rB]) + 0.5)
 
-                        # To get the correct PID, we should find the particle with the same user_index
-                        # in the original const_label array.
-                        labelA = pA.user_index()
-                        labelB = pB.user_index()
+                    # if "const_pdg" in jet_data.fields:
+                    #     print("!!IN const pdg")
 
-                        # Find indices in the parquet array where label == user_index
-                        # This is slow in a loop, but since we only do it for w in [0.22, 0.25], it's okay.
-                        idxA_orig = np.where(jet_data.const_label == labelA)[0]
-                        idxB_orig = np.where(jet_data.const_label == labelB)[0]
+                    #     labelA = pA.user_index()
+                    #     labelB = pB.user_index()
 
-                        if len(idxA_orig) > 0 and len(idxB_orig) > 0:
-                            pidA_abs = abs(int(jet_data.const_pid[idxA_orig[0]]))
-                            pidB_abs = abs(int(jet_data.const_pid[idxB_orig[0]]))
+                    #     # Find indices in the parquet array where label == user_index
+                    #     # This is slow in a loop, but since we only do it for w in [0.22, 0.25], it's okay.
+                    #     idxA_orig = np.where(jet_data.const_label == labelA)[0]
+                    #     idxB_orig = np.where(jet_data.const_label == labelB)[0]
 
-                            # Clip values > 400 to 400 to capture protons (2212) and others at the edge
-                            valA = pidA_abs if pidA_abs <= 400 else 400
-                            valB = pidB_abs if pidB_abs <= 400 else 400
-                            h_pair_pid[v].Fill(float(valA), float(valB), mc_weight)
+                    #     if len(idxA_orig) > 0 and len(idxB_orig) > 0:
+                    #         pidA_abs = abs(int(jet_data.const_pdg[idxA_orig[0]]))
+                    #         pidB_abs = abs(int(jet_data.const_pdg[idxB_orig[0]]))
+                    #         print("pidA:", pidA_abs, "pidB:", pidB_abs)
+
+                    #         # Clip values > 400 to 400 to capture protons (2212) and others at the edge
+                    #         valA = pidA_abs if pidA_abs <= 400 else 400
+                    #         valB = pidB_abs if pidB_abs <= 400 else 400
+                    #         h_pair_pid[v].Fill(float(valA), float(valB)) #, mc_weight)
 
                     # Angular separation and mass
                     dr = pA.delta_R(pB)
-                    h_pair_dr[v].Fill(dr, mc_weight)
+                    h_pair_dr[v].Fill(dr) #, mc_weight)
 
                     # Invariant mass
-                    pA_vec = fj.LorentzVector(pA.perp(), pA.rapidity(), pA.phi(), PION_MASS)
-                    pB_vec = fj.LorentzVector(pB.perp(), pB.rapidity(), pB.phi(), PION_MASS)
-                    mass = (pA_vec + pB_vec).mass()
-                    h_pair_mass[v].Fill(mass, mc_weight)
+                    mass = (pA + pB).m()
+                    h_pair_mass[v].Fill(mass) #, mc_weight)
 
     # -----------------------------------------------------------------------
     # Write output

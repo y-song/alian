@@ -52,7 +52,7 @@ def make_pseudojets(pt, eta, phi, label, mass=PION_MASS):
     return pjets
 
 
-def cluster_jets(pt, eta, phi, label, jet_def, pt_min, eta_max, highjetcut=False):
+def cluster_jets(pt, eta, phi, label, pdg=None, jet_def=None, pt_min=0, eta_max=1.0, highjetcut=False):
     consts = make_pseudojets(pt, eta, phi, label)
     if len(consts) == 0:
         return []
@@ -72,13 +72,28 @@ def cluster_jets(pt, eta, phi, label, jet_def, pt_min, eta_max, highjetcut=False
         if highpttrack:
             continue
         cparts = j.constituents()
+
+        # Recover PDG codes if provided
+        const_pdgs = []
+        if pdg is not None:
+            if isinstance(pdg, dict):
+                # Use the map directly (perfect for detector jets)
+                const_pdgs = [pdg.get(c.user_index(), 0) for c in cparts]
+            else:
+                # Use the array (perfect for particle jets)
+                label_to_pdg = {lab: p for lab, p in zip(label, pdg)}
+                const_pdgs = [label_to_pdg.get(c.user_index(), 0) for c in cparts]
+        else:
+            const_pdgs = [0] * len(cparts)
+
         out.append({
             "pt": j.pt(), "eta": j_eta, "phi": j.phi_std(),
             "nconst": len(cparts),
             "const_pt":    [c.pt() for c in cparts],
             "const_eta":   [c.eta() for c in cparts],
             "const_phi":   [c.phi_std() for c in cparts],
-            "const_label": [c.user_index() for c in cparts],   # <-- NEW
+            "const_pdg":   const_pdgs,
+            "const_label": [c.user_index() for c in cparts],
         })
     return out
 
@@ -181,6 +196,8 @@ def main():
         "matched_part_pt": Hist1D("matched_part_pt", "Matched part jet p_{T};p_{T} (GeV);counts", 100, 0, 200),
         "track_eff_num":   Hist1D("track_eff_num",   "Matched Tracks;p_{T} (GeV);counts",       100, 0, 100),
         "track_eff_den":   Hist1D("track_eff_den",   "All MC Particles;p_{T} (GeV);counts",      100, 0, 100),
+        "det_const_pdg":     Hist1D("det_const_pdg",     "Det Jet Constituent |PDG|; |PDG|;counts",   2500, 0, 2500),
+        "part_const_pdg":    Hist1D("part_const_pdg",    "Part Jet Constituent |PDG|; |PDG|;counts",  2500, 0, 2500),
     }
     resp_bins = np.linspace(0, 200, 101)
     resp = np.zeros((len(resp_bins) - 1, len(resp_bins) - 1), dtype=np.float64)
@@ -201,6 +218,7 @@ def main():
         "const_pt": [],       # list<float>
         "const_eta": [],      # list<float>
         "const_phi": [],      # list<float>
+        "const_pdg": [],      # list<float>
         "is_matched": [],     # bool
         "match_index": [],    # index of partner jet at the other level (-1 if none)
         "match_pt": [],       # pt of matched partner (-1 if none)
@@ -222,6 +240,7 @@ def main():
         rows["const_pt"].append(jet["const_pt"])
         rows["const_eta"].append(jet["const_eta"])
         rows["const_phi"].append(jet["const_phi"])
+        rows["const_pdg"].append(jet["const_pdg"])
         rows["is_matched"].append(is_matched)
         rows["match_index"].append(match_index)
         rows["match_pt"].append(match_pt)
@@ -241,7 +260,7 @@ def main():
         "track_data_pt", "track_data_eta", "track_data_phi",
         "track_data_mclabel", "track_data_tracksel",
         "mc_particle_pt", "mc_particle_eta", "mc_particle_phi",
-        "mc_particle_partID",
+        "mc_particle_partID", "mc_particle_pdgcode",
     ]
 
     SEL8_BIT = 0
@@ -280,8 +299,13 @@ def main():
             p_eta = ak.to_numpy(chunk["mc_particle_eta"][ie])
             p_phi = ak.to_numpy(chunk["mc_particle_phi"][ie])
             p_id  = ak.to_numpy(chunk["mc_particle_partID"][ie])
+            p_pdg  = ak.to_numpy(chunk["mc_particle_pdgcode"][ie])
             pmask = (p_pt >= 0.15) & (np.abs(p_eta) <= 0.9)
-            p_pt, p_eta, p_phi, p_id = p_pt[pmask], p_eta[pmask], p_phi[pmask], p_id[pmask]
+            p_pt, p_eta, p_phi, p_id, p_pdg = p_pt[pmask], p_eta[pmask], p_phi[pmask], p_id[pmask], p_pdg[pmask]
+
+            # Map particle ID to PDG code for easy lookup
+            particle_pdg_map = {pid: pdg_val for pid, pdg_val in zip(p_id, p_pdg)}
+
 
             # ---- Single track efficiency calculation ----
             # Track is "matched" if its label exists in the selected MC particle set
@@ -309,8 +333,8 @@ def main():
             # Denominator is all MC particles that pass the same cuts
             h["track_eff_den"].fill_array(p_pt, weight)
     
-            det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, jet_def, JET_PT_MIN, JET_ETA_MAX, highjetcut=True)
-            part_jets = cluster_jets(p_pt, p_eta, p_phi, p_id, jet_def, JET_PT_MIN, JET_ETA_MAX)
+            det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, pdg=particle_pdg_map, jet_def=jet_def, pt_min=JET_PT_MIN, eta_max=JET_ETA_MAX, highjetcut=True)
+            part_jets = cluster_jets(p_pt, p_eta, p_phi, p_id, pdg=p_pdg, jet_def=jet_def, pt_min=JET_PT_MIN, eta_max=JET_ETA_MAX)
 
             # ---- pt,jet / pThat outlier rejection (event-level veto) ----
             all_jet_pts = [j["pt"] for j in det_jets] + [j["pt"] for j in part_jets]
@@ -333,10 +357,12 @@ def main():
                 h["det_jet_pt"].fill(j["pt"], weight)
                 h["det_jet_eta"].fill(j["eta"], weight)
                 h["det_jet_phi"].fill(j["phi"], weight)
+                h["det_const_pdg"].fill_array([abs(p) for p in j["const_pdg"]], weight)
             for j in part_jets:
                 h["part_jet_pt"].fill(j["pt"], weight)
                 h["part_jet_eta"].fill(j["eta"], weight)
                 h["part_jet_phi"].fill(j["phi"], weight)
+                h["part_const_pdg"].fill_array([abs(p) for p in j["const_pdg"]], weight)
 
             # ---- matching ----
             matches = match_jets(det_jets, part_jets, MATCH_DR_MAX)
@@ -410,6 +436,7 @@ def main():
         "const_pt":    ak.Array(rows["const_pt"]),
         "const_eta":   ak.Array(rows["const_eta"]),
         "const_phi":   ak.Array(rows["const_phi"]),
+        "const_pdg":   ak.Array(rows["const_pdg"]),
         "is_matched":  np.asarray(rows["is_matched"], dtype=bool),
         "match_index": np.asarray(rows["match_index"], dtype=np.int32),
         "match_pt":    np.asarray(rows["match_pt"], dtype=np.float32),

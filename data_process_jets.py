@@ -24,6 +24,7 @@
 import math
 import numpy as np
 import pandas as pd
+import array
 import fastjet as fj
 import fjcontrib
 import ecorrel
@@ -54,7 +55,7 @@ class DataAnalysis:
         # binning mode: "ungroomed" (jet pt) or "groomed" (radiator pt)
         self.binning = "ungroomed"
         self.slice_prefix = "jetpt"
-        self.unweighted = False
+        self.unweighted = False        
 
         # histogram axes
         self.RL_NBINS = 25  # 75
@@ -69,6 +70,7 @@ class DataAnalysis:
 
         # RAW DATA BINS FOR UNFOLDING
         self.JETPT_UNF_BINS = np.array([10, 20, 40, 60, 80, 100, 120, 150, 200, 500], dtype=np.float64)
+        self.jetpt_edges = array.array("d", self.JETPT_UNF_BINS)
 
         self.W_NBINS = 20 #30 #100
         W_MIN, W_MAX = 0.0, 0.3 #1.0 #0.3
@@ -354,23 +356,23 @@ class DataAnalysis:
         raw3Dhists = {}
         if binning == "groomed":
             for cut in active_cuts:
-                raw1Dhist = ROOT.TH1D(f"groomed_{self.format_cut_tag(*cut)}_jet_pt_raw1D", "groomed jet p_{T}; p_{T,gr. jet}", len(self.pt_bins) - 1, self.pt_bins)
+                raw1Dhist = ROOT.TH1D(f"groomed_{self.format_cut_tag(*cut)}_jet_pt_raw1D", "groomed jet p_{T}; p_{T,gr. jet}", len(self.JETPT_UNF_BINS) - 1, self.jetpt_edges)
                 raw1Dhists[cut] = raw1Dhist
                 for obj in self.objects:
                     raw3Dhist = ROOT.TH3D(f"{obj}_{self.format_cut_tag(*cut)}_raw", 
                                           f"raw {obj} EEC;p_{{T,gr. jet}};R_{{L}};weight", 
-                                          len(self.JETPT_UNF_BINS) - 1, self.JETPT_UNF_BINS,
+                                          len(self.JETPT_UNF_BINS) - 1, self.jetpt_edges,
                                           self.RL_NBINS, self.RL_BINS,
                                           self.W_NBINS, self.W_BINS)
                     raw3Dhists[(cut, obj)] = raw3Dhist
         else:
             for cut in active_cuts:
-                raw1Dhist = ROOT.TH1D(f"ungroomed_{self.format_cut_tag(*cut)}_jet_pt_raw1D", "ungroomed jet p_{T}; p_{T,jet}", len(self.pt_bins) - 1, self.pt_bins)
+                raw1Dhist = ROOT.TH1D(f"ungroomed_{self.format_cut_tag(*cut)}_jet_pt_raw1D", "ungroomed jet p_{T}; p_{T,jet}", len(self.JETPT_UNF_BINS) - 1, self.jetpt_edges)
                 raw1Dhists[cut] = raw1Dhist
                 for obj in self.objects:
                     raw3Dhist = ROOT.TH3D(f"{obj}_{self.format_cut_tag(*cut)}_raw", 
                                           f"raw {obj} EEC;p_{{T, jet}};R_{{L}};weight", 
-                                          len(self.JETPT_UNF_BINS) - 1, self.JETPT_UNF_BINS,
+                                          len(self.JETPT_UNF_BINS) - 1, self.jetpt_edges,
                                           self.RL_NBINS, self.RL_BINS,
                                           self.W_NBINS, self.W_BINS)
                     raw3Dhists[(cut, obj)] = raw3Dhist
