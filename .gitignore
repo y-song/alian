@@ -9,3 +9,9 @@ __pycache__
 *.txt
 *.out
 *.err
+*.make
+*.cmake
+*.dir
+*CMakeFiles
+Makefile
+claude/

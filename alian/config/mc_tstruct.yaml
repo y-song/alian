@@ -1,0 +1,10 @@
+eventTree:
+  branches:
+  # - run_number
+  - vtx_z
+  - weight
+  - ptHat
+  - multiplicity
+  - track_pt
+  - track_eta
+  - track_phi

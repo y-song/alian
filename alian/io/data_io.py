@@ -31,9 +31,9 @@ class Run3FileInput(yasp.GenericObject):
         self.event_count = 0
         self.n_events = kwargs.get('n_events', -1)
 
-    def add_generic_ebye_info(self):
-        self.event.multiplicity = self.event.data['multiplicity']
-        self.event.centrality = self.event.data['centrality']
+    def add_generic_ebye_info(self): 
+        self.event.multiplicity = self.event.data.get("multiplicity", None)
+        self.event.centrality = self.event.data.get("centrality", None)
         self.event.track_count = len(self.event.data['track_pt'])
         self.event.counter = self.event_count
 

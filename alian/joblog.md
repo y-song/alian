@@ -15,6 +15,7 @@
 1698585: PbPb 100 GeV, z_cut = 0.2, R = 0.6  
 1698685: pp 100 GeV, z_cut = 0.3, R = 0.6  
 1698785: PbPb 100 GeV, z_cut = 0.3, R = 0.6  
+
 ## Removed double counting of EEC
 1656393: pp 100 GeV, z_cut = 0.1  
 1656512: PbPb 100 GeV, z_cut = 0.1  
@@ -43,10 +44,11 @@
 1819476: pp 90 GeV, z_cut = 0.3, matched to gluons  
 1822976: PbPb 90 GeV, z_cut = 0.1, matched to quarks  
 1817976: pp 90 GeV, z_cut = 0.1, matched to quarks  
+
 ## Ti = 300 MeV
-1828063: z_cut = 0.1  
-1829699: z_cut = 0.2
-1831014: z_cut = 0.3
+1828063: z_cut = 0.1 (50 bins in RL) 
+1829699: z_cut = 0.2 (50 bins in RL)
+1831014: z_cut = 0.3 (50 bins in RL)
 1834257: z_cut = 0.1 (51 bins in RL)  
 1835349: z_cut = 0.2 (51 bins in RL) 
 1836660: z_cut = 0.3 (51 bins in RL)
@@ -55,37 +57,66 @@
 1792199: 0-10%  
 1792287: 30-100%  
 1799381: 0-10%, 2 perp cones for rho estimate, excluded pure ghosts for jet median
-- grid median: size = 0.5, jet median: R = 0.2, perp cone: R = 0.4
+- grid median: size = 0.5, jet median: R = 0.2, perp cone: R = 0.4  
+
 1809245: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts 
-- grid median: size = 0.5, jet median: R = 0.2, perp cone: R = 0.2
+- grid median: size = 0.5, jet median: R = 0.2, perp cone: R = 0.2  
+
 1809340: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts 
-- grid median: size = 0.6, jet median: R = 0.3, perp cone: R = 0.3
+- grid median: size = 0.6, jet median: R = 0.3, perp cone: R = 0.3  
+
 1809402: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts 
-- grid median: size = 0.7, jet median: R = 0.4, perp cone: R = 0.4
+- grid median: size = 0.7, jet median: R = 0.4, perp cone: R = 0.4  
+
 1809915: 0-10%, 2 perp cones for rho estimate, excluded pure ghosts for jet median
-- grid median: size = 0.75, jet median: R = 0.4, perp cone: R = 0.4
+- grid median: size = 0.75, jet median: R = 0.4, perp cone: R = 0.4  
+
 1809966: 0-10%, 2 perp cones for rho estimate, excluded pure ghosts for jet median
-- grid median: size = 0.8, jet median: R = 0.3, perp cone: R = 0.3
+- grid median: size = 0.8, jet median: R = 0.3, perp cone: R = 0.3  
 
 # pp data + OO MB data embedding
 ## Code has a bug in jet matching (shouldn't affect anything related to matched jets)
 1810068: 0-10%, 2 perp cones for rho estimate, excluded pure ghosts for jet median
-- grid median: size = 0.5, jet median: R = 0.2, perp cone: R = 0.2
+- grid median: size = 0.5, jet median: R = 0.2, perp cone: R = 0.2  
+
 1810119: 0-10%, 2 perp cones for rho estimate, excluded pure ghosts for jet median
-- grid median: size = 0.6, jet median: R = 0.3, perp cone: R = 0.3
+- grid median: size = 0.6, jet median: R = 0.3, perp cone: R = 0.3  
+
 1810221: 0-10%, 2 perp cones for rho estimate, excluded pure ghosts for jet median
-- grid median: size = 0.7, jet median: R = 0.4, perp cone: R = 0.4
+- grid median: size = 0.7, jet median: R = 0.4, perp cone: R = 0.4  
+
 1810272: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts for jet median
-- grid median: size = 0.8, jet median: R = 0.4, perp cone: R = 0.4
+- grid median: size = 0.8, jet median: R = 0.4, perp cone: R = 0.4  
+
 1810323: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts for jet median
-- grid median: size = 0.65, jet median: R = 0.3, perp cone: R = 0.3
+- grid median: size = 0.65, jet median: R = 0.3, perp cone: R = 0.3  
+
 1810374: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts for jet median
-- grid median: size = 0.55, jet median: R = 0.2, perp cone: R = 0.2
+- grid median: size = 0.55, jet median: R = 0.2, perp cone: R = 0.2  
+
 ## Jet matching bug fixed
 1826156: 0-10%, 2 perp cones for rho estimate, didn't exclude pure ghosts for jet median
 - grid median: size = 0.7, jet median: R = 0.4, perp cone: R = 0.4
     - compared to 1810221, number of matched jets with grid median differs by 25/284155
     - compared to 1810272, number of matched jets with jet median differs by 25/286491
 
-# OO data
-1829729: 0-10%
+# OO JE derived data
+## Old data
+1839915: 0-10%
+1840121: track QA, 0-10%  
+1840208: track QA, track eta weighted by pT  
+1863933: track QA, track pT > 10 GeV  
+## Reproduced data
+1925283: track QA, 0-10%  
+1927065: track QA, 0-100%, 110 files done  
+1934715: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
+
+### Break continue bug fixed
+1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV 
+
+# OO MB data
+1934255: small sample, 0-100%  
+1934620: 0-100%  
+1934682: 0-100%, jet finder and analysis pT > 10 GeV  
+### Break continue bug fixed
+1943944: 0-100%, jet finder and analysis pT > 10 GeV  

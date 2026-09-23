@@ -1,22 +1,23 @@
 import heppyy.util.fastjet_cppyy
 from cppyy.gbl import fastjet as fj
 from cppyy.gbl import std
-
 import heppyy
-
 from .selection import EventSel, RCTSel, TrigSel
-
+import numpy as np
 alian = heppyy.load_cppyy("alian")
 
 class Event:
     def __init__(self, ev):
-        self.run_number = ev.data["run_number"]
-        self.multiplicity = ev.data["multiplicity"]
-        self.centrality = ev.data["centrality"]
-        self.occupancy = ev.data["occupancy"]
-        self.event_sel = EventSel(ev.data["event_sel"])
-        self.trig_sel = TrigSel(ev.data["trig_sel"])
-        self.rct = RCTSel(ev.data["rct"])
+        self.run_number = ev.data.get("run_number", None)
+        self.multiplicity = ev.data.get("multiplicity", None)
+        self.centrality = ev.data.get("centrality", None)
+        self.occupancy = ev.data.get("occupancy", None)
+        self.weight = ev.data.get("weight", None)
+        self.pTHat = ev.data.get("pTHat", None)
+        self.vtx_z = ev.data.get("vtx_z", None)
+        self.event_sel = EventSel(ev.data["event_sel"]) if "event_sel" in ev.data else None
+        self.trig_sel = TrigSel(ev.data["trig_sel"]) if "trig_sel" in ev.data else None
+        self.rct = RCTSel(ev.data["rct"]) if "rct" in ev.data else None
 
 class FlatEvent:
     """Lightweight event wrapper for a flat track tree.
@@ -47,17 +48,21 @@ def get_tracks(ev):
     )
 
 
-def get_selected_tracks(ev, selector):
+def get_selected_tracks(ev, selector, index_offset=0):
     """Get selected tracks from an event (track selections applied)."""
+    if "track_sel" in ev.data:
+        track_sel = ev.data["track_sel"]
+    else:
+        track_sel = np.zeros(len(ev.data["track_pt"]), dtype=np.uint8) # will mess up charge of tracks
     return std.vector[fj.PseudoJet](
         [
             t
-            for t in alian.numpy_ptetaphi_to_tracks(
+            for t in alian.numpy_ptetaphi_to_tracks( # defined in src/fjutil/fjutil.cxx
                 ev.data["track_pt"],
                 ev.data["track_eta"],
                 ev.data["track_phi"],
-                ev.data["track_sel"],
-                0,
+                track_sel,
+                index_offset,
             )
             if selector.selects(t)
         ]
