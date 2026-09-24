@@ -2,7 +2,7 @@
 """
 Example usage:
 python analysis/test/embed.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed.root
-python analysis/test/embed.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combined1.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed.root
+python analysis/test/embed.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combined1.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed_test.root
 """
 
 import argparse
@@ -13,8 +13,10 @@ import heppyy
 fj = heppyy.load_cppyy('fastjet')
 from cppyy.gbl import std
 
-from ROOT import TFile
-
+from ROOT import (
+    TFile, TH2F, TCanvas, TGraph, TEllipse, TLegend,
+    kBlack, kRed, kBlue, kGreen,
+)
 from alian.analysis.base import (
     AnalysisSelector, JetFinder,
     set_up_logger, delta_R,
@@ -115,6 +117,10 @@ class EmbeddingAnalysis:
         self.area_cut = 0.56*np.pi*self.R*self.R
         self.output = Output.load(self.cfg)
         self.hists = self.output.hists
+        # --- event displays ---
+        self.n_event_displays = 30
+        self.event_display_index = 0
+        self.event_displays = []
         self.logger.info("Embedding analysis initialized.")
 
     # -----------------------------------------------------------------------
@@ -176,7 +182,6 @@ class EmbeddingAnalysis:
         combined_jets.sort(key=lambda j: j.pt() - rho*j.area(), reverse=True)
         [self.hists['combined_pT'].Fill(j.pt(), weight) for j in combined_jets]
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
-        
         # ---  match pp jets to combined jets --- 
         combined_jet_matched_indices = [-1 for x in range(0, len(combined_jets))]
         for pp_ijet in range(0, len(pp_jets)):
@@ -192,6 +197,16 @@ class EmbeddingAnalysis:
                     combined_ijet_matched = combined_ijet
             if (len(combined_jet_matched) == 1): # pp jet has a unique combined jet match
                 combined_jet_matched_indices[combined_ijet_matched] = pp_ijet
+       
+        self._make_event_display(
+            pp_tracks=pp_tracks,
+            oo_tracks=oo_tracks,
+            pp_jets=pp_jets,
+            combined_jets=combined_jets,
+            combined_jet_matched_indices=combined_jet_matched_indices,
+            rho=rho,
+            centrality=oo_ev.data['centrality'],
+        )
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
@@ -255,6 +270,279 @@ class EmbeddingAnalysis:
           if perpcone1.delta_R(part) <= coneR or perpcone2.delta_R(part) <= coneR:
             perpcone_pt += part.perp()
         return perpcone_pt / (2*np.pi*coneR*coneR)
+    
+    def _make_event_display(
+        self,
+        pp_tracks,
+        oo_tracks,
+        pp_jets,
+        combined_jets,
+        combined_jet_matched_indices,
+        rho,
+        centrality,
+    ):
+        if self.event_display_index >= self.n_event_displays:
+            return
+
+        i_event = self.event_display_index
+
+        # -----------------------------------------------------------
+        # Base eta-phi histogram.
+        #
+        # Bin content = summed track pT in that eta-phi cell.
+        # Both pp and OO tracks contribute to the z-axis.
+        # -----------------------------------------------------------
+        h_disp = TH2F(
+            f'event_display_evt{i_event}',
+            (
+                f'Event {i_event}, centrality = {centrality:.1f}%, '
+                f'#rho = {rho:.2f} GeV;'
+                f'#eta;#varphi;#Sigma #it{{p}}_{{T}} (GeV)'
+            ),
+            50, -1.0, 1.0,
+            63, 0.0, 2.0 * np.pi,
+        )
+
+        h_disp.SetStats(False)
+
+        for track in oo_tracks:
+            h_disp.Fill(track.eta(), track.phi(), track.pt())
+
+        for track in pp_tracks:
+            h_disp.Fill(track.eta(), track.phi(), track.pt())
+
+        # -----------------------------------------------------------
+        # TGraphs identify track origin.
+        #
+        # Marker color/style identifies pp vs OO.
+        # Marker size does NOT encode pT; pT is encoded by the
+        # TH2 z-axis.
+        # -----------------------------------------------------------
+        g_oo = TGraph(len(oo_tracks))
+        g_oo.SetName(f'event_display_oo_tracks_evt{i_event}')
+        g_oo.SetMarkerStyle(24)
+        g_oo.SetMarkerSize(1.2)
+        g_oo.SetMarkerColor(kBlack)
+
+        for i_track, track in enumerate(oo_tracks):
+            g_oo.SetPoint(
+                i_track,
+                track.eta(),
+                track.phi(),
+            )
+
+        g_pp = TGraph(len(pp_tracks))
+        g_pp.SetName(f'event_display_pp_tracks_evt{i_event}')
+        g_pp.SetMarkerStyle(20)
+        g_pp.SetMarkerSize(1.2)
+        g_pp.SetMarkerColor(kGreen+2)
+
+        for i_track, track in enumerate(pp_tracks):
+            g_pp.SetPoint(
+                i_track,
+                track.eta(),
+                track.phi(),
+            )
+
+        # -----------------------------------------------------------
+        # Canvas
+        # -----------------------------------------------------------
+        c = TCanvas(
+            f'event_display_canvas_evt{i_event}',
+            f'Event display {i_event}',
+            1000,
+            800,
+        )
+
+        c.SetRightMargin(0.14)
+
+        h_disp.Draw("COLZ")
+        g_oo.Draw("P SAME")
+        g_pp.Draw("P SAME")
+
+        jet_circles = []
+
+        print("Event:", i_event)
+        # -----------------------------------------------------------
+        # pp jets:
+        # green solid circles
+        # -----------------------------------------------------------
+        for jet in pp_jets:
+            print("pp jet:", jet.perp())
+            circle = TEllipse(
+                jet.eta(),
+                jet.phi(),
+                self.R,
+                self.R,
+            )
+
+            circle.SetFillStyle(0)
+            circle.SetLineColor(kGreen + 2)
+            circle.SetLineStyle(1)
+            circle.SetLineWidth(2)
+            circle.Draw("SAME")
+
+            jet_circles.append(circle)
+
+            # Handle phi periodicity if the jet is near phi = 0.
+            if jet.phi() < self.R:
+                circle_copy = TEllipse(
+                    jet.eta(),
+                    jet.phi() + 2.0 * np.pi,
+                    self.R,
+                    self.R,
+                )
+
+                circle_copy.SetFillStyle(0)
+                circle_copy.SetLineColor(kGreen + 2)
+                circle_copy.SetLineStyle(1)
+                circle_copy.SetLineWidth(2)
+                circle_copy.Draw("SAME")
+
+                jet_circles.append(circle_copy)
+
+            # Handle phi periodicity if the jet is near phi = 2pi.
+            if jet.phi() > 2.0 * np.pi - self.R:
+                circle_copy = TEllipse(
+                    jet.eta(),
+                    jet.phi() - 2.0 * np.pi,
+                    self.R,
+                    self.R,
+                )
+
+                circle_copy.SetFillStyle(0)
+                circle_copy.SetLineColor(kGreen + 2)
+                circle_copy.SetLineStyle(1)
+                circle_copy.SetLineWidth(2)
+                circle_copy.Draw("SAME")
+
+                jet_circles.append(circle_copy)
+
+        # -----------------------------------------------------------
+        # Combined jets:
+        #
+        # matched   -> black solid
+        # unmatched -> black dashed
+        #
+        # All jets here have already passed 
+        # j.pt() - rho * j.area() selection.
+        # -----------------------------------------------------------
+        for combined_ijet in range(0, len(combined_jets)):
+            jet = combined_jets[combined_ijet]
+            print("combined jet:", jet.perp(), jet.perp()-rho*jet.area())
+
+            if combined_jet_matched_indices[combined_ijet] != -1:
+                line_style = 1
+            else:
+                line_style = 2
+
+            circle = TEllipse(
+                jet.eta(),
+                jet.phi(),
+                self.R,
+                self.R,
+            )
+
+            circle.SetFillStyle(0)
+            circle.SetLineColor(kBlack)
+            circle.SetLineStyle(line_style)
+            circle.SetLineWidth(2)
+            circle.Draw("SAME")
+
+            jet_circles.append(circle)
+
+            if jet.phi() < self.R:
+                circle_copy = TEllipse(
+                    jet.eta(),
+                    jet.phi() + 2.0 * np.pi,
+                    self.R,
+                    self.R,
+                )
+
+                circle_copy.SetFillStyle(0)
+                circle_copy.SetLineColor(kBlack)
+                circle_copy.SetLineStyle(line_style)
+                circle_copy.SetLineWidth(2)
+                circle_copy.Draw("SAME")
+
+                jet_circles.append(circle_copy)
+
+            if jet.phi() > 2.0 * np.pi - self.R:
+                circle_copy = TEllipse(
+                    jet.eta(),
+                    jet.phi() - 2.0 * np.pi,
+                    self.R,
+                    self.R,
+                )
+
+                circle_copy.SetFillStyle(0)
+                circle_copy.SetLineColor(kBlack)
+                circle_copy.SetLineStyle(line_style)
+                circle_copy.SetLineWidth(2)
+                circle_copy.Draw("SAME")
+
+                jet_circles.append(circle_copy)
+
+        # -----------------------------------------------------------
+        # Legend
+        # -----------------------------------------------------------
+        legend = TLegend(0.15, 0.72, 0.48, 0.89)
+        legend.SetBorderSize(0)
+        legend.SetFillStyle(0)
+
+        # legend.AddEntry(g_oo, "OO tracks", "p")
+        # legend.AddEntry(g_pp, "pp tracks", "p")
+
+        pp_jet_legend = TEllipse()
+        # pp_jet_legend.SetFillStyle(0)
+        # pp_jet_legend.SetLineColor(kGreen + 2)
+        # pp_jet_legend.SetLineStyle(1)
+        # pp_jet_legend.SetLineWidth(3)
+
+        combined_matched_legend = TEllipse()
+        # combined_matched_legend.SetFillStyle(0)
+        # combined_matched_legend.SetLineColor(kBlack)
+        # combined_matched_legend.SetLineStyle(1)
+        # combined_matched_legend.SetLineWidth(3)
+
+        combined_unmatched_legend = TEllipse()
+        # combined_unmatched_legend.SetFillStyle(0)
+        # combined_unmatched_legend.SetLineColor(kBlack)
+        # combined_unmatched_legend.SetLineStyle(2)
+        # combined_unmatched_legend.SetLineWidth(3)
+
+        # legend.AddEntry(pp_jet_legend, "pp jets", "l")
+        # legend.AddEntry(
+        #     combined_matched_legend,
+        #     "Combined jets, matched",
+        #     "l",
+        # )
+        # legend.AddEntry(
+        #     combined_unmatched_legend,
+        #     "Combined jets, unmatched",
+        #     "l",
+        # )
+
+        # legend.Draw()
+
+        c.Update()
+
+        # Keep Python references alive until the ROOT file is written.
+        self.event_displays.append(
+            {
+                'canvas': c,
+                'hist': h_disp,
+                'oo_tracks': g_oo,
+                'pp_tracks': g_pp,
+                'jet_circles': jet_circles,
+                'legend': legend,
+                'pp_jet_legend': pp_jet_legend,
+                'combined_matched_legend': combined_matched_legend,
+                'combined_unmatched_legend': combined_unmatched_legend,
+            }
+        )
+
+        self.event_display_index += 1
 
     # -----------------------------------------------------------------------
     # output / timing
@@ -265,8 +553,16 @@ class EmbeddingAnalysis:
 
     def save(self):
         self.logger.info(f"Saving output to: {self.output_file}")
+
         with TFile(self.output_file, "RECREATE") as f:
             self.output.save(f)
+
+            f.mkdir("event_displays")
+            f.cd("event_displays")
+
+            for display in self.event_displays:
+                display['canvas'].Write()
+
         self.logger.info("Output saved.")
 
     def note_time(self, msg):
