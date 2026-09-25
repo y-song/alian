@@ -35,10 +35,6 @@ class EmbeddingAnalysis:
     other source.
     """
 
-    _defaults = {
-        'pt_min_pp_jet': 10.0,
-    }
-
     def __init__(self, pp_file, oo_file, output_file, cfg_file,
                  pp_tree_struct, oo_tree_struct,
                  nev=-1, lhc_run=3):
@@ -64,7 +60,7 @@ class EmbeddingAnalysis:
     def init(self):
         self.cfg = read_yaml(self.cfg_file)
 
-        for k, v in (self._defaults | self.cfg.get('analysis', {})).items():
+        for k, v in self.cfg.get('analysis', {}).items():
             setattr(self, k, v)
 
         # --- signal source (file 1) ---
@@ -77,8 +73,6 @@ class EmbeddingAnalysis:
             n_events=-1,
         )
         self.pp_selector = AnalysisSelector.load(pp_cfg)
-        pp_jf_opts = {**JetFinder._defaults, **pp_cfg.get('jet_finder', {})}
-        self.pp_jet_finder = JetFinder(**pp_jf_opts)
 
         # --- background source (file 2) ---
         oo_cfg = self.cfg.get('oo', {})
@@ -109,18 +103,25 @@ class EmbeddingAnalysis:
         )
         print("bge:\n", self.bge.description())
 
-        # --- embedded jet finder (needs jet areas for area subtraction) ---
+        # --- jet finders ---
+        pp_jf_opts = {**JetFinder._defaults, **pp_cfg.get('jet_finder', {})}
+        self.pp_jet_finder = JetFinder(**pp_jf_opts)
         combined_jf_opts = {**JetFinder._defaults, **oo_cfg.get('jet_finder', {})}
         self.combined_jet_finder = JetFinder(**combined_jf_opts)
-
         self.R = pp_jf_opts['R']
         self.area_cut = 0.56*np.pi*self.R*self.R
-        self.output = Output.load(self.cfg)
-        self.hists = self.output.hists
+
+        # --- substructure tools ---
+        # self.lund_gen = fj.contrib.LundGenerator()
+        self.sd = fj.contrib.SoftDrop(0, self.z_cut)
+
         # --- event displays ---
         self.n_event_displays = 30
         self.event_display_index = 0
         self.event_displays = []
+                
+        self.output = Output.load(self.cfg)
+        self.hists = self.output.hists
         self.logger.info("Embedding analysis initialized.")
 
     # -----------------------------------------------------------------------
@@ -182,51 +183,70 @@ class EmbeddingAnalysis:
         combined_jets.sort(key=lambda j: j.pt() - rho*j.area(), reverse=True)
         [self.hists['combined_pT'].Fill(j.pt(), weight) for j in combined_jets]
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
+        
         # ---  match pp jets to combined jets --- 
+        # print("Starting jet matching...")
         combined_jet_matched_indices = [-1 for x in range(0, len(combined_jets))]
         for pp_ijet in range(0, len(pp_jets)):
+            # print("pp jet", pp_ijet)
             pp_jet = pp_jets[pp_ijet]
             combined_jet_matched = []
             combined_ijet_matched = -1
             for combined_ijet in range(0, len(combined_jets)):
+                # print("Combined jet", combined_ijet)
                 combined_jet = combined_jets[combined_ijet]
+                # TO DO: Think about if we want to do this differently
                 if (combined_jet_matched_indices[combined_ijet] != -1): # combined jet already has a match
+                    # print("This combined jet already has a match")
                     continue
                 if (self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold) and (self.is_geo_matched(combined_jet, pp_jet)):
                     combined_jet_matched.append(combined_jet)
                     combined_ijet_matched = combined_ijet
+                    # print("Combined jet", combined_ijet, "matched to", pp_ijet)
+                    # print("pp jet", pp_ijet, "now has", len(combined_jet_matched), "match(es)")
+                # else:
+                    # print("Combined jet", combined_ijet, "NOT matched to", pp_ijet)
+            # print("pp jet", pp_ijet, "has", len(combined_jet_matched), "total match(es)")
             if (len(combined_jet_matched) == 1): # pp jet has a unique combined jet match
                 combined_jet_matched_indices[combined_ijet_matched] = pp_ijet
+        # print("Combined jets [0, ..., len(combined_jets)] are matched to\npp jets", combined_jet_matched_indices)
        
-        self._make_event_display(
-            pp_tracks=pp_tracks,
-            oo_tracks=oo_tracks,
-            pp_jets=pp_jets,
-            combined_jets=combined_jets,
-            combined_jet_matched_indices=combined_jet_matched_indices,
-            rho=rho,
-            centrality=oo_ev.data['centrality'],
-        )
+        # self._make_event_display(
+        #     pp_tracks=pp_tracks,
+        #     oo_tracks=oo_tracks,
+        #     pp_jets=pp_jets,
+        #     combined_jets=combined_jets,
+        #     combined_jet_matched_indices=combined_jet_matched_indices,
+        #     rho=rho,
+        #     centrality=oo_ev.data['centrality'],
+        # )
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
             j = combined_jets[combined_ijet]
+            gj = self.sd(j)
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
 
+            self.hists['combined_pTg'].Fill(gj.pt(), weight) 
             self.hists['combined_pT_sub_pT'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
             self.hists['combined_area_sub_pT'].Fill(j.pt()-j.area()*rho, j.area(), weight)
 
             if (pp_ijet != -1):
                 pp_j = pp_jets[pp_ijet]
+                pp_gj = self.sd(pp_j)
 
                 self.hists['pp_pT_matched'].Fill(pp_j.pt(), weight)
+                self.hists['pp_pTg_pp_pT_matched'].Fill(pp_j.pt(), pp_gj.pt(), weight)
 
                 self.hists['combined_pT_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
                 self.hists['combined_area_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.area(), weight)
 
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho, weight)
+                self.hists['combined_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt(), weight)
                 self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt()-j.area()*rho-pp_j.pt(), weight)
+                self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-pp_gj.pt(), weight)
+                self.hists['residual_combined_pTg_matched'].Fill(gj.pt(), gj.pt()-pp_gj.pt(), weight)
 
     # -----------------------------------------------------------------------
     # helpers
