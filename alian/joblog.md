@@ -16,11 +16,6 @@
 1698685: pp 100 GeV, z_cut = 0.3, R = 0.6  
 1698785: PbPb 100 GeV, z_cut = 0.3, R = 0.6  
 
-## Removed double counting of EEC
-1656393: pp 100 GeV, z_cut = 0.1  
-1656512: PbPb 100 GeV, z_cut = 0.1  
-- 1656701: SoftDrop instead of LundGenerator for cross check
-
 # Jewel 5.02 TeV
 ## Default
 1702207: PbPb 90 GeV, z_cut = 0.1, recoil off  
@@ -35,7 +30,7 @@
 1779056: pp 90 GeV, z_cut = 0.1, EEC constituent pT > 0.15 GeV  
 1780056: PbPb 90 GeV, z_cut = 0.1, EEC constituent pT > 0.15 GeV  
 1781056: pp 90 GeV, z_cut = 0.2, EEC constituent pT > 0.15 GeV  
-1782056: PbPb 90 GeV, z_cut = 0.2, EEC constituent pT > 0.15 GeV
+1782056: PbPb 90 GeV, z_cut = 0.2, EEC constituent pT > 0.15 GeV  
 1819976: PbPb 90 GeV, z_cut = 0.1, matched to gluons  
 1820976: PbPb 90 GeV, z_cut = 0.2, matched to gluons  
 1821976: PbPb 90 GeV, z_cut = 0.3, matched to gluons  
@@ -46,11 +41,11 @@
 1817976: pp 90 GeV, z_cut = 0.1, matched to quarks  
 
 ## Ti = 300 MeV
-1828063: z_cut = 0.1 (50 bins in RL) 
-1829699: z_cut = 0.2 (50 bins in RL)
-1831014: z_cut = 0.3 (50 bins in RL)
+1828063: z_cut = 0.1 (50 bins in RL)  
+1829699: z_cut = 0.2 (50 bins in RL)  
+1831014: z_cut = 0.3 (50 bins in RL)  
 1834257: z_cut = 0.1 (51 bins in RL)  
-1835349: z_cut = 0.2 (51 bins in RL) 
+1835349: z_cut = 0.2 (51 bins in RL)   
 1836660: z_cut = 0.3 (51 bins in RL)
 
 # pp data + OO data embedding
@@ -104,26 +99,11 @@
 1986633
 
 # OO JE derived data
-## Old data
-1839915: 0-10%
-1840121: track QA, 0-10%  
-1840208: track QA, track eta weighted by pT  
-1863933: track QA, track pT > 10 GeV  
-## Reproduced data
-1925283: track QA, 0-10%  
-1927065: track QA, 0-100%, 110 files done  
-1934715: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
-
-### Break continue bug fixed
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
-1984403: track QA, 0-100%, jet finder and analysis pT > 20 GeV, subjobs 24, 54, 60, 68 didn't run
+1984403: track QA, 0-100%, jet finder and analysis pT > 20 GeV, subjobs 24, 54, 60, 68 didn't run  
 1986538: Rerun failed subjobs from 1984403  
 
 # OO MB data
-1934255: small sample, 0-100%  
-1934620: 0-100%  
-1934682: 0-100%, jet finder and analysis pT > 10 GeV  
-### Break continue bug fixed
 1943944: 0-100%, jet finder and analysis pT > 10 GeV  
 1982382: 0-100%, jet finder and analysis pT > 20 GeV, subjob 7 didn't finish  
-1986542: Rerun failed job from 1982382  
+1986542: Rerun failed subjob from 1982382  
