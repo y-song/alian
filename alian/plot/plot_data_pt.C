@@ -84,28 +84,32 @@ void plot_data_pt(std::string file_name)
 {
     SetStyle();
     
-    std::string infile  = "/home/youqi/alian/alian/output/embed.root";//"/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    std::string infile  = "/home/youqi/alian/alian/output/embed_092426.root";//"/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
     TFile *f = new TFile(infile.c_str(), "READ");
 
-    TH1D *h_sub_pT_all = (TH1D *)f->Get("sub_pT");
-    // TH1D *h_sub_pT_all = (TH1D *)f->Get("pp_pT"); // for pp
+    TH1D *h_all = (TH1D *)f->Get("sub_pT");
+    // TH1D *h_all = (TH1D *)f->Get("pp_pT"); // for pp
 
-    TH2 *h_combined_pT_sub_pT_matched = (TH2 *)f->Get("combined_pT_sub_pT_matched");
-    TH1D *h_sub_pT_matched = h_combined_pT_sub_pT_matched->ProjectionX(Form("%s_projx", h_combined_pT_sub_pT_matched->GetName()));
-    // TH2 *h_combined_pT_sub_pT_matched = (TH2 *)f->Get("sub_pT_pp_pT_matched"); // for pp
-    // TH1D *h_sub_pT_matched = h_combined_pT_sub_pT_matched->ProjectionX(Form("%s_projx", h_combined_pT_sub_pT_matched->GetName())); // for pp
+    TH2 *h_sub_pT_pp_pT_matched = (TH2 *)f->Get("sub_pT_pp_pT_matched");
+    TH2 *h_sub_pTg_pp_pTg_matched = (TH2 *)f->Get("sub_pTg_pp_pTg_matched");
+    TH1D *h_matched = h_sub_pT_pp_pT_matched->ProjectionX(Form("%s_projx", h_sub_pT_pp_pT_matched->GetName()));
+    TH1D *h_g_matched = h_sub_pTg_pp_pTg_matched->ProjectionX(Form("%s_projx", h_sub_pTg_pp_pTg_matched->GetName()));
+    // TH1D *h_matched = h_sub_pT_pp_pT_matched->ProjectionY(Form("%s_projy", h_sub_pT_pp_pT_matched->GetName())); // for pp
+    // TH1D *h_g_matched = h_sub_pTg_pp_pTg_matched->ProjectionY(Form("%s_projy", h_sub_pTg_pp_pTg_matched->GetName())); // for pp
 
     TCanvas *c = new TCanvas("c", "c", 700, 500);
     ProcessCanvas(c);
     c->cd();
     gPad->SetLogy();
     
-    FormatHist(h_sub_pT_all, kBlue, kFullSquare);
+    FormatHist(h_all, kBlue, kFullSquare);
     // FormatHist(h_JetPt, kBlue, kFullTriangleUp);
-    FormatHist(h_sub_pT_matched, kRed, kFullCircle);
-    h_sub_pT_all->Draw();
+    FormatHist(h_matched, kRed, kFullCircle);
+    FormatHist(h_g_matched, kGreen+2, kFullCircle);
+    h_all->Draw();
     // h_JetPt->Draw("same");
-    h_sub_pT_matched->Draw("same");
+    h_matched->Draw("same");
+    h_g_matched->Draw("same");
 
     c->SaveAs("output/embed_pt.png");
 }

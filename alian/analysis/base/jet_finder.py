@@ -51,8 +51,7 @@ class JetFinder:
         self.pT_min = pT_min
         self.jet_selector = fj.SelectorAbsEtaMax(self.eta_max) * fj.SelectorPtMin(pT_min)
         fj.ClusterSequence.print_banner()
-        self.area_def = fj.AreaDefinition(fj.active_area, fj.GhostedAreaSpec(self.eta_max + self.R))
-        # I used fj.AreaDefinition(fj.active_area_explicit_ghosts) for run 2 PbPb
+        self.area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(self.eta_max + self.R))
 
     @singledispatchmethod
     @classmethod

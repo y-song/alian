@@ -3,6 +3,7 @@
 Example usage:
 python analysis/test/embed.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed.root
 python analysis/test/embed.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combined1.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed_test.root
+- took
 """
 
 import argparse
@@ -185,41 +186,21 @@ class EmbeddingAnalysis:
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
         
         # ---  match pp jets to combined jets --- 
-        # print("Starting jet matching...")
         combined_jet_matched_indices = [-1 for x in range(0, len(combined_jets))]
         for pp_ijet in range(0, len(pp_jets)):
-            # print("pp jet", pp_ijet)
             pp_jet = pp_jets[pp_ijet]
             combined_jet_matched = []
             combined_ijet_matched = -1
             for combined_ijet in range(0, len(combined_jets)):
-                # print("Combined jet", combined_ijet)
                 combined_jet = combined_jets[combined_ijet]
                 # TO DO: Think about if we want to do this differently
-                if (combined_jet_matched_indices[combined_ijet] != -1): # combined jet already has a match
-                    # print("This combined jet already has a match")
+                if (combined_jet_matched_indices[combined_ijet] != -1): # skip if combined jet already has a match
                     continue
                 if (self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold) and (self.is_geo_matched(combined_jet, pp_jet)):
                     combined_jet_matched.append(combined_jet)
                     combined_ijet_matched = combined_ijet
-                    # print("Combined jet", combined_ijet, "matched to", pp_ijet)
-                    # print("pp jet", pp_ijet, "now has", len(combined_jet_matched), "match(es)")
-                # else:
-                    # print("Combined jet", combined_ijet, "NOT matched to", pp_ijet)
-            # print("pp jet", pp_ijet, "has", len(combined_jet_matched), "total match(es)")
             if (len(combined_jet_matched) == 1): # pp jet has a unique combined jet match
                 combined_jet_matched_indices[combined_ijet_matched] = pp_ijet
-        # print("Combined jets [0, ..., len(combined_jets)] are matched to\npp jets", combined_jet_matched_indices)
-       
-        # self._make_event_display(
-        #     pp_tracks=pp_tracks,
-        #     oo_tracks=oo_tracks,
-        #     pp_jets=pp_jets,
-        #     combined_jets=combined_jets,
-        #     combined_jet_matched_indices=combined_jet_matched_indices,
-        #     rho=rho,
-        #     centrality=oo_ev.data['centrality'],
-        # )
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
@@ -228,6 +209,7 @@ class EmbeddingAnalysis:
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
 
             self.hists['combined_pTg'].Fill(gj.pt(), weight) 
+            self.hists['combined_pTg_sub_pTg'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight) 
             self.hists['combined_pT_sub_pT'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
             self.hists['combined_area_sub_pT'].Fill(j.pt()-j.area()*rho, j.area(), weight)
 
@@ -240,13 +222,14 @@ class EmbeddingAnalysis:
 
                 self.hists['combined_pT_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
                 self.hists['combined_area_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.area(), weight)
+                self.hists['combined_pTg_sub_pTg_matched'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight)
 
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho, weight)
-                self.hists['combined_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt(), weight)
+                self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho, weight)
                 self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt()-j.area()*rho-pp_j.pt(), weight)
-                self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-pp_gj.pt(), weight)
-                self.hists['residual_combined_pTg_matched'].Fill(gj.pt(), gj.pt()-pp_gj.pt(), weight)
+                self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho-pp_gj.pt(), weight)
+                self.hists['residual_sub_pTg_matched'].Fill(gj.pt()-gj.area()*rho, gj.pt()-gj.area()*rho-pp_gj.pt(), weight)
 
     # -----------------------------------------------------------------------
     # helpers

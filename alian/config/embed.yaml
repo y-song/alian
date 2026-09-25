@@ -1,7 +1,7 @@
 # Configuration for the embedding analysis (analysis/test/embed.py).
 #
 # File 1 (pp): Run3 MC -- pp events
-# File 2 (oo): Run3 data -- oo events to embed into
+# File 2 (oo): Run3 data -- oo events
 
 # ---- pp (file 1) ---------------------------------------------------------
 pp:
@@ -42,6 +42,7 @@ analysis:
   pt_min_combined_jet: 20.0
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
+  z_cut: 0.1
 
 output:
   bins:
@@ -78,20 +79,24 @@ output:
       "Subtracted combined jet #it{p}_{T};#it{p}_{T}^{sub} (GeV);jet count",
       jet_pT]
 
+    combined_pTg: [1, "combined_pTg",
+      "Groomed combined jet #it{p}_{T};#it{p}_{T,g}^{combined} (GeV);jet count",
+      jet_pT]
+
     # pp jets with a matched combined jet
     pp_pT_matched: [1, "pp_pT_matched",
       "Matched pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);jet count",
       jet_pT]
 
 
-    # --- rho ---------------------------------------------------------------
+    # --- rho ----------------------------------------------------------------
 
     cent_rho: [2, "cent_rho",
       "Jet-median #rho vs centrality;#rho (GeV);centrality (%)",
       rho, centrality]
 
 
-    # --- all selected combined jets ----------------------------------------
+    # --- all selected combined jets -----------------------------------------
 
     combined_pT_sub_pT: [2, "combined_pT_sub_pT",
       "Combined jet #it{p}_{T} vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
@@ -101,8 +106,16 @@ output:
       "Combined jet area vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);jet area",
       jet_pT, area]
 
+    combined_pTg_sub_pTg: [2, "combined_pTg_sub_pTg",
+      "Groomed combined jet #it{p}_{T} vs subtracted groomed #it{p}_{T};#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{combined} (GeV)",
+      jet_pT, jet_pT]
+
 
     # --- matched combined jets ---------------------------------------------
+
+    pp_pTg_pp_pT_matched: [2, "pp_pTg_pp_pT_matched",
+      "Groomed pp jet #it{p}_{T} vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T,g}^{pp} (GeV)",
+      jet_pT, jet_pT]
 
     combined_pT_sub_pT_matched: [2, "combined_pT_sub_pT_matched",
       "Combined jet #it{p}_{T} vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
@@ -112,8 +125,16 @@ output:
       "Combined jet area vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);jet area",
       jet_pT, area]
 
+    combined_pTg_sub_pTg_matched: [2, "combined_pTg_sub_pTg_matched",
+      "Groomed combined jet #it{p}_{T} vs subtracted groomed #it{p}_{T} (matched);#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{combined} (GeV)",
+      jet_pT, jet_pT]
+
     sub_pT_pp_pT_matched: [2, "sub_pT_pp_pT_matched",
       "Subtracted combined jet #it{p}_{T} vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{sub} (GeV)",
+      jet_pT, jet_pT]
+
+    sub_pTg_pp_pTg_matched: [2, "sub_pTg_pp_pTg_matched",
+      "Subtracted groomed combined jet #it{p}_{T} vs groomed pp jet #it{p}_{T} (matched);#it{p}_{T,g}^{pp} (GeV);#it{p}_{T,g}^{sub} (GeV)",
       jet_pT, jet_pT]
 
     residual_pp_pT_matched: [2, "residual_pp_pT_matched",
@@ -122,4 +143,12 @@ output:
 
     residual_sub_pT_matched: [2, "residual_sub_pT_matched",
       "Residual vs subtracted combined jet #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{sub} - #it{p}_{T}^{pp} (GeV)",
+      jet_pT, residual]
+
+    residual_pp_pTg_matched: [2, "residual_pp_pTg_matched",
+      "Groomed residual vs groomed pp jet #it{p}_{T} (matched);#it{p}_{T,g}^{pp} (GeV);#it{p}_{T,g}^{sub} - #it{p}_{T,g}^{pp} (GeV)",
+      jet_pT, residual]
+
+    residual_sub_pTg_matched: [2, "residual_sub_pTg_matched",
+      "Groomed residual vs subtracted groomed combined jet #it{p}_{T} (matched);#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{sub} - #it{p}_{T,g}^{pp} (GeV)",
       jet_pT, residual]
