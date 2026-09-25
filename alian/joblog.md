@@ -100,6 +100,9 @@
     - compared to 1810221, number of matched jets with grid median differs by 25/284155
     - compared to 1810272, number of matched jets with jet median differs by 25/286491
 
+# pp MC + OO MB data embedding
+1986633
+
 # OO JE derived data
 ## Old data
 1839915: 0-10%
@@ -112,7 +115,9 @@
 1934715: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
 
 ### Break continue bug fixed
-1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV 
+1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
+1984403: track QA, 0-100%, jet finder and analysis pT > 20 GeV, subjobs 24, 54, 60, 68 didn't run
+1986538: Rerun failed subjobs from 1984403  
 
 # OO MB data
 1934255: small sample, 0-100%  
@@ -120,3 +125,5 @@
 1934682: 0-100%, jet finder and analysis pT > 10 GeV  
 ### Break continue bug fixed
 1943944: 0-100%, jet finder and analysis pT > 10 GeV  
+1982382: 0-100%, jet finder and analysis pT > 20 GeV, subjob 7 didn't finish  
+1986542: Rerun failed job from 1982382  
