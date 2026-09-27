@@ -46,7 +46,8 @@ analysis:
 
 output:
   bins:
-    jet_pT:     ['lin',   0, 200, 100]
+    jet_pT:     ['lin',  -2, 200, 101]
+    jet_mult:   ['lin',  -2,  20,  22]
     residual:   ['lin', -80,  80, 160]
     rho:        ['lin',   0, 100, 100]
     area:       ['lin', -0.2, 2, 44]
@@ -60,6 +61,10 @@ output:
     pp_pT: [1, "pp_pT",
       "pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);jet count",
       jet_pT]
+
+    pp_n: [1, "pp_n",
+      "pp jet #it{N};#it{N}^{pp} (GeV);jet count",
+      jet_mult]
 
     # combined jets before subtracted-pT selection
     combined_pT_preselect: [1, "combined_pT_preselect",
@@ -136,6 +141,14 @@ output:
     sub_pTg_pp_pTg_matched: [2, "sub_pTg_pp_pTg_matched",
       "Subtracted groomed combined jet #it{p}_{T} vs groomed pp jet #it{p}_{T} (matched);#it{p}_{T,g}^{pp} (GeV);#it{p}_{T,g}^{sub} (GeV)",
       jet_pT, jet_pT]
+
+    sub_n_pp_n_matched: [2, "sub_n_pp_n_matched",
+      "Combined jet multiplicity vs pp jet multiplicity (matched);#it{N}^{pp};#it{N}^{combined}",
+      jet_mult, jet_mult]
+      
+    sub_ng_pp_ng_matched: [2, "sub_ng_pp_ng_matched",
+      "Groomed combined jet multiplicity vs groomed pp jet multiplicity (matched);#it{N}_{g}^{pp};#it{N}_{g}^{combined}",
+      jet_mult, jet_mult]
 
     residual_pp_pT_matched: [2, "residual_pp_pT_matched",
       "Residual vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{sub} - #it{p}_{T}^{pp} (GeV)",

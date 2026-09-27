@@ -3,7 +3,6 @@
 Example usage:
 python analysis/test/embed.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed.root
 python analysis/test/embed.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combined1.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed.yaml -o output/embed_test.root
-- took
 """
 
 import argparse
@@ -95,7 +94,7 @@ class EmbeddingAnalysis:
             fj.SelectorAbsEtaMax(max_eta - bge_R)
             * sel_not(fj.SelectorNHardest(2))
         )
-        bge_def  = fj.JetDefinition(fj.kt_algorithm, bge_R)
+        bge_def = fj.JetDefinition(fj.kt_algorithm, bge_R)
         bge_area_def = fj.AreaDefinition(
             fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(max_eta)
         )
@@ -165,6 +164,7 @@ class EmbeddingAnalysis:
         pp_jets = [j for j in pp_jets if j.pt() >= self.pt_min_pp_jet]
         weight = pp_ev.data['weight']
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
+        [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
 
         # --- combined event: pp tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
@@ -226,6 +226,8 @@ class EmbeddingAnalysis:
 
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho, weight)
                 self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho, weight)
+                self.hists['sub_n_pp_n_matched'].Fill(len(pp_j.constituents()), len(j.constituents()), weight)
+                self.hists['sub_ng_pp_ng_matched'].Fill(len(pp_gj.constituents()), len(gj.constituents()), weight)
                 self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho-pp_gj.pt(), weight)
