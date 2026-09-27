@@ -159,7 +159,7 @@ void MakeComparisonPlot(TH1D *hTrig, TH1D *hMB, const char *canvasName, const ch
     FormatHist(leg1, hTrig, trigLegend, kRed+2);
     FormatHist(leg1, hMB, mbLegend, kBlue + 2);
 
-    hTrig->GetYaxis()->SetTitle("Self-normalized counts");
+    hTrig->GetYaxis()->SetTitle("Counts");
     hTrig->GetYaxis()->SetTitleOffset(0.95);
     hTrig->GetYaxis()->SetTitleSize(0.055);
     hTrig->GetYaxis()->SetLabelSize(0.05);
@@ -220,8 +220,8 @@ void track_pt_mb_vs_trig()
 {
     SetStyle();
 
-    TFile *f_trig = new TFile("/rstorage/youqi/1927065/AnalysisResultsFinal.root", "READ");
-    TFile *f = new TFile("/rstorage/youqi/1934620/AnalysisResultsFinal.root", "READ");
+    TFile *f_trig = new TFile("/rstorage/youqi/1984403/AnalysisResultsFinal.root", "READ");
+    TFile *f = new TFile("/rstorage/youqi/1982382/AnalysisResultsFinal.root", "READ");
 
     // TH1D *h1 = (TH1D *)f->Get("track_pT");
     TH1D *h2_trig = (TH1D *)f_trig->Get("track_in_jet_event_pT");
@@ -246,10 +246,17 @@ void track_pt_mb_vs_trig()
     h2->GetXaxis()->SetRangeUser(0, 20);
     h3->GetXaxis()->SetRangeUser(0, 20);
 
-    h2_trig->Scale(1.0 / h2_trig->Integral(h2_trig->GetXaxis()->FindBin(10), h2_trig->GetXaxis()->FindBin(20)));
-    h3_trig->Scale(1.0 / h3_trig->Integral(h3_trig->GetXaxis()->FindBin(10), h3_trig->GetXaxis()->FindBin(20)));
-    h2->Scale(1.0 / h2->Integral(h2->GetXaxis()->FindBin(10), h2->GetXaxis()->FindBin(20)));
-    h3->Scale(1.0 / h3->Integral(h3->GetXaxis()->FindBin(10), h3->GetXaxis()->FindBin(20)));
+    // double scale = 3178671578/39451961*3471341553/3178671578.0; // fCountsWithTVXAndZVertexAndSel8Full
+    // double scale = 4352252447/39451961*4753407738/4352252447.0; // fCounts
+    double scale = 4000626686/39451961*4369951994/4000626686; // fCountsWithTVX
+    std::cout << "upscale MB by: " << scale << std::endl;
+
+    // h2_trig->Scale(1.0 / h2_trig->Integral(h2_trig->GetXaxis()->FindBin(30), h2_trig->GetXaxis()->FindBin(200)));
+    // h3_trig->Scale(1.0 / h3_trig->Integral(h3_trig->GetXaxis()->FindBin(30), h3_trig->GetXaxis()->FindBin(200)));
+    // h2->Scale(1.0 / h2->Integral(h2->GetXaxis()->FindBin(30), h2->GetXaxis()->FindBin(200)));
+    // h3->Scale(1.0 / h3->Integral(h3->GetXaxis()->FindBin(30), h3->GetXaxis()->FindBin(200)));
+    h2->Scale(scale);
+    h3->Scale(scale);
 
     gSystem->mkdir("output", kTRUE);
     MakeComparisonPlot(h3_trig, h3, "c_track_in_jet", "ratio_h3_trig_over_h3", "#splitline{JE triggered: All tracks in jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "#splitline{MB: All tracks in jets with}{R = 0.4, p_{T} #minus #rhoA > 20 GeV}", "output/track_in_jet_pt_mb_vs_trig.png");
