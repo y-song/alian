@@ -26,6 +26,10 @@ from alian.analysis.base.event import Event, get_selected_tracks
 from alian.analysis.base.utils import read_yaml, is_slurm
 from alian.io.data_io import DataInput
 
+# source code locations
+# /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
+# /home/youqi/yasp/.workdir/bundle/hepbase/fjcontrib/mp/fjcontrib-master/RecursiveTools/SoftDrop.cc
+# /home/youqi/yasp/.workdir/bundle/hepbase/fjcontrib/mp/fjcontrib-master/RecursiveTools/include/fastjet/contrib/SoftDrop.hh
 
 class EmbeddingAnalysis:
     """Embed pp events from a pp file into OO events from an OO file.
@@ -165,6 +169,7 @@ class EmbeddingAnalysis:
         weight = pp_ev.data['weight']
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
+        pp_njet_pT20 = sum(j.pt() > 20.0 for j in pp_jets)
 
         # --- combined event: pp tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
@@ -184,6 +189,7 @@ class EmbeddingAnalysis:
         combined_jets.sort(key=lambda j: j.pt() - rho*j.area(), reverse=True)
         [self.hists['combined_pT'].Fill(j.pt(), weight) for j in combined_jets]
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
+        self.hists['combined_njet_pp_njet'].Fill(pp_njet_pT20, len(combined_jets), weight)
         
         # ---  match pp jets to combined jets --- 
         combined_jet_matched_indices = [-1 for x in range(0, len(combined_jets))]

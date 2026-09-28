@@ -47,7 +47,7 @@ analysis:
 output:
   bins:
     jet_pT:     ['lin',  -2, 200, 101]
-    jet_mult:   ['lin',  -2,  20,  22]
+    count:      ['lin',  -2,  40,  42]
     residual:   ['lin', -80,  80, 160]
     rho:        ['lin',   0, 100, 100]
     area:       ['lin', -0.2, 2, 44]
@@ -64,7 +64,7 @@ output:
 
     pp_n: [1, "pp_n",
       "pp jet #it{N};#it{N}^{pp} (GeV);jet count",
-      jet_mult]
+      count]
 
     # combined jets before subtracted-pT selection
     combined_pT_preselect: [1, "combined_pT_preselect",
@@ -88,21 +88,21 @@ output:
       "Groomed combined jet #it{p}_{T};#it{p}_{T,g}^{combined} (GeV);jet count",
       jet_pT]
 
+    combined_njet_pp_njet: [2, "combined_njet_pp_njet",
+      "Combined jet count vs pp jet count;pp jet count;combined jet count",
+      count, count]
+
     # pp jets with a matched combined jet
     pp_pT_matched: [1, "pp_pT_matched",
       "Matched pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);jet count",
       jet_pT]
 
-
     # --- rho ----------------------------------------------------------------
-
     cent_rho: [2, "cent_rho",
       "Jet-median #rho vs centrality;#rho (GeV);centrality (%)",
       rho, centrality]
 
-
     # --- all selected combined jets -----------------------------------------
-
     combined_pT_sub_pT: [2, "combined_pT_sub_pT",
       "Combined jet #it{p}_{T} vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
       jet_pT, jet_pT]
@@ -144,11 +144,11 @@ output:
 
     sub_n_pp_n_matched: [2, "sub_n_pp_n_matched",
       "Combined jet multiplicity vs pp jet multiplicity (matched);#it{N}^{pp};#it{N}^{combined}",
-      jet_mult, jet_mult]
+      count, count]
       
     sub_ng_pp_ng_matched: [2, "sub_ng_pp_ng_matched",
       "Groomed combined jet multiplicity vs groomed pp jet multiplicity (matched);#it{N}_{g}^{pp};#it{N}_{g}^{combined}",
-      jet_mult, jet_mult]
+      count, count]
 
     residual_pp_pT_matched: [2, "residual_pp_pT_matched",
       "Residual vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{sub} - #it{p}_{T}^{pp} (GeV)",
