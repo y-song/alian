@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH --job-name=youqi
+#SBATCH --job-name=embed
 #SBATCH --partition=quick
 #SBATCH --output=/home/youqi/temp/%A_%a.out
 #SBATCH --error=/home/youqi/temp/%A_%a.err
-#SBATCH --array=0
+#SBATCH --array=0-32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 #SBATCH --time=04:00:00

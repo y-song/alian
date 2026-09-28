@@ -12,7 +12,7 @@ class Event:
         self.multiplicity = ev.data.get("multiplicity", None)
         self.centrality = ev.data.get("centrality", None)
         self.occupancy = ev.data.get("occupancy", None)
-        self.weight = ev.data.get("weight", None)
+        self.weight = ev.data.get("weight", 1.0)
         self.pTHat = ev.data.get("pTHat", None)
         self.vtx_z = ev.data.get("vtx_z", None)
         self.event_sel = EventSel(ev.data["event_sel"]) if "event_sel" in ev.data else None

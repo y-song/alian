@@ -96,7 +96,8 @@
     - compared to 1810272, number of matched jets with jet median differs by 25/286491
 
 # pp MC + OO MB data embedding
-1986633
+1986633: only 11 jobs finished
+1986696  
 
 # OO JE derived data
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  

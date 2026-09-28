@@ -10,7 +10,7 @@
 #SBATCH --time=01:00:00
 
 # FILE_LIST=list/jewel_pp_90GeV.txt
-FILE_LIST=list/jewel_PbPb_90GeV_Ti590MeV.txt
+FILE_LIST=list/jewel_PbPb_90GeV_Ti300MeV.txt
 CONFIG=config/jewel.yaml
 ANALYSIS_CODE=analysis/jewel/analyze_jewel.py
 OUTPUT_DIR=/home/youqi/temp/$SLURM_ARRAY_JOB_ID
