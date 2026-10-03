@@ -25,3 +25,9 @@ cd alian
 module load alian
 ```
 
+# recompile
+```
+./install_with_yasp.sh
+module load alian
+```
+
