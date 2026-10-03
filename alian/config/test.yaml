@@ -37,6 +37,8 @@ output:
     RL: ['log', 1.0e-4, 1.0, 51]
     Rg: ['lin', -1.0, 0.6, 32]
     zg: ['lin', -1.0, 0.5, 30]
+    count: ['lin', -2, 200, 202]
+
   histograms:
     # define histograms with bins described in `bins`
     event: [1, "event", "Event count;;Counts", event]
@@ -64,6 +66,7 @@ output:
     jet_A_post_selection: [1, "jet_A_post_selection", "Jet area (post selection);jet area;Counts", jet_area]
     jet_pT_sub_post_selection: [1, "jet_pT_sub_post_selection", "Jet #it{p}_{T} spectrum (post selection);jet #it{p}_{T}^{sub} (GeV);Counts", jet_pT]
     jet_pT_sub_pT_post_selection: [2, "jet_pT_sub_pT_post_selection", "Background subtracted jet #it{p}_{T} vs unsubtracted jet #it{p}_{T} (post selection);jet #it{p}_{T} (GeV);jet #it{p}_{T}^{sub} (GeV)", jet_pT, jet_pT]
+    jet_mult: [1, "jet_mult", "jet multiplicity (pre-subtraction);number of jet fragments;jet count", count]
     eec: [2, "eec", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_low_phi: [2, "eec_low_phi", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
     eec_high_phi: [2, "eec_high_phi", "EEC;jet #it{p}_{T} (GeV);#it{R}_{L}", jet_pT, RL]
