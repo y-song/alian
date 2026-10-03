@@ -47,7 +47,7 @@ analysis:
 output:
   bins:
     jet_pT:     ['lin',  -2, 200, 101]
-    count:      ['lin',  -2,  40,  42]
+    count:      ['lin',  -2, 200, 202]
     residual:   ['lin', -80,  80, 160]
     rho:        ['lin',   0, 100, 100]
     area:       ['lin', -0.2, 2, 44]
@@ -115,7 +115,10 @@ output:
       "Groomed combined jet #it{p}_{T} vs subtracted groomed #it{p}_{T};#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{combined} (GeV)",
       jet_pT, jet_pT]
 
-
+    combined_sub_cutflow: [1, "combined_sub_cutflow",
+      "Combined jet cutflow;selections;jet count",
+      count]
+      
     # --- matched combined jets ---------------------------------------------
 
     pp_pTg_pp_pT_matched: [2, "pp_pTg_pp_pT_matched",

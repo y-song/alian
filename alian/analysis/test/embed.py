@@ -11,6 +11,7 @@ import numpy as np
 
 import heppyy
 fj = heppyy.load_cppyy('fastjet')
+alian = heppyy.load_cppyy("alian")
 from cppyy.gbl import std
 
 from ROOT import (
@@ -123,7 +124,6 @@ class EmbeddingAnalysis:
         self.n_event_displays = 30
         self.event_display_index = 0
         self.event_displays = []
-                
         self.output = Output.load(self.cfg)
         self.hists = self.output.hists
         self.logger.info("Embedding analysis initialized.")
@@ -190,23 +190,36 @@ class EmbeddingAnalysis:
         [self.hists['combined_pT'].Fill(j.pt(), weight) for j in combined_jets]
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
         self.hists['combined_njet_pp_njet'].Fill(pp_njet_pT20, len(combined_jets), weight)
-        
-        # ---  match pp jets to combined jets --- 
-        combined_jet_matched_indices = [-1 for x in range(0, len(combined_jets))]
-        for pp_ijet in range(0, len(pp_jets)):
-            pp_jet = pp_jets[pp_ijet]
-            combined_jet_matched = []
-            combined_ijet_matched = -1
-            for combined_ijet in range(0, len(combined_jets)):
-                combined_jet = combined_jets[combined_ijet]
-                # TO DO: Think about if we want to do this differently
-                if (combined_jet_matched_indices[combined_ijet] != -1): # skip if combined jet already has a match
-                    continue
-                if (self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold) and (self.is_geo_matched(combined_jet, pp_jet)):
-                    combined_jet_matched.append(combined_jet)
-                    combined_ijet_matched = combined_ijet
-            if (len(combined_jet_matched) == 1): # pp jet has a unique combined jet match
-                combined_jet_matched_indices[combined_ijet_matched] = pp_ijet
+
+        # --- match pp jets to combined jets ---
+        # Candidate matching follows the embedding-specific criteria used here:
+        #   1) mc_fraction > threshold
+        #   2) geometrical matching
+        # Candidate bookkeeping and the final mutual-uniqueness requirement follow
+        # the JetInfo/set_jet_info/is_match_unique pattern in Wenqing's
+        # pyjetty/alice_analysis/process/base/process_base.py.
+        for pp_ijet, pp_jet in enumerate(pp_jets):
+            for combined_ijet, combined_jet in enumerate(combined_jets):
+                if (self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold and self.is_geo_matched(combined_jet, pp_jet)):
+                    deltaR = pp_jet.delta_R(combined_jet)
+                    self.set_jet_info(pp_jet, combined_ijet, deltaR) # set info for pp_jet
+                    self.set_jet_info(combined_jet, pp_ijet, deltaR) # set info for combined_jet
+        for combined_jet in combined_jets:
+            self.hists['combined_sub_cutflow'].Fill(0.5, weight)
+            if combined_jet.has_user_info[alian.JetInfo]():
+                self.hists['combined_sub_cutflow'].Fill(1.5, weight)
+        combined_jet_matched_indices = [-1 for _ in combined_jets]  # -1 means there is no mutually unique match.
+        for pp_ijet, pp_jet in enumerate(pp_jets):
+            if not self.is_match_unique(pp_jet, combined_jets):
+                continue
+            pp_jet_info = pp_jet.user_info[alian.JetInfo]()
+            combined_ijet = pp_jet_info.closest_jet_index
+            combined_jet = combined_jets[combined_ijet]
+            pp_jet_info.match_index = combined_ijet
+            combined_jet_info = combined_jet.user_info[alian.JetInfo]()
+            combined_jet_info.match_index = pp_ijet
+            combined_jet_matched_indices[combined_ijet] = pp_ijet
+            self.hists['combined_sub_cutflow'].Fill(2.5, weight)
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
@@ -214,8 +227,8 @@ class EmbeddingAnalysis:
             gj = self.sd(j)
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
 
-            self.hists['combined_pTg'].Fill(gj.pt(), weight) 
-            self.hists['combined_pTg_sub_pTg'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight) 
+            self.hists['combined_pTg'].Fill(gj.pt(), weight)
+            self.hists['combined_pTg_sub_pTg'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight)
             self.hists['combined_pT_sub_pT'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
             self.hists['combined_area_sub_pT'].Fill(j.pt()-j.area()*rho, j.area(), weight)
 
@@ -245,15 +258,45 @@ class EmbeddingAnalysis:
     #---------------------------------------------------------------
     # Compare two jets and store matching candidates in user_info
     #---------------------------------------------------------------
+    #---------------------------------------------------------------
+    # Set 'jet_match' as a matching candidate in user_info of 'jet'
+    #
+    # Adapted directly from:
+    # pyjetty/alice_analysis/process/base/process_base.py
+    #---------------------------------------------------------------
+    def set_jet_info(self, jet, jet_match_index, deltaR):
+        if jet.has_user_info[alian.JetInfo]():
+            jet_user_info = jet.user_info[alian.JetInfo]()
+        else:
+            jet_user_info = alian.JetInfo()
+            jet.set_user_info(jet_user_info)
+        jet_user_info.matching_candidates.push_back(jet_match_index)
+        if deltaR < jet_user_info.closest_jet_deltaR:
+            jet_user_info.closest_jet_index = jet_match_index
+            jet_user_info.closest_jet_deltaR = deltaR
+    #---------------------------------------------------------------
+    # Return whether a jet has a unique match
+    #---------------------------------------------------------------
+    def is_match_unique(self, jet, matched_jets):
+        if jet.has_user_info[alian.JetInfo]():
+            jet_info = jet.user_info[alian.JetInfo]()
+            if jet_info.matching_candidates.size() == 1:
+                jet_match = matched_jets[jet_info.closest_jet_index]
+                if jet_match.has_user_info[alian.JetInfo]():
+                    jet_match_info = jet_match.user_info[alian.JetInfo]()
+                    if jet_match_info.matching_candidates.size() == 1:
+                        return True
+        return False
+
     def is_geo_matched(self, jet1, jet2):
         deltaR = jet1.delta_R(jet2)
-      
+
         # Add a matching candidate to the list if it is within the geometrical cut
         if deltaR < 0.6 * self.R:
             return True
         else:
             return False
-    
+
     #---------------------------------------------------------------
     # Return pt-fraction of tracks in jet_pp that are contained in jet_combined
     #---------------------------------------------------------------
@@ -262,15 +305,15 @@ class EmbeddingAnalysis:
         pt_contained = 0.
         for track in jet_combined.constituents():
           if track.user_index() >= 0:
-            pt_contained += track.pt()           
+            pt_contained += track.pt()
         return pt_contained/pt_total
-    
+
     def _combined_event(self, pp_tracks, oo_tracks):
         """Merge pp tracks with background tracks."""
         combined = list(oo_tracks)
         combined.extend(pp_tracks)
         return std.vector[fj.PseudoJet](combined)
-    
+
     def _find_perpcone_rho(self, ref_jet, combined, coneR=0.4):
         perpcone1 = fj.PseudoJet()
         perpcone1.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + np.pi/2, ref_jet.m())
@@ -281,7 +324,7 @@ class EmbeddingAnalysis:
           if perpcone1.delta_R(part) <= coneR or perpcone2.delta_R(part) <= coneR:
             perpcone_pt += part.perp()
         return perpcone_pt / (2*np.pi*coneR*coneR)
-    
+
     def _make_event_display(
         self,
         pp_tracks,
@@ -435,7 +478,7 @@ class EmbeddingAnalysis:
         # matched   -> black solid
         # unmatched -> black dashed
         #
-        # All jets here have already passed 
+        # All jets here have already passed
         # j.pt() - rho * j.area() selection.
         # -----------------------------------------------------------
         for combined_ijet in range(0, len(combined_jets)):
