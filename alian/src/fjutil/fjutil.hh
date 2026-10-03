@@ -62,6 +62,15 @@ namespace alian
 		uint16_t _track_sel;
 	};
 
+	class JetInfo : public fastjet::PseudoJet::UserInfoBase
+	{
+	public:
+		std::vector<int> matching_candidates;
+		int closest_jet_index = -1;
+		double closest_jet_deltaR = 1000.;
+		int match_index = -1;
+	};
+	
 	class Cluster : public fastjet::PseudoJet
 	{
 	public:
