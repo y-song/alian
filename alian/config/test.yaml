@@ -54,6 +54,7 @@ output:
     track_phi_eta: [2, "track_phi_eta", "Track #it{#phi} vs track #it{#eta};#it{#eta};#it{#phi}", eta, phi]
     track_in_jet_pT: [1, "track_in_jet_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
     track_in_jet_event_pT: [1, "track_in_jet_event_pT", "Track #it{p}_{T} spectrum;#it{p}_{T} (GeV);Counts", track_pT]
+    z: [1, "z", "Fragmentation function;#it{z};Counts", RL]
     jet_pT: [1, "jet_pT", "Jet #it{p}_{T} spectrum;jet #it{p}_{T} (GeV);Counts", jet_pT]
     jet_eta: [1, "jet_eta", "Jet #it{#eta};jet #it{#eta};Counts", eta]
     jet_eta_runnumber: [2, "jet_eta_runnumber", "Jet #it{#eta} vs run number;run number-564300;jet #it{#eta}", run_number, eta]
