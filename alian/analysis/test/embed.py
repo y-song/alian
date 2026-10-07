@@ -239,7 +239,9 @@ class EmbeddingAnalysis:
             j = combined_jets[combined_ijet]
             gj = self.sd(j)
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
-
+            combined_constituents = [t for t in j.constituents() if not t.is_pure_ghost()]
+            combined_g_constituents = [t for t in gj.constituents() if not t.is_pure_ghost()]
+            
             self.hists['combined_pTg'].Fill(gj.pt(), weight)
             self.hists['combined_pTg_sub_pTg'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight)
             self.hists['combined_pT_sub_pT'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
@@ -258,8 +260,8 @@ class EmbeddingAnalysis:
 
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho, weight)
                 self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho, weight)
-                self.hists['sub_n_pp_n_matched'].Fill(len(self.nonghost_constituents(pp_j)), len(self.nonghost_constituents(j)), weight)
-                self.hists['sub_ng_pp_ng_matched'].Fill(len(self.nonghost_constituents(pp_gj)), len(self.nonghost_constituents(gj)), weight)
+                self.hists['sub_n_pp_n_matched'].Fill(len(pp_j.constituents()), len(combined_constituents), weight)
+                self.hists['sub_ng_pp_ng_matched'].Fill(len(pp_gj.constituents()), len(combined_g_constituents), weight)
                 self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho-pp_gj.pt(), weight)
@@ -320,12 +322,6 @@ class EmbeddingAnalysis:
           if track.user_index() >= 0:
             pt_contained += track.pt()
         return pt_contained/pt_total
-
-    def nonghost_constituents(self, jet):
-        return [
-            t for t in jet.constituents()
-            if not t.is_pure_ghost()
-        ]
 
     def _combined_event(self, pp_tracks, oo_tracks):
         """Merge pp tracks with background tracks."""
