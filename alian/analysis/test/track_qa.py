@@ -91,9 +91,12 @@ class TrackQA(AnalysisBase):
             if (pt_sub < self.pt_min_jet):
                 continue
             has_acceptable_jet = True
-            [self.hists['track_in_jet_pT'].Fill(t.pt()) for t in j.constituents()]
-            [self.hists['z'].Fill(t.pt()/j.pt()) for t in j.constituents()]
-            self.hists['jet_mult'].Fill(len(j.constituents()))
+
+            constituents = [t for t in j.constituents() if not t.is_pure_ghost()]
+            [self.hists['track_in_jet_pT'].Fill(t.pt()) for t in constituents]
+            [self.hists['z'].Fill(t.pt()/j.pt()) for t in constituents]
+            self.hists['jet_mult'].Fill(len(constituents))
+            
             self.do_eec(j, "eec")
             if (j.phi() > 0 and j.phi() < 2.0):
                 self.hists['jet_pT_sub_pT_low_phi'].Fill(j.pt(), pt_sub)
@@ -101,6 +104,7 @@ class TrackQA(AnalysisBase):
             elif (j.phi() > 3.2 and j.phi() < 4.8):
                 self.hists['jet_pT_sub_pT_high_phi'].Fill(j.pt(), pt_sub)
                 self.do_eec(j, "eec_high_phi")
+                
         if has_acceptable_jet == False:
             return
         self.hists['event'].Fill(2.5)
