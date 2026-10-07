@@ -169,7 +169,6 @@ class EmbeddingAnalysis:
         weight = pp_ev.data['weight']
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
-        pp_njet_pT20 = sum(j.pt() > 20.0 for j in pp_jets)
 
         # --- combined event: pp tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
@@ -189,9 +188,8 @@ class EmbeddingAnalysis:
         combined_jets.sort(key=lambda j: j.pt() - rho*j.area(), reverse=True)
         [self.hists['combined_pT'].Fill(j.pt(), weight) for j in combined_jets]
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
-        self.hists['combined_njet_pp_njet'].Fill(pp_njet_pT20, len(combined_jets), weight)
+        self.hists['combined_njet_pp_njet'].Fill(len(pp_jets), len(combined_jets), weight)
 
-        # --- match pp jets to combined jets ---
         # Candidate matching follows the embedding-specific criteria used here:
         #   1) mc_fraction > threshold
         #   2) geometrical matching
@@ -204,10 +202,25 @@ class EmbeddingAnalysis:
                     deltaR = pp_jet.delta_R(combined_jet)
                     self.set_jet_info(pp_jet, combined_ijet, deltaR) # set info for pp_jet
                     self.set_jet_info(combined_jet, pp_ijet, deltaR) # set info for combined_jet
+
+        # --- fill cut flow histogram ---
         for combined_jet in combined_jets:
-            self.hists['combined_sub_cutflow'].Fill(0.5, weight)
+            self.hists['combined_sub_cutflow'].Fill(0.5, weight) # all combined jets
             if combined_jet.has_user_info[alian.JetInfo]():
-                self.hists['combined_sub_cutflow'].Fill(1.5, weight)
+                self.hists['candidate_dR'].Fill(combined_jet.user_info[alian.JetInfo]().closest_jet_deltaR, weight)
+            
+            deltaR_matches = []
+            for pp_jet in pp_jets:
+                if self.is_geo_matched(combined_jet, pp_jet):
+                    deltaR_matches.append(pp_jet)  
+            if len(deltaR_matches) > 0:
+                self.hists['combined_sub_cutflow'].Fill(1.5, weight) # combined jets with pp jets within delta R    
+                
+                for pp_jet in deltaR_matches:
+                    if self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold:
+                        self.hists['combined_sub_cutflow'].Fill(2.5, weight) # combined jets with pp jets within delta R and mc fraction
+                        break
+
         combined_jet_matched_indices = [-1 for _ in combined_jets]  # -1 means there is no mutually unique match.
         for pp_ijet, pp_jet in enumerate(pp_jets):
             if not self.is_match_unique(pp_jet, combined_jets):
@@ -219,7 +232,7 @@ class EmbeddingAnalysis:
             combined_jet_info = combined_jet.user_info[alian.JetInfo]()
             combined_jet_info.match_index = pp_ijet
             combined_jet_matched_indices[combined_ijet] = pp_ijet
-            self.hists['combined_sub_cutflow'].Fill(2.5, weight)
+            self.hists['combined_sub_cutflow'].Fill(3.5, weight) # combined jets with pp jets within delta R and mc fraction, and unique matches in both direction
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
