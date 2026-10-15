@@ -162,7 +162,8 @@ class EmbeddingAnalysis:
     # -----------------------------------------------------------------------
 
     def analyze_event_pair(self, pp_ev, oo_ev):
-        # --- pp particles, tracks and pp jets ---
+
+        # --- pp particles, tracks, particle jets and det jets ---
         pp_particles = get_selected_particles(pp_ev, self.pp_selector.track)
         pp_tracks = get_selected_tracks(pp_ev, self.pp_selector.track)
         pp_particle_jets = self.pp_jet_finder.find_jets(pp_particles, use_area=False)
@@ -177,31 +178,10 @@ class EmbeddingAnalysis:
             return
         pp_jets = self.reject_high_track_pt_jets(pp_jets_preselect)
 
-        # matching:
-        #   1) geometrical matching
-        # Candidate bookkeeping and the final mutual-uniqueness requirement follow
-        # the JetInfo/set_jet_info/is_match_unique pattern in Wenqing's
-        # pyjetty/alice_analysis/process/base/process_base.py.
-        for pp_particle_ijet, pp_particle_jet in enumerate(pp_particle_jets):
-            for pp_ijet, pp_jet in enumerate(pp_jets):
-                if (self.is_geo_matched(pp_jet, pp_particle_jet)):
-                    deltaR = pp_particle_jet.delta_R(pp_jet)
-                    self.set_jet_info(pp_particle_jet, pp_ijet, deltaR) # set info for pp_particle_jet
-                    self.set_jet_info(pp_jet, pp_particle_ijet, deltaR) # set info for pp_jet
-
-        pp_jet_matched_indices = [-1 for _ in pp_jets]  # -1 means there is no mutually unique match.
-        for pp_particle_ijet, pp_particle_jet in enumerate(pp_particle_jets):
-            if not self.is_match_unique(pp_particle_jet, pp_jets):
-                continue
-            pp_particle_jet_info = pp_particle_jet.user_info[alian.JetInfo]()
-            pp_ijet = pp_particle_jet_info.closest_jet_index
-            pp_jet = pp_jets[pp_ijet]
-            pp_particle_jet_info.match_index = pp_ijet
-            pp_jet_info = pp_jet.user_info[alian.JetInfo]()
-            pp_jet_info.match_index = pp_particle_ijet
-            pp_jet_matched_indices[pp_ijet] = pp_particle_ijet
-
-        pp_jets = [j for index, j in enumerate(pp_jets) if pp_jet_matched_indices[index] >= 0] # from now on, only look at pp jets with a truth match
+        # --- match pp det jets to pp partice jets ---
+        pp_jet_matched_indices = self.match_pp_particle_to_pp_det(pp_particle_jets, pp_jets)
+        pp_jets = [j for index, j in enumerate(pp_jets) if pp_jet_matched_indices[index] >= 0] 
+        # !!! from now on, only look at pp jets with a truth match !!!
         pp_jet_tracks = []
         for j in pp_jets:
             pp_jet_tracks.extend(j.constituents())        
@@ -209,7 +189,7 @@ class EmbeddingAnalysis:
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
         
-        # --- combined event: pp tracks + oo tracks ---
+        # --- combined event: pp jet tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
         combined = self._combined_event(pp_jet_tracks, oo_tracks)
 
@@ -229,52 +209,29 @@ class EmbeddingAnalysis:
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
         self.hists['combined_njet_pp_njet'].Fill(len(pp_jets), len(combined_jets), weight)
 
-        for j in pp_jets:
-            j.set_user_info(alian.JetInfo())
-        
-        # Candidate matching follows the embedding-specific criteria used here:
-        #   1) mc_fraction > threshold
-        #   2) geometrical matching
-        # Candidate bookkeeping and the final mutual-uniqueness requirement follow
-        # the JetInfo/set_jet_info/is_match_unique pattern in Wenqing's
-        # pyjetty/alice_analysis/process/base/process_base.py.
-        for pp_ijet, pp_jet in enumerate(pp_jets):
-            for combined_ijet, combined_jet in enumerate(combined_jets):
-                if (self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold and self.is_geo_matched(combined_jet, pp_jet)):
-                    deltaR = pp_jet.delta_R(combined_jet)
-                    self.set_jet_info(pp_jet, combined_ijet, deltaR) # set info for pp_jet
-                    self.set_jet_info(combined_jet, pp_ijet, deltaR) # set info for combined_jet
+        # Match the retained pp det jets to combined jets.
+        # This starts a fresh matching pass, clearing the truth-match JetInfo.
+        combined_jet_matched_indices = self.match_pp_det_to_combined(pp_jets, combined_jets)
 
         # --- fill cut flow histogram ---
         for combined_jet in combined_jets:
             self.hists['combined_sub_cutflow'].Fill(0.5, weight) # all combined jets
-            if combined_jet.has_user_info[alian.JetInfo]():
-                self.hists['candidate_dR'].Fill(combined_jet.user_info[alian.JetInfo]().closest_jet_deltaR, weight)
-            
+            combined_jet_info = combined_jet.user_info[alian.JetInfo]()
+            if combined_jet_info.matching_candidates.size() > 0:
+                self.hists['candidate_dR'].Fill(combined_jet_info.closest_jet_deltaR, weight)
             deltaR_matches = []
             for pp_jet in pp_jets:
                 if self.is_geo_matched(combined_jet, pp_jet):
                     deltaR_matches.append(pp_jet)  
             if len(deltaR_matches) > 0:
-                self.hists['combined_sub_cutflow'].Fill(1.5, weight) # combined jets with pp jets within delta R    
-                
+                self.hists['combined_sub_cutflow'].Fill(1.5, weight) # combined jets with pp jets within delta R
                 for pp_jet in deltaR_matches:
                     if self.mc_fraction(pp_jet, combined_jet) > self.mc_fraction_threshold:
                         self.hists['combined_sub_cutflow'].Fill(2.5, weight) # combined jets with pp jets within delta R and mc fraction
                         break
-
-        combined_jet_matched_indices = [-1 for _ in combined_jets]  # -1 means there is no mutually unique match.
-        for pp_ijet, pp_jet in enumerate(pp_jets):
-            if not self.is_match_unique(pp_jet, combined_jets):
-                continue
-            pp_jet_info = pp_jet.user_info[alian.JetInfo]()
-            combined_ijet = pp_jet_info.closest_jet_index
-            combined_jet = combined_jets[combined_ijet]
-            pp_jet_info.match_index = combined_ijet
-            combined_jet_info = combined_jet.user_info[alian.JetInfo]()
-            combined_jet_info.match_index = pp_ijet
-            combined_jet_matched_indices[combined_ijet] = pp_ijet
-            self.hists['combined_sub_cutflow'].Fill(3.5, weight) # combined jets with pp jets within delta R and mc fraction, and unique matches in both direction
+        for pp_ijet in combined_jet_matched_indices:
+            if pp_ijet >= 0:
+                self.hists['combined_sub_cutflow'].Fill(3.5, weight) # mutually unique matches
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
@@ -319,7 +276,7 @@ class EmbeddingAnalysis:
             if (j.pt() < 100):
                 jets.append(j)
                 continue
-            for c in j.constituents(): # only check for jets with jet pT > 100 GeV
+            for c in j.constituents(): # only check jets with jet pT >= 100 GeV
                 if c.pt() > 100:
                     highpttrack = True
                     break
@@ -327,9 +284,52 @@ class EmbeddingAnalysis:
                 jets.append(j)
         return jets
 
-    #---------------------------------------------------------------
-    # Compare two jets and store matching candidates in user_info
-    #---------------------------------------------------------------
+    def match_pp_particle_to_pp_det(self, particle_jets, det_jets):
+        """Return the particle-jet index for each det jet, or -1."""
+        return self.match_jets(particle_jets, det_jets)
+
+    def match_pp_det_to_combined(self, det_jets, combined_jets):
+        """Return the det-jet index for each combined jet, or -1."""
+        return self.match_jets(det_jets, combined_jets, require_mc_fraction=True)
+
+    def match_jets(self, source_jets, target_jets, require_mc_fraction=False):
+        """Find mutually unique matches; return one source index per target jet.
+
+        Every pass replaces JetInfo on both collections. Previous matching
+        metadata is discarded; returned index lists remain valid for the
+        collection ordering used in that pass.
+
+        All candidates must pass the geometrical cut. Embedding candidates
+        must additionally pass mc_fraction(source, target) > threshold.
+        """
+        for jets in (source_jets, target_jets):
+            for jet in jets:
+                jet.set_user_info(alian.JetInfo())
+
+        for source_index, source_jet in enumerate(source_jets):
+            for target_index, target_jet in enumerate(target_jets):
+                if not self.is_geo_matched(source_jet, target_jet):
+                    continue
+                if require_mc_fraction:
+                    if not (self.mc_fraction(source_jet, target_jet) > self.mc_fraction_threshold):
+                        continue
+                deltaR = source_jet.delta_R(target_jet)
+                self.set_jet_info(source_jet, target_index, deltaR)
+                self.set_jet_info(target_jet, source_index, deltaR)
+
+        matched_indices = [-1 for _ in target_jets]
+        for source_index, source_jet in enumerate(source_jets):
+            if not self.is_match_unique(source_jet, target_jets):
+                continue
+            source_info = source_jet.user_info[alian.JetInfo]()
+            target_index = source_info.closest_jet_index
+            target_info = target_jets[target_index].user_info[alian.JetInfo]()
+            source_info.match_index = target_index
+            target_info.match_index = source_index
+            matched_indices[target_index] = source_index
+
+        return matched_indices
+
     #---------------------------------------------------------------
     # Set 'jet_match' as a matching candidate in user_info of 'jet'
     #

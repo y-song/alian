@@ -98,13 +98,19 @@
 # pp MC + OO MB data embedding
 1986633: only 11 jobs finished
 1986696  
+1998387: New matching  
+2001196: 10/14/26. Embed pp det jets and not events. Implement outlier rejection and pp det matching to pp truth.  
 
 # OO JE derived data
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
 1984403: track QA, 0-100%, jet finder and analysis pT > 20 GeV, subjobs 24, 54, 60, 68 didn't run  
 1986538: Rerun failed subjobs from 1984403  
+1998266: subjobs 9, 10, 18, 45, 52, 53, 54, 57, 60, 68, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 95, 96, 97, 98, 106, 112, 118 didn't run  
+1998422: Rerun failed subjobs from 1998266  
+1998609: Ignore ghosts for track in jet spectrum  
 
 # OO MB data
 1943944: 0-100%, jet finder and analysis pT > 10 GeV  
 1982382: 0-100%, jet finder and analysis pT > 20 GeV, subjob 7 didn't finish  
 1986542: Rerun failed subjob from 1982382  
+1998732: Ignore ghosts for track in jet spectrum  
