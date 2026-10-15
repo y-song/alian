@@ -64,6 +64,8 @@ void ProcessCanvas(TCanvas *Canvas)
     Canvas->SetFrameBorderMode(0);
     Canvas->SetFrameLineWidth(1);
     Canvas->SetFrameBorderMode(1);
+    Canvas->SetGridx(1);
+    Canvas->SetGridy(1);
 }
 
 void FormatHist(TLegend *l, TH1 *hist, std::string text, int markercolor = 1, int markerstyle = 8)
@@ -134,16 +136,16 @@ TH1D *DivideByBinWidth(TH1D *input_hist)
 // divide by bin width, and normalize by njets. Returns nullptr if histogram not found.
 TH1D *LoadAndProcess(TFile *f, const char *histName, double pt_lo, double pt_hi, double scale=1.0)
 {
-    TH2 *h_JetPt_SubPt = (TH2 *)f->Get("jet_pT_sub_pT_post_selection");
-    TH2 *h_JetPt_SubPt_cut = (TH2 *)h_JetPt_SubPt->Clone(Form("%s_cut", h_JetPt_SubPt->GetName()));
-    h_JetPt_SubPt_cut->GetYaxis()->SetRangeUser(pt_lo, pt_hi);
-    TH1D *h_JetPt = h_JetPt_SubPt_cut->ProjectionX(Form("%s_proj", h_JetPt_SubPt_cut->GetName()));
-    std::cout << "Number of jets from pT " << pt_lo + 1 << "-" << pt_hi << ": ";
-    double njets = h_JetPt->Integral((int)h_JetPt->FindBin(pt_lo), (int)h_JetPt->FindBin(pt_hi));
-    std::cout << njets << std::endl;
-    TCanvas *c_test = new TCanvas();
-    h_JetPt->Draw();
-    c_test->SaveAs(Form("output/jet_pt_check_%i_%i.pdf", (int)pt_lo, (int)pt_hi));
+    // TH2 *h_JetPt_SubPt = (TH2 *)f->Get("jet_pT_sub_pT_post_selection");
+    // TH2 *h_JetPt_SubPt_cut = (TH2 *)h_JetPt_SubPt->Clone(Form("%s_cut", h_JetPt_SubPt->GetName()));
+    // h_JetPt_SubPt_cut->GetYaxis()->SetRangeUser(pt_lo, pt_hi);
+    // TH1D *h_JetPt = h_JetPt_SubPt_cut->ProjectionX(Form("%s_proj", h_JetPt_SubPt_cut->GetName()));
+    // std::cout << "Number of jets from pT " << pt_lo + 1 << "-" << pt_hi << ": ";
+    // double njets = h_JetPt->Integral((int)h_JetPt->FindBin(pt_lo), (int)h_JetPt->FindBin(pt_hi));
+    // std::cout << njets << std::endl;
+    // TCanvas *c_test = new TCanvas();
+    // h_JetPt->Draw();
+    // c_test->SaveAs(Form("output/jet_pt_check_%i_%i.pdf", (int)pt_lo, (int)pt_hi));
     
     TH2 *h2 = (TH2 *)f->Get(histName);
     if (!h2) {
@@ -154,7 +156,8 @@ TH1D *LoadAndProcess(TFile *f, const char *histName, double pt_lo, double pt_hi,
     h2_cut->GetXaxis()->SetRangeUser(pt_lo, pt_hi);
     TH1D *proj  = h2_cut->ProjectionY(Form("%s_proj", histName));
     TH1D *hdivw = DivideByBinWidth((TH1D *)proj->Clone(Form("h_%s", histName)));
-    hdivw->Scale(scale / njets);
+    // hdivw->Scale(scale / njets);
+    hdivw->Scale(1.0/hdivw->Integral());
     return hdivw;
 }
 
@@ -171,9 +174,9 @@ void plot_inclusive_eec(std::string file_name)
     TFile *f     = new TFile(infile.c_str(), "READ");
     TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
 
-    TH1D *h_jet_eec_1 = LoadAndProcess(f, "eec", 20.0, 40.0);
-    TH1D *h_jet_eec_2 = LoadAndProcess(f, "eec", 40.0, 60.0);
-    TH1D *h_jet_eec_3 = LoadAndProcess(f, "eec", 60.0, 80.0);
+    // TH1D *h_jet_eec_1 = LoadAndProcess(f, "eec_low_phi", 20.0, 40.0);
+    TH1D *h_jet_eec_2 = LoadAndProcess(f, "eec_low_phi", 40.0, 60.0);
+    TH1D *h_jet_eec_3 = LoadAndProcess(f, "eec_high_phi", 40.0, 60.0);
 
     // {hist name in file, legend label, color, marker style}
     struct HistConfig {
@@ -183,9 +186,9 @@ void plot_inclusive_eec(std::string file_name)
         TH1D       *hist;
     };
     std::vector<HistConfig> configs = {
-        {"20-40", kBlue,     kFullSquare    , h_jet_eec_1},
+        // {"40-60", kBlue,     kFullSquare    , h_jet_eec_1},
         {"40-60", kGreen+2,  kFullDiamond   , h_jet_eec_2},
-        {"60-80", kRed,      kFullTriangleUp, h_jet_eec_3},
+        {"40-60", kRed,      kFullTriangleUp, h_jet_eec_3},
     };
 
     // Canvas
@@ -209,8 +212,8 @@ void plot_inclusive_eec(std::string file_name)
         TH1D *h = cfg.hist;
         FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
         h->GetXaxis()->SetRangeUser(0.01, 0.4);
-        h->GetYaxis()->SetRangeUser(0, 8);
-        h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
+        h->GetYaxis()->SetRangeUser(0, 0.15);
+        // h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
 
         if (first) {
             h->Draw("L same");
@@ -223,7 +226,7 @@ void plot_inclusive_eec(std::string file_name)
     // l->Draw("same");
 
     // Save canvas
-    std::string fname = "/home/youqi/alian/alian/output/inclusive_eec_R" + jetR + "_" + file_name + ".pdf";
+    std::string fname = "/home/youqi/alian/alian/output/inclusive_eec_low_high_phi_R" + jetR + "_" + file_name + ".pdf";
     c->SaveAs(fname.c_str());
     delete c;
     delete l;
@@ -231,7 +234,7 @@ void plot_inclusive_eec(std::string file_name)
     // Save processed histograms to output file
     f_out->cd();
 
-    h_jet_eec_1->Write();
+    // h_jet_eec_1->Write();
     h_jet_eec_2->Write();
     h_jet_eec_3->Write();    
 
