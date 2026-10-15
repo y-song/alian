@@ -8,3 +8,8 @@ eventTree:
   - track_pt
   - track_eta
   - track_phi
+  - truth_pt
+  - truth_eta
+  - truth_phi
+  - truth_e
+  - pdg

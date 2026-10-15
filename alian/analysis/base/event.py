@@ -13,7 +13,7 @@ class Event:
         self.centrality = ev.data.get("centrality", None)
         self.occupancy = ev.data.get("occupancy", None)
         self.weight = ev.data.get("weight", 1.0)
-        self.pTHat = ev.data.get("pTHat", None)
+        self.pTHat = ev.data.get("ptHat", None)
         self.vtx_z = ev.data.get("vtx_z", None)
         self.event_sel = EventSel(ev.data["event_sel"]) if "event_sel" in ev.data else None
         self.trig_sel = TrigSel(ev.data["trig_sel"]) if "trig_sel" in ev.data else None
@@ -46,7 +46,6 @@ def get_tracks(ev):
         ev.data["track_sel"],
         0,
     )
-
 
 def get_selected_tracks(ev, selector, index_offset=0):
     """Get selected tracks from an event (track selections applied)."""
@@ -82,6 +81,23 @@ def get_selected_tracks_from_pxpypze(ev, selector):
         ]
     )
     return std.vector[fj.PseudoJet]([t for t in tracks if selector.selects(t)])
+
+def get_selected_particles(ev, selector, index_offset=0):
+    """Get selected truth particles from an event."""
+    sel = np.zeros(len(ev.data["truth_pt"]), dtype=np.uint8) # will mess up charge of particles
+    return std.vector[fj.PseudoJet](
+        [
+            t
+            for t in alian.numpy_ptetaphi_to_tracks( # defined in src/fjutil/fjutil.cxx
+                ev.data["truth_pt"],
+                ev.data["truth_eta"],
+                ev.data["truth_phi"],
+                sel,
+                index_offset,
+            )
+            if selector.selects(t)
+        ]
+    )
 
 def get_partons(ev):
     """Get the two hard partons from an event (stored as event-level scalars)."""
@@ -125,7 +141,6 @@ def get_clusters(ev):
         ev.data["cluster_matched_track_sel"],
         0,
     )
-
 
 def get_selected_clusters(ev, selector):
     """Get selected clusters from an event (cluster selections applied)."""

@@ -23,7 +23,7 @@ from alian.analysis.base import (
     set_up_logger, delta_R,
 )
 from alian.analysis.base.output import Output
-from alian.analysis.base.event import Event, get_selected_tracks
+from alian.analysis.base.event import Event, get_selected_tracks, get_selected_particles
 from alian.analysis.base.utils import read_yaml, is_slurm
 from alian.io.data_io import DataInput
 
@@ -162,17 +162,56 @@ class EmbeddingAnalysis:
     # -----------------------------------------------------------------------
 
     def analyze_event_pair(self, pp_ev, oo_ev):
-        # --- pp tracks and pp jets ---
+        # --- pp particles, tracks and pp jets ---
+        pp_particles = get_selected_particles(pp_ev, self.pp_selector.track)
         pp_tracks = get_selected_tracks(pp_ev, self.pp_selector.track)
-        pp_jets = self.pp_jet_finder.find_jets(pp_tracks, use_area=False)
-        pp_jets = [j for j in pp_jets if j.pt() >= self.pt_min_pp_jet]
+        pp_particle_jets = self.pp_jet_finder.find_jets(pp_particles, use_area=False)
+        pp_particle_jets = [j for j in pp_particle_jets if j.pt() >= self.pt_min_pp_jet]
+        pp_jets_preselect = self.pp_jet_finder.find_jets(pp_tracks, use_area=False)
+        pp_jets_preselect = [j for j in pp_jets_preselect if j.pt() >= self.pt_min_pp_jet]
         weight = pp_ev.data['weight']
+        pTHat = pp_ev.data['ptHat']
+        if (len(pp_particle_jets) > 0 and pp_particle_jets[0].pt() > 6 * pTHat):
+            return
+        if (len(pp_jets_preselect) > 0 and pp_jets_preselect[0].pt() > 4 * pTHat):
+            return
+        pp_jets = self.reject_high_track_pt_jets(pp_jets_preselect)
+
+        # matching:
+        #   1) geometrical matching
+        # Candidate bookkeeping and the final mutual-uniqueness requirement follow
+        # the JetInfo/set_jet_info/is_match_unique pattern in Wenqing's
+        # pyjetty/alice_analysis/process/base/process_base.py.
+        for pp_particle_ijet, pp_particle_jet in enumerate(pp_particle_jets):
+            for pp_ijet, pp_jet in enumerate(pp_jets):
+                if (self.is_geo_matched(pp_jet, pp_particle_jet)):
+                    deltaR = pp_particle_jet.delta_R(pp_jet)
+                    self.set_jet_info(pp_particle_jet, pp_ijet, deltaR) # set info for pp_particle_jet
+                    self.set_jet_info(pp_jet, pp_particle_ijet, deltaR) # set info for pp_jet
+
+        pp_jet_matched_indices = [-1 for _ in pp_jets]  # -1 means there is no mutually unique match.
+        for pp_particle_ijet, pp_particle_jet in enumerate(pp_particle_jets):
+            if not self.is_match_unique(pp_particle_jet, pp_jets):
+                continue
+            pp_particle_jet_info = pp_particle_jet.user_info[alian.JetInfo]()
+            pp_ijet = pp_particle_jet_info.closest_jet_index
+            pp_jet = pp_jets[pp_ijet]
+            pp_particle_jet_info.match_index = pp_ijet
+            pp_jet_info = pp_jet.user_info[alian.JetInfo]()
+            pp_jet_info.match_index = pp_particle_ijet
+            pp_jet_matched_indices[pp_ijet] = pp_particle_ijet
+
+        pp_jets = [j for index, j in enumerate(pp_jets) if pp_jet_matched_indices[index] >= 0] # from now on, only look at pp jets with a truth match
+        pp_jet_tracks = []
+        for j in pp_jets:
+            pp_jet_tracks.extend(j.constituents())        
+        
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
-
+        
         # --- combined event: pp tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
-        combined = self._combined_event(pp_tracks, oo_tracks)
+        combined = self._combined_event(pp_jet_tracks, oo_tracks)
 
         # --- rho from bge on the combined event ---
         self.bge.set_particles(combined)
@@ -190,6 +229,9 @@ class EmbeddingAnalysis:
         [self.hists['sub_pT'].Fill(j.pt() - rho*j.area(), weight) for j in combined_jets]
         self.hists['combined_njet_pp_njet'].Fill(len(pp_jets), len(combined_jets), weight)
 
+        for j in pp_jets:
+            j.set_user_info(alian.JetInfo())
+        
         # Candidate matching follows the embedding-specific criteria used here:
         #   1) mc_fraction > threshold
         #   2) geometrical matching
@@ -270,6 +312,21 @@ class EmbeddingAnalysis:
     # -----------------------------------------------------------------------
     # helpers
     # -----------------------------------------------------------------------
+    def reject_high_track_pt_jets(self, jets_preselect):
+        jets = []
+        for j in jets_preselect:
+            highpttrack = False
+            if (j.pt() < 100):
+                jets.append(j)
+                continue
+            for c in j.constituents(): # only check for jets with jet pT > 100 GeV
+                if c.pt() > 100:
+                    highpttrack = True
+                    break
+            if not highpttrack:
+                jets.append(j)
+        return jets
+
     #---------------------------------------------------------------
     # Compare two jets and store matching candidates in user_info
     #---------------------------------------------------------------
@@ -674,7 +731,7 @@ if __name__ == '__main__':
         help="YAML describing the pp tree structure (default: mc_tstruct.yaml).",
     )
     parser.add_argument(
-        '-t2', '--oo-tree-struct', type=str, default=None,
+        '-t2', '--oo-tree-struct', type=str, default="config/run3_tstruct.yaml",
         help="YAML describing the OO tree structure (default: auto-detected).",
     )
     parser.add_argument(
