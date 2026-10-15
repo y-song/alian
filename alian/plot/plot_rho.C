@@ -64,7 +64,8 @@ TH1D *GetRhoPDF(TH2 *h2, double cent_lo, double cent_hi, int color, const char *
 void plot_rho(std::string file_name)
 {
     SetStyle();
-
+    
+    // "/home/youqi/alian/alian/output/embed_092426.root";
     std::string infile  = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
     TFile *f = new TFile(infile.c_str(), "READ");
     TH2 *h_cent_rho = (TH2 *)f->Get("cent_rho");
@@ -82,8 +83,8 @@ void plot_rho(std::string file_name)
     h_0_10->GetXaxis()->SetRangeUser(0, 50);
     h_0_10->GetYaxis()->SetRangeUser(1e-5, 1);
     h_0_10->Draw("hist");
-    // h_10_30->Draw("hist same");
-    // h_30_100->Draw("hist same");
+    h_10_30->Draw("hist same");
+    h_30_100->Draw("hist same");
 
     TLegend *l = new TLegend(0.6, 0.65, 0.88, 0.85);
     l->AddEntry(h_0_10, "0#minus10%", "l");
@@ -93,18 +94,18 @@ void plot_rho(std::string file_name)
 
     c->SaveAs("output/rho_pdf.png");
 
-    TH2 *h_sigma_rho = (TH2 *)f->Get("sigma_rho");
-    h_sigma_rho->GetXaxis()->SetRangeUser(0, 30);
-    h_sigma_rho->GetXaxis()->SetTitle("#rho (GeV)");
-    h_sigma_rho->GetYaxis()->SetRangeUser(0, 10);
-    h_sigma_rho->GetYaxis()->SetTitle("#sigma (GeV)");
-    h_sigma_rho->GetZaxis()->SetRangeUser(1, 1e5);
-    h_sigma_rho->GetZaxis()->SetTitle("Event counts");
+    // TH2 *h_sigma_rho = (TH2 *)f->Get("sigma_rho");
+    // h_sigma_rho->GetXaxis()->SetRangeUser(0, 30);
+    // h_sigma_rho->GetXaxis()->SetTitle("#rho (GeV)");
+    // h_sigma_rho->GetYaxis()->SetRangeUser(0, 10);
+    // h_sigma_rho->GetYaxis()->SetTitle("#sigma (GeV)");
+    // h_sigma_rho->GetZaxis()->SetRangeUser(1, 1e5);
+    // h_sigma_rho->GetZaxis()->SetTitle("Event counts");
 
-    TCanvas *c2 = new TCanvas();
-    c2->cd();
-    gPad->SetLogz();
-    gPad->SetRightMargin(0.15);
-    h_sigma_rho->Draw("colz");
-    c2->SaveAs("output/sigma_rho.png");
+    // TCanvas *c2 = new TCanvas();
+    // c2->cd();
+    // gPad->SetLogz();
+    // gPad->SetRightMargin(0.15);
+    // h_sigma_rho->Draw("colz");
+    // c2->SaveAs("output/sigma_rho.png");
 }

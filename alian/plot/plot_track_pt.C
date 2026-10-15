@@ -85,7 +85,7 @@ void plot_track_pt()
 {
     SetStyle();
     
-    TFile *f = new TFile("/rstorage/youqi/1934255/AnalysisResultsFinal.root", "READ");
+    TFile *f = new TFile("/rstorage/youqi/1940255/AnalysisResultsFinal.root", "READ");
     TH1D *h1 = (TH1D *)f->Get("track_pT");
     TH1D *h2 = (TH1D *)f->Get("track_in_jet_event_pT");
     TH1D *h3 = (TH1D *)f->Get("track_in_jet_pT");
@@ -106,5 +106,5 @@ void plot_track_pt()
     h3->Draw("same");
     leg1->Draw("same");
 
-    c->SaveAs("output/oo_mb_track_pt.png");
+    c->SaveAs("output/oo_derived_track_pt.png");
 }
