@@ -10,7 +10,7 @@ jet_finder:
 
 analysis:
   pt_min_eec: 0.150
-  pt_min_jet: 10
+  pt_min_jet: 100.0
   z_cut: 0.1
   wake: false
 

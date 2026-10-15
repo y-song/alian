@@ -12,8 +12,8 @@
 #include <TLine.h>
 #include <TFile.h>
 // Example Usage:
-// root -l 'analysis/test/plot_eec.C("1652402", "100", "120", "(vacuum) pp")'
-// root -l 'analysis/test/plot_eec.C("PbPb_100GeV", "100", "120", "PbPb 0#minus10%")'
+// root -l 'plot/plot_eec.C("1652402", "100", "120", "(vacuum) pp")'
+// root -l 'plot/plot_eec.C("PbPb_100GeV", "100", "120", "PbPb 0#minus10%")'
 
 using namespace std;
 
@@ -113,7 +113,7 @@ void addLegendInfo(TLegend *l, TString jetR, TString plot_text)
 {
     l->SetTextSize(0.045);
     l->AddEntry("NULL", "JEWEL " + plot_text, "h");
-    l->AddEntry("NULL", "#sqrt{#it{s}} = 2.76 TeV, #hat{#it{p}}_{T} > 100 GeV", "h");
+    l->AddEntry("NULL", "#sqrt{#it{s}} = 5.02 TeV, #hat{#it{p}}_{T} > 90 GeV", "h");
     l->AddEntry("NULL", "Anti-#it{k}_{T} full jets, #it{R} = " + jetR, "h");
     l->AddEntry("NULL", "#it{p}_{T}^{track} > 1 GeV/#it{c}", "h");
     l->SetTextSize(0.037);
@@ -157,7 +157,8 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     gStyle->SetOptStat(0);
     SetStyle();
 
-    std::string infile  = "/rstorage/youqi/hybrid/" + file_name + "/AnalysisResultsFinal.root";
+    // std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    std::string infile  = "/home/youqi/temp/" + file_name + "/AnalysisResultsFinal.root";
     std::string jetR    = "04";
     std::string jetR_str = "0.4";
     std::string outfile = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
@@ -199,12 +200,12 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
         TH1D       *hist;
     };
     std::vector<HistConfig> configs = {
-        {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
+        // {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
         // {"SD jet EEC", kGray+2, kFullCircle , h_sdjet_eec},
-        // {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
-        // {"EEC,aa", kBlue,     kFullSquare    , h_aa},
-        // {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
-        // {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
+        {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
+        {"EEC,aa", kBlue,     kFullSquare    , h_aa},
+        {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
+        {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
         // {"Rg",     kRed,      kFullTriangleUp, h_rg},
     };
 

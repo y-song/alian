@@ -23,13 +23,13 @@ struct FilePair {
 // ── 5.02 TeV ──────────────────────────────────────────────────
 // recoil on:
 const std::vector<FilePair> kPairs = {
-    {"output/eec_R04_100_120_1703291.root",
+    {"output/eec_R04_100_120_1834257.root",
      "output/eec_R04_100_120_1707049.root",
      "z_{cut} = 0.1", kRed,     1},
-    {"output/eec_R04_100_120_1736222.root",
+    {"output/eec_R04_100_120_1835349.root",
      "output/eec_R04_100_120_1737222.root",
      "z_{cut} = 0.2", kBlue,    1},
-    {"output/eec_R04_100_120_1739222.root",
+    {"output/eec_R04_100_120_1836660.root",
      "output/eec_R04_100_120_1740222.root",
      "z_{cut} = 0.3", kGreen+2, 1},
 };

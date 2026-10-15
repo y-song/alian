@@ -154,7 +154,7 @@ void plot_eec_rg(std::string file_name, std::string pt_min, std::string pt_max, 
     gStyle->SetOptStat(0);
     SetStyle();
 
-    std::string infile  = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    std::string infile  = "/home/youqi/temp/" + file_name + "/AnalysisResultsFinal.root";
     std::string jetR    = "04";
     std::string jetR_str = "0.4";
     std::string outfile = "/home/youqi/alian/alian/output/rg_eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
@@ -214,7 +214,7 @@ void plot_eec_rg(std::string file_name, std::string pt_min, std::string pt_max, 
     gPad->SetLogx();
 
     TH1F *frame = new TH1F("frame", "My Normalized Plot", 100, 0.001, 0.5);
-    frame->SetMaximum(0.1); 
+    frame->SetMaximum(0.15); 
     frame->SetMinimum(0.0);
     frame->GetXaxis()->SetTitle("#it{R}_{L}");
     frame->Draw();

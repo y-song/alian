@@ -220,8 +220,8 @@ void track_pt_mb_vs_trig()
 {
     SetStyle();
 
-    TFile *f_trig = new TFile("/rstorage/youqi/1984403/AnalysisResultsFinal.root", "READ");
-    TFile *f = new TFile("/rstorage/youqi/1982382/AnalysisResultsFinal.root", "READ");
+    TFile *f_trig = new TFile("/rstorage/youqi/1998609/AnalysisResultsFinal.root", "READ");
+    TFile *f = new TFile("/rstorage/youqi/1998732/AnalysisResultsFinal.root", "READ");
 
     // TH1D *h1 = (TH1D *)f->Get("track_pT");
     TH1D *h2_trig = (TH1D *)f_trig->Get("track_in_jet_event_pT");
