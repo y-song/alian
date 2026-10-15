@@ -42,7 +42,7 @@ analysis:
   pt_min_combined_jet: 20.0
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
-  z_cut: 0.1
+  z_cut: 0.2
 
 output:
   bins:
