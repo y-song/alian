@@ -61,6 +61,7 @@ PION_MASS  = 0.13957
 
 # ---- response matrix binning ----
 JETPT_BINS = np.array([10, 20, 40, 60, 80, 100, 120, 150, 200, 500], dtype=np.float64)
+JETPT_BINS_TR = np.array([5, 10, 20, 40, 60, 80, 100, 120, 150, 200, 500], dtype=np.float64)
 
 RL_NBINS = 25
 RL_MIN, RL_MAX = 0.01, 1.0
@@ -268,6 +269,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("input", help="input parquet file (from script 1)")
     ap.add_argument("-o", "--output", default="response.root", help="output ROOT file")
+    ap.add_argument("--corr-rootfile", default="", help="Corresponding input root file for the parquet file") # bc the parquet file only stores jets, not total number of events
     args = ap.parse_args()
 
     # -----------------------------------------------------------------------
@@ -277,6 +279,10 @@ def main():
     n_bins_pt = len(JETPT_BINS) - 1
     jetpt_edges = array.array("d", JETPT_BINS)
 
+    n_bins_pt_tr = len(JETPT_BINS_TR) - 1
+    jetpt_edges_tr = array.array("d", JETPT_BINS_TR)
+
+    hNevents = ROOT.TH1D("hNevents", "hNevents", 2, -0.5, 1.5)
 
     h_resp_jetpt = {}
     h_res_jetpt = {}
@@ -286,7 +292,7 @@ def main():
         yaxis = "p_{T,g}^{part}" if v == "groomed" else "p_{T}^{part}"
         h_resp_jetpt[v] = ROOT.TH2D(f"resp_jetpt_{v}", f"{title};{xaxis};{yaxis}",
                                      len(JETPT_BINS) - 1, jetpt_edges,
-                                     len(JETPT_BINS) - 1, jetpt_edges)
+                                     len(JETPT_BINS_TR) - 1, jetpt_edges_tr)
 
         # JES/JER: pT_part vs (pT_part - pT_det / pT_part)
         h_res_jetpt[v] = ROOT.TH2D(f"res_jetpt_{v}", f"jetpt ((part-det)/part) {v};p_{{T}}^{{part}};(p_{{T}}^{{part}}-p_{{T}}^{{det}})/p_{{T}}^{{part}}",
@@ -303,25 +309,24 @@ def main():
         h1_reco[v].GetXaxis().SetTitle(f'p^{{det}}_{{T,{label_suffix}}}')
         h1_reco[v].GetYaxis().SetTitle('Counts')
 
-        h1_gen[v] = ROOT.TH1D(f"h1jetpt_gen_{v}", f"h1jetpt_gen_{v}", len(JETPT_BINS) - 1, jetpt_edges)
+        h1_gen[v] = ROOT.TH1D(f"h1jetpt_gen_{v}", f"h1jetpt_gen_{v}", len(JETPT_BINS_TR) - 1, jetpt_edges_tr)
         h1_gen[v].GetXaxis().SetTitle(f'p^{{part}}_{{T,{label_suffix}}}')
         h1_gen[v].GetYaxis().SetTitle('Counts')
 
-        res = ROOT.RooUnfoldResponse(h1_reco[v], h1_gen[v])
-        res.SetName(f"roounfold_response_1D_{v}")
+        res = ROOT.RooUnfoldResponse(h1_reco[v], h1_gen[v], f"roounfold_response_1D_{v}", f"roounfold_response_1D_{v}")
         response1D[v] = res
 
         response_matrix = ROOT.TH2D(f"roounfold_response_TH2D_{v}", f"roounfold_response_TH2D_{v}",
                            len(JETPT_BINS) - 1, jetpt_edges,
-                           len(JETPT_BINS) - 1, jetpt_edges)
+                           len(JETPT_BINS_TR) - 1, jetpt_edges_tr)
         res_oldversion = ROOT.RooUnfoldResponse(h1_reco[v], h1_gen[v], response_matrix, f"roounfold_response_1D_{v}_oldversion", f"roounfold_response_1D_{v}_oldversion")
         response1D_oldversion[v] = res_oldversion
 
     # 6D THnSparse per EEC:  axes = pt_det, pt_part, RL_det, RL_part, w_det, w_part
-    nbins6 = np.array([len(JETPT_BINS) - 1, len(JETPT_BINS) - 1,
+    nbins6 = np.array([len(JETPT_BINS) - 1, len(JETPT_BINS_TR) - 1,
                        RL_NBINS, RL_NBINS, W_NBINS, W_NBINS], dtype=np.int32)
-    xmin6 = np.array([JETPT_BINS[0], JETPT_BINS[0], RL_MIN, RL_MIN, W_MIN, W_MIN], dtype=np.float64)
-    xmax6 = np.array([JETPT_BINS[-1], JETPT_BINS[-1], RL_MAX, RL_MAX, W_MAX, W_MAX], dtype=np.float64)
+    xmin6 = np.array([JETPT_BINS[0], JETPT_BINS_TR[0], RL_MIN, RL_MIN, W_MIN, W_MIN], dtype=np.float64)
+    xmax6 = np.array([JETPT_BINS[-1], JETPT_BINS_TR[-1], RL_MAX, RL_MAX, W_MAX, W_MAX], dtype=np.float64)
 
     resp6 = {v: {} for v in VERSIONS}
     roounfold_resp6 = {v: {} for v in VERSIONS}
@@ -343,7 +348,7 @@ def main():
             )
             # set variable bin edges on the axes that need them
             hs.GetAxis(0).Set(len(JETPT_BINS) - 1, jetpt_edges)  # pt_det
-            hs.GetAxis(1).Set(len(JETPT_BINS) - 1, jetpt_edges)  # pt_part
+            hs.GetAxis(1).Set(len(JETPT_BINS_TR) - 1, jetpt_edges_tr)  # pt_part
             hs.GetAxis(2).Set(RL_NBINS, array.array("d", RL_BINS.tolist()))  # RL_det (log)
             hs.GetAxis(3).Set(RL_NBINS, array.array("d", RL_BINS.tolist()))  # RL_part (log)
             hs.GetAxis(4).Set(W_NBINS, array.array("d", W_BINS.tolist()))    # w_det
@@ -353,14 +358,14 @@ def main():
 
             # same response matrices, but in ROOT.RooUnfoldResponse form, order: jetpt, RL, weight (det), jetpt, RL, weight (part)
             h3_reco = ROOT.TH3D(f"{v}_{lab}_reco", f"{v}_{lab}_reco", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
-            h3_gen = ROOT.TH3D(f"{v}_{lab}_gen", f"{v}_{lab}_gen", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
+            h3_gen = ROOT.TH3D(f"{v}_{lab}_gen", f"{v}_{lab}_gen", len(JETPT_BINS_TR) - 1, jetpt_edges_tr, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
             h3_reco.GetXaxis().SetTitle(f'p^{{det}}_{{T,{label_suffix}}}'); h3_reco.GetYaxis().SetTitle('R_{L}^{det}'); h3_reco.GetZaxis().SetTitle('weight^{det}')
             h3_gen.GetXaxis().SetTitle(f'p^{{part}}_{{T,{label_suffix}}}'); h3_gen.GetYaxis().SetTitle('R_{L}^{part}'); h3_gen.GetZaxis().SetTitle('weight^{part}')
             hresponse = ROOT.RooUnfoldResponse(h3_reco, h3_gen, f"{v}_{lab}_roounfold_response", f"{v}_{lab}_roounfold_response")
             roounfold_resp6[v][lab] = hresponse
 
             h3_reco_unmatched = ROOT.TH3D(f"{v}_{lab}_reco_unmatched", f"{v}_{lab}_reco_unmatched", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
-            h3_gen_unmatched = ROOT.TH3D(f"{v}_{lab}_gen_unmatched", f"{v}_{lab}_gen_unmatched", len(JETPT_BINS) - 1, jetpt_edges, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
+            h3_gen_unmatched = ROOT.TH3D(f"{v}_{lab}_gen_unmatched", f"{v}_{lab}_gen_unmatched", len(JETPT_BINS_TR) - 1, jetpt_edges_tr, RL_NBINS, RL_BINS, W_NBINS, W_BINS)
             h3_reco_unmatched.GetXaxis().SetTitle(f'p^{{det}}_{{T,{label_suffix}}}'); h3_reco_unmatched.GetYaxis().SetTitle('R_{L}^{det}'); h3_reco_unmatched.GetZaxis().SetTitle('weight^{det}')
             h3_gen_unmatched.GetXaxis().SetTitle(f'p^{{part}}_{{T,{label_suffix}}}'); h3_gen_unmatched.GetYaxis().SetTitle('R_{L}^{part}'); h3_gen_unmatched.GetZaxis().SetTitle('weight^{part}')
 
@@ -374,8 +379,8 @@ def main():
 
     # --- Differential Efficiency/Purity Histograms ---
     # Jet level (pT)
-    h_match_gen_jet_eff_num = {v: ROOT.TH1D(f"jet_match_gen_eff_num_{v}", f"Matched Gen, {v.capitalize()} Jet Eff Num", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
-    h_all_gen_jet_eff_den = {v: ROOT.TH1D(f"jet_all_gen_eff_den_{v}", f"Total Gen, {v.capitalize()} Jet Eff Den", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
+    h_match_gen_jet_eff_num = {v: ROOT.TH1D(f"jet_match_gen_eff_num_{v}", f"Matched Gen, {v.capitalize()} Jet Eff Num", len(JETPT_BINS_TR)-1, jetpt_edges_tr) for v in VERSIONS}
+    h_all_gen_jet_eff_den = {v: ROOT.TH1D(f"jet_all_gen_eff_den_{v}", f"Total Gen, {v.capitalize()} Jet Eff Den", len(JETPT_BINS_TR)-1, jetpt_edges_tr) for v in VERSIONS}
     h_match_rec_jet_pur_num = {v: ROOT.TH1D(f"jet_match_rec_pur_num_{v}", f"Matched Rec, {v.capitalize()} Jet Pur Num", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
     h_all_rec_jet_pur_den = {v: ROOT.TH1D(f"jet_all_rec_pur_den_{v}", f"Total Rec, {v.capitalize()} Jet Pur Den", len(JETPT_BINS)-1, jetpt_edges) for v in VERSIONS}
 
@@ -422,6 +427,23 @@ def main():
         h_res_w[lab] = ROOT.TH2D(f"res_w_{lab}", f"Weight residual {lab};w^{{part}};(w^{{part}}-w^{{det}})/w^{{part}}", W_NBINS, W_BINS, 100, -1, 1)
 
 
+    # -----------------------------------------------------------------------
+    # Calculate number of events
+    # -----------------------------------------------------------------------
+    # Read number of events from corresponding rootfile
+    total_num_events = 0
+    if args.corr_rootfile != "":
+        corr_file = ROOT.TFile.Open(args.corr_rootfile, "READ")
+        t = corr_file.Get("eventTree")
+        total_num_events = t.GetEntries()
+        corr_file.Close()
+
+    hNevents.Fill(0, total_num_events)
+    b = hNevents.FindBin(0)
+    hNevents.SetBinContent(b, total_num_events)
+    hNevents.SetBinError(b, total_num_events ** 0.5)
+    hNevents.SetEntries(total_num_events)
+        
     # -----------------------------------------------------------------------
     # Read parquet, regroup jets by (event, level)
     # -----------------------------------------------------------------------
@@ -482,7 +504,7 @@ def main():
 
         # For groomed versions, we only fill denominators for unmatched jets here
         # to avoid rebuilding matched jets twice.
-        if "groomed" in VERSIONS and not bool(jets[r].is_matched):
+        if "groomed" in VERSIONS: # and not bool(jets[r].is_matched):
             jet_consts = build_pseudojets(jets[r].const_pt, jets[r].const_eta, jets[r].const_phi, jets[r].const_label)
             jet, cs = recluster_ca(jet_consts)
             if jet is not None:
@@ -567,11 +589,14 @@ def main():
         part_rad = part_d.pair()
 
         # Fill groomed efficiency/purity for matched jets
+        # if "groomed" in VERSIONS:
+        #     h_match_gen_jet_eff_num["groomed"].Fill(part_rad.perp(), mc_weight)
+        #     h_all_gen_jet_eff_den["groomed"].Fill(part_rad.perp(), mc_weight)
+        #     h_match_rec_jet_pur_num["groomed"].Fill(det_rad.perp(), mc_weight)
+        #     h_all_rec_jet_pur_den["groomed"].Fill(det_rad.perp(), mc_weight)
         if "groomed" in VERSIONS:
-            h_match_gen_jet_eff_num["groomed"].Fill(part_rad.perp(), mc_weight)
-            h_all_gen_jet_eff_den["groomed"].Fill(part_rad.perp(), mc_weight)
-            h_match_rec_jet_pur_num["groomed"].Fill(det_rad.perp(), mc_weight)
-            h_all_rec_jet_pur_den["groomed"].Fill(det_rad.perp(), mc_weight)
+                h_match_gen_jet_eff_num["groomed"].Fill(part_rad.perp(), mc_weight)
+                h_match_rec_jet_pur_num["groomed"].Fill(det_rad.perp(), mc_weight)
 
         # Get subjets of the chosen radiator
         det_sub = sorted(det_rad.pieces(), key=lambda x: x.pt(), reverse=True)
@@ -817,6 +842,8 @@ def main():
     fout = ROOT.TFile(args.output, "RECREATE")
     fout.cd()
 
+    hNevents.Write()
+
     for v in VERSIONS:
         h_resp_jetpt[v].Write()
         h_res_jetpt[v].Write()
@@ -872,6 +899,8 @@ def main():
     output_diff_name = args.output.rsplit(".", 1)[0] + "_ptdifferential.root" if "." in args.output else args.output + "_ptdifferential.root"
     fout_diff = ROOT.TFile(output_diff_name, "RECREATE")
     fout_diff.cd()
+
+    hNevents.Write()
 
     for b in range(n_bins_pt):
         # Lund plane

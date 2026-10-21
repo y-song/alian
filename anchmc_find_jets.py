@@ -29,7 +29,7 @@ ROOT.TH2.SetDefaultSumw2()
 JET_R = 0.4
 JET_ETA_MAX = 0.9 - JET_R          # fiducial jet |eta| acceptance
 JET_PT_MIN = 8.0                   # minimum jet pt to keep (GeV) -- tune as needed
-PTHAT_OUTLIER_FACTOR = 4.0         # reject events with pt_jet / pThat > this
+# PTHAT_OUTLIER_FACTOR = 4.0         # reject events with pt_jet / pThat > this
 MATCH_DR_MAX = 0.6 * JET_R         # geometric matching radius (dR)
 
 PION_MASS = 0.13957                # assumed constituent mass
@@ -174,6 +174,7 @@ def main():
     ap.add_argument("-t", "--tree", default="eventTree", help="tree name")
     ap.add_argument("-n", "--nevents", type=int, default=-1,
                     help="number of events to process (-1 = all)")
+    ap.add_argument("--pthat-outlier-factor", default=4.0, help="reject events with pt_jet / pThat > this value")
     args = ap.parse_args()
 
     # -----------------------------------------------------------------------
@@ -265,6 +266,7 @@ def main():
 
     SEL8_BIT = 0
     GLOBAL_TRACK_BIT = 1        
+    PTHAT_OUTLIER_FACTOR = args.pthat_outlier_factor #4.0  # reject events with pt_jet / pThat > this
 
     tree_path = f"{args.input}:{args.tree}"
     n_processed = 0

@@ -182,6 +182,8 @@ def process(infile, outfile):
     h_eta = ROOT.TH1D("h_eta", "global track #eta;#eta;counts",            80, -1.0, 1.0)
     h_phi = ROOT.TH1D("h_phi", "global track #varphi;#varphi;counts",            80, 0, 2*np.pi) #-np.pi, np.pi)
 
+    h_track_pt_eta_phi = ROOT.TH3D("h_track_pt_eta_phi", "global track #varphi vs #eta vs p_{T};p_{T} [GeV/c];#eta;#varphi", 200, 0.0, 200.0, 80, -1.0, 1.0, 80, 0, 2*np.pi)
+
     # Jet histograms
     h_jet_pt  = ROOT.TH1D("h_jet_pt",  "jet p_{T};p_{T}^{jet} [GeV/c];counts", 1000, 0.0, 100.0)
     h_jet_eta = ROOT.TH1D("h_jet_eta", "jet #eta;#eta^{jet};counts",            80, -1.0, 1.0)
@@ -248,7 +250,7 @@ def process(infile, outfile):
 
     # hCHECK_trackpt_evt_withjetsabove8gev_all = ROOT.TH1D("hCHECK_trackpt_evt_withjetsabove8gev_all",  "track p_{T};p_{T} [GeV/c], events with jets > 8 GeV, all;counts", 200, 0.0, 20.0) # magenta
 
-    for h in (h_pt, h_eta, h_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_trackpt_jetpt_edge, h_tracketa_jetpt_edge, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_pt_jettrig_noetarestr, h_tracketa_trackpt_fid, h_tracketa_trackpt_jettrig_fid, h_tracketa_trackpt_edge, h_trackpt_R06_trig, h_trackpt_R06_trig_fid, h_highpt_nojet_eta_pt, h_highpt_nojet_eta_phi, h_highpt_nojet_dR_leadjet, h_highpt_nojet_dR_closestjet, h_pt_R06_trig, h_pt_R06_trig_fid, h_jet_pt_R06, h_jet_pt_R04_with_R06, h_jet_pt_R06_fid, h_jet_pt_R04_with_R04_fid, h_jet_pt_R04_with_R06_fid): #h_pt_ext, h_trackpt_jetpt_ext
+    for h in (h_pt, h_eta, h_phi, h_track_pt_eta_phi, h_jet_pt, h_jet_eta, h_jet_phi, h_jet_n, h_trackpt_jetpt, h_tracketa_jetpt, h_trackpt_jetpt_edge, h_tracketa_jetpt_edge, h_pt_jettrig, h_eta_jettrig, h_jet_n_above_below_jettrig, h_pt_jettrig_noetarestr, h_tracketa_trackpt_fid, h_tracketa_trackpt_jettrig_fid, h_tracketa_trackpt_edge, h_trackpt_R06_trig, h_trackpt_R06_trig_fid, h_highpt_nojet_eta_pt, h_highpt_nojet_eta_phi, h_highpt_nojet_dR_leadjet, h_highpt_nojet_dR_closestjet, h_pt_R06_trig, h_pt_R06_trig_fid, h_jet_pt_R06, h_jet_pt_R04_with_R06, h_jet_pt_R06_fid, h_jet_pt_R04_with_R04_fid, h_jet_pt_R04_with_R06_fid): #h_pt_ext, h_trackpt_jetpt_ext
         h.Sumw2()
 
     # for h in (hCHECK_trackpt_jetsabove8gev_fid, hCHECK_trackpt_jetsabove8gev_edge, hCHECK_trackpt_jetsabove8gev_all, hCHECK_trackpt_evt_withjetsabove8gev_all):
@@ -321,6 +323,8 @@ def process(infile, outfile):
             # h_pt_ext.FillN(len(pt), pt.astype(np.float64),  w)
             h_eta.FillN(len(eta), eta.astype(np.float64), w)
             h_phi.FillN(len(phi), phi.astype(np.float64), w)
+            for x, y, z in zip(pt.astype(np.float64), eta.astype(np.float64), phi.astype(np.float64)):
+                h_track_pt_eta_phi.Fill(x, y, z)
 
         # --- Jet clustering (per event, looping over events) ---
         n_ev = len(sel_pt)
@@ -565,7 +569,7 @@ def process(infile, outfile):
 
 
     fout = ROOT.TFile(outfile, "RECREATE")
-    h_pt.Write(); h_eta.Write(); h_phi.Write() #
+    h_pt.Write(); h_eta.Write(); h_phi.Write(); h_track_pt_eta_phi.Write()
     h_jet_pt.Write(); h_jet_eta.Write(); h_jet_phi.Write(); h_jet_n.Write()
     h_trackpt_jetpt.Write(); h_tracketa_jetpt.Write() #h_trackpt_jetpt_ext.Write()
     h_trackpt_jetpt_edge.Write(); h_tracketa_jetpt_edge.Write()

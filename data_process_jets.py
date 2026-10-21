@@ -49,8 +49,7 @@ class DataAnalysis:
         # NOTE: these may overlap, a jet is filled into every slice it matches.
         self.pt_slices = [
             (10, 20), (20, 40), (40, 60), (60, 80), (80, 100),
-            (100, 120), (120, 150), (150, 200), (200, 500), (50, 60)
-        ]
+            (100, 120), (120, 150), (150, 200), (200, 500)] #, (50, 60)
 
         # binning mode: "ungroomed" (jet pt) or "groomed" (radiator pt)
         self.binning = "ungroomed"
@@ -274,13 +273,13 @@ class DataAnalysis:
         sums = defaultdict(float)
         counts = defaultdict(int)
         lund_gen = fjcontrib.LundGenerator(self.jet_def_ca)
-        njets = 0
+        njets = -1 #0
         print("[pre-pass] scanning jets to determine <groomed pt> per slice ...")
         for _, jet_constituents in grouped:
             cs, jet = self.cluster_jet(jet_constituents)
             if jet is None:
                 continue
-            njets += 1
+            njets += 1 # start counting first jet as 0
             if njets % report_every == 0:
                 print(f"[pre-pass] {njets} jets")
             if njets >= njet_cutoff and njet_cutoff >= 0:
@@ -299,7 +298,16 @@ class DataAnalysis:
 
     # ---------- main ----------
     def run(self, infile, outfile, zcuts=[0.1, 0.2], use_maxkt=True, unweighted=False,
-            binning="ungroomed", slice_prefix=None, njet_cutoff=-1):
+            binning="ungroomed", slice_prefix=None, njet_cutoff=-1, corr_rootfile=""):
+
+        # Read number of events from corresponding rootfile
+        total_num_events = 0
+        if corr_rootfile != "":
+            corr_file = ROOT.TFile.Open(corr_rootfile, "READ")
+            t = corr_file.Get("eventTree")
+            total_num_events = t.GetEntries()
+            corr_file.Close()
+        
 
         self.binning = binning
         self.unweighted = unweighted
@@ -345,6 +353,9 @@ class DataAnalysis:
                     print(f"[{self.slice_tag(lo, hi)}_{self.format_cut_tag(*cut)}] "
                           f"<pt> = {avg_pts[key]:.2f}  ({binning})")
 
+        # Start making histograms
+        hNevents = ROOT.TH1D("hNevents", "hNevents", 2, -0.5, 1.5)
+        
         # Make raw distributions for inclusive QA
         inclusiveQA = {}
         for (lo,hi) in self.pt_slices:
@@ -511,7 +522,15 @@ class DataAnalysis:
 
         print(f"[main] done, {njets} jets processed")
 
+        hNevents.Fill(0, total_num_events)
+        b = hNevents.FindBin(0)
+        hNevents.SetBinContent(b, total_num_events)
+        hNevents.SetBinError(b, total_num_events ** 0.5)
+        hNevents.SetEntries(total_num_events)
+
+        
         # ---- normalize / format / write ----
+        hNevents.Write()
         for cut in active_cuts:
             raw1Dhists[cut].Write()
             for obj in self.objects:
@@ -559,7 +578,7 @@ class DataAnalysis:
                 print(f"[{tag}] jets={c['num_jets']} passed_cut={c['num_jets_passed_cut']}")
 
         # store the binning mode in the file so downstream code can check it
-        ROOT.TNamed("binning_mode", self.binning).Write()
+        # ROOT.TNamed("binning_mode", self.binning).Write()
         root_outfile.Close()
 
         # write per-slice average pt
@@ -600,6 +619,8 @@ if __name__ == "__main__":
                         help="Override the slice tag prefix (default: 'jetpt' for ungroomed "
                              "binning, 'gjetpt' for groomed binning)")
     parser.add_argument("--njetcutoff", type=int, default=-1, help="Number of jets to run")
+    parser.add_argument("--corr-rootfile", default="", help="Corresponding input root file for the parquet file") # bc the parquet file only stores jets, not total number of events
+    
 
     args = parser.parse_args()
     DataAnalysis().run(args.infile, args.outfile,
@@ -608,4 +629,5 @@ if __name__ == "__main__":
                        unweighted=args.add_noweight,
                        binning=args.binning,
                        slice_prefix=args.slice_prefix,
-                       njet_cutoff=args.njetcutoff)
+                       njet_cutoff=args.njetcutoff,
+                       corr_rootfile=args.corr_rootfile)
