@@ -24,10 +24,13 @@
 
 // gSystem->Load("libRooUnfold");
 
-void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/response.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/57911278/response_groomed_forunfolding_merged.root", 
-              const TString& data_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/AnalysisResults.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/57879247/AnalysisResultsMerged_groomedbins.root",
+//const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/response.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/57911278/response_groomed_forunfolding_merged.root", //58411425
+//const TString& data_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/AnalysisResults.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/58416144/AnalysisResultsMerged_groomedbins.root",
+              
+void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/58919321/response_groomed_forunfolding_merged.root", //58411425
+              const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60017705/AnalysisResultsMerged_groomedbins.root",
               const TString& outfile="/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/unfolding/unfolded1D.root",
-              int iter=9, bool do_purity=false) {
+              int iter=9, bool do_purity=true) {
     
     // gSystem->Load("libRooUnfold");
     // gSystem->Load("libRooUnfold.so");
@@ -42,7 +45,7 @@ void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty
     // Open inputs
     // RM
     TFile* f = new TFile(rm_file);
-    RooUnfoldResponse* response1D = (RooUnfoldResponse*) f->Get("roounfold_response_1D_groomed"); // response1D, reco1D_gen1D
+    RooUnfoldResponse* response1D = (RooUnfoldResponse*) f->Get("roounfold_response_1D_groomed_oldversion"); // response1D, reco1D_gen1D
 
     // DATA
     TFile* f_data = new TFile(data_file);
@@ -60,17 +63,20 @@ void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty
         h1_reco->Sumw2(1);
         h1_reco_unmatched->Sumw2(1);
         purity = (TH1D*) h1_reco->Clone("purity");
+        // TH1D* rec_num_in = response1D->Hresponse()->ProjectionX("rec_num_inTruthRange", 1, response1D->Hresponse()->GetNbinsY()); // TEMPORARY FIX
+        // purity = (TH1D*) rec_num_in->Clone("purity"); // TEMPORARY FIX
         purity->Divide(h1_reco_unmatched); // (reco / reco_unmatched)
-        // h1_raw->Multiply(purity);
-
-        TH1D* h1_gen = (TH1D*) f->Get("jet_match_gen_eff_num_groomed"); //"gen1D");
-        TH1D* h1_gen_unmatched = (TH1D*) f->Get("jet_all_gen_eff_den_groomed"); //"gen1D_unmatched");
-        h1_gen->Sumw2(1);
-        h1_gen_unmatched->Sumw2(1);
-        efficiency = (TH1D*) h1_gen->Clone("efficiency");
-        efficiency->Divide(h1_gen_unmatched);
-        // h1_raw->Divide(efficiency);
+        h1_raw->Multiply(purity);
+        
     }
+
+    TH1D* h1_gen = (TH1D*) f->Get("jet_match_gen_eff_num_groomed"); //"gen1D");
+    TH1D* h1_gen_unmatched = (TH1D*) f->Get("jet_all_gen_eff_den_groomed"); //"gen1D_unmatched");
+    h1_gen->Sumw2(1);
+    h1_gen_unmatched->Sumw2(1);
+    efficiency = (TH1D*) h1_gen->Clone("efficiency");
+    efficiency->Divide(h1_gen_unmatched);
+    // h1_raw->Divide(efficiency);
 
     // Create output file
     TFile* fout = new TFile(outfile, "RECREATE");
@@ -84,6 +90,9 @@ void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty
         // Clone and name histograms
         TH1* htempUnf1D = (TH1*)hunf1D->Clone(TString::Format("Baysian_Unfolded1Diter%d", i));
         // TH1* htempFold1D = (TH1*)hfold1D->Clone(TString::Format("Baysian_Folded1Diter%d", i));
+
+        // efficiency correction done here
+        if (do_purity) htempUnf1D->Divide(efficiency);   // final, efficiency-corrected
         
         // Write histograms to output file
         htempUnf1D->Write();
