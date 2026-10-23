@@ -6,6 +6,7 @@ python analysis/test/embed.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combi
 """
 
 import argparse
+import itertools
 from time import perf_counter
 import numpy as np
 
@@ -31,6 +32,8 @@ from alian.io.data_io import DataInput
 # /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
 # /home/youqi/yasp/.workdir/bundle/hepbase/fjcontrib/mp/fjcontrib-master/RecursiveTools/SoftDrop.cc
 # /home/youqi/yasp/.workdir/bundle/hepbase/fjcontrib/mp/fjcontrib-master/RecursiveTools/include/fastjet/contrib/SoftDrop.hh
+# /home/youqi/yasp/.workdir/bundle/hepbase/fjcontrib/mp/fjcontrib-master/LundPlane/LundGenerator.cc
+# /home/youqi/yasp/.workdir/bundle/hepbase/fjcontrib/mp/fjcontrib-master/LundPlane/include/fastjet/contrib/LundGenerator.hh
 
 class EmbeddingAnalysis:
     """Embed pp events from a pp file into OO events from an OO file.
@@ -117,8 +120,9 @@ class EmbeddingAnalysis:
         self.area_cut = 0.56*np.pi*self.R*self.R
 
         # --- substructure tools ---
-        # self.lund_gen = fj.contrib.LundGenerator()
-        self.sd = fj.contrib.SoftDrop(0, self.z_cut)
+        self.eec_trk_selector = fj.SelectorPtMin(self.pt_min_eec)
+        self.lund_gen = fj.contrib.LundGenerator()
+        # self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
         # --- event displays ---
         self.n_event_displays = 30
@@ -181,6 +185,7 @@ class EmbeddingAnalysis:
         # --- match pp det jets to pp partice jets ---
         pp_jet_matched_indices = self.match_pp_particle_to_pp_det(pp_particle_jets, pp_jets)
         pp_jets = [j for index, j in enumerate(pp_jets) if pp_jet_matched_indices[index] >= 0] 
+
         # !!! from now on, only look at pp jets with a truth match !!!
         pp_jet_tracks = []
         for j in pp_jets:
@@ -188,6 +193,24 @@ class EmbeddingAnalysis:
         
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
+        for j in pp_jets:
+            self.do_eec(j, "pp_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
+            lund_seq = self.lund_gen.result(j)
+            l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
+            if l is None:
+                continue
+            gj = l.pair()
+            if gj.pt() < self.pt_min_pp_jet:
+                continue
+            self.hists['pp_pTg'].Fill(gj.pt(), weight)
+            subjet_a = l.harder()
+            subjet_b = l.softer()
+            self.do_eec(j, "pp_sdjet_eec", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight) # jet passes SD, but this includes stuff removed by SD
+            # self.do_eec(gj, "sdjet_eec", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight) # jet passes SD, and this only includes stuff passes by SD
+            self.do_eec(subjet_a, "pp_eec_aa", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
+            self.do_eec(subjet_b, "pp_eec_bb", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
+            self.do_eec_cross(subjet_a, subjet_b, "pp_eec_ab", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
+            self.hists['pp_rg'].Fill(gj.pt(), delta_R(subjet_a, subjet_b), weight)
         
         # --- combined event: pp jet tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
@@ -235,36 +258,76 @@ class EmbeddingAnalysis:
 
         # --- fill histograms per combined jet ---
         for combined_ijet in range(0, len(combined_jets)):
+
             j = combined_jets[combined_ijet]
-            gj = self.sd(j)
+            lund_seq = self.lund_gen.result(j)
+            l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
+            if l is None:
+                continue
+            gj = l.pair()
+            gj_pt_sub = gj.pt()-gj.area()*rho
+            if gj_pt_sub < self.pt_min_combined_jet:
+                continue
+            # keep going if combined passes grooming
+            
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
             combined_constituents = [t for t in j.constituents() if not t.is_pure_ghost()]
             combined_g_constituents = [t for t in gj.constituents() if not t.is_pure_ghost()]
             
             self.hists['combined_pTg'].Fill(gj.pt(), weight)
-            self.hists['combined_pTg_sub_pTg'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight)
+            self.hists['combined_pTg_sub_pTg'].Fill(gj_pt_sub, gj.pt(), weight)
             self.hists['combined_pT_sub_pT'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
             self.hists['combined_area_sub_pT'].Fill(j.pt()-j.area()*rho, j.area(), weight)
 
-            if (pp_ijet != -1):
+            if (pp_ijet != -1): # mateched to pp
+
                 pp_j = pp_jets[pp_ijet]
-                pp_gj = self.sd(pp_j)
+                pp_lund_seq = self.lund_gen.result(pp_j)
+                pp_l = self.select_soft_drop(pp_lund_seq, z_cut=self.z_cut) # class is LundDeclustering
+                if pp_l is None:
+                    continue
+                pp_gj = pp_l.pair()
+                if pp_gj.pt() < self.pt_min_pp_jet:
+                    continue
+                # keep going if pp passes grooming
 
                 self.hists['pp_pT_matched'].Fill(pp_j.pt(), weight)
+                self.hists['pp_pTg_matched'].Fill(pp_gj.pt(), weight)
                 self.hists['pp_pTg_pp_pT_matched'].Fill(pp_j.pt(), pp_gj.pt(), weight)
 
+                self.hists['combined_pTg_matched'].Fill(gj_pt_sub, weight)
                 self.hists['combined_pT_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
                 self.hists['combined_area_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.area(), weight)
-                self.hists['combined_pTg_sub_pTg_matched'].Fill(gj.pt()-gj.area()*rho, gj.pt(), weight)
+                self.hists['combined_pTg_sub_pTg_matched'].Fill(gj_pt_sub, gj.pt(), weight)
 
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho, weight)
-                self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho, weight)
+                self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj_pt_sub, weight)
                 self.hists['sub_n_pp_n_matched'].Fill(len(pp_j.constituents()), len(combined_constituents), weight)
                 self.hists['sub_ng_pp_ng_matched'].Fill(len(pp_gj.constituents()), len(combined_g_constituents), weight)
                 self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho-pp_j.pt(), weight)
                 self.hists['residual_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt()-j.area()*rho-pp_j.pt(), weight)
-                self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt()-gj.area()*rho-pp_gj.pt(), weight)
-                self.hists['residual_sub_pTg_matched'].Fill(gj.pt()-gj.area()*rho, gj.pt()-gj.area()*rho-pp_gj.pt(), weight)
+                self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj_pt_sub-pp_gj.pt(), weight)
+                self.hists['residual_sub_pTg_matched'].Fill(gj_pt_sub, gj_pt_sub-pp_gj.pt(), weight)
+
+                self.do_eec(pp_j, "pp_matched_eec", ew_denom=pp_j.pt(), jet_pt_bin=pp_j.pt(), event_weight=weight)
+                pp_subjet_a = pp_l.harder()
+                pp_subjet_b = pp_l.softer()
+                self.do_eec(pp_j, "pp_matched_sdjet_eec", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight) # jet passes SD, but this includes stuff removed by SD
+                # self.do_eec(pp_gj, "sdjet_eec", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight) # jet passes SD, and this only includes stuff passes by SD
+                self.do_eec(pp_subjet_a, "pp_matched_eec_aa", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
+                self.do_eec(pp_subjet_b, "pp_matched_eec_bb", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
+                self.do_eec_cross(pp_subjet_a, pp_subjet_b, "pp_matched_eec_ab", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
+                self.hists['pp_matched_rg'].Fill(pp_gj.pt(), delta_R(pp_subjet_a, pp_subjet_b), weight)
+                
+                self.do_eec(j, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
+                subjet_a = l.harder()
+                subjet_b = l.softer()
+                self.do_eec(j, "combined_matched_sdjet_eec", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight) # jet passes SD, but this includes stuff removed by SD
+                # self.do_eec(gj, "sdjet_eec", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight) # jet passes SD, and this only includes stuff passes by SD
+                self.do_eec(subjet_a, "combined_matched_eec_aa", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
+                self.do_eec(subjet_b, "combined_matched_eec_bb", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
+                self.do_eec_cross(subjet_a, subjet_b, "combined_matched_eec_ab", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
+                self.hists['combined_matched_rg'].Fill(gj_pt_sub, delta_R(subjet_a, subjet_b), weight)
 
     # -----------------------------------------------------------------------
     # helpers
@@ -380,6 +443,36 @@ class EmbeddingAnalysis:
             pt_contained += track.pt()
         return pt_contained/pt_total
 
+    def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None, event_weight=1.0):
+        if ew_denom is None:
+            ew_denom = jet.pt()
+        if jet_pt_bin is None:
+            jet_pt_bin = jet.pt()
+        tracks = self.eec_trk_selector(jet.constituents())
+        for p1, p2 in itertools.permutations(tracks, 2):
+            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+            rl = delta_R(p1, p2)
+            self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
+
+    def do_eec_cross(self, subjet_a, subjet_b, hist_name, ew_denom, jet_pt_bin, event_weight=1.0):
+        tracks_a = self.eec_trk_selector(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector(subjet_b.constituents())
+        for p1 in tracks_a:
+            for p2 in tracks_b:
+                ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+                rl = delta_R(p1, p2)
+                self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
+
+    def select_soft_drop(self, lund_seq, z_cut=0.1):
+        """
+        Return the first primary Lund splitting satisfying z > z_cut (soft-drop
+        condition with beta=0), or None if no splitting passes.
+        """
+        for l in lund_seq:
+            if l.z() > z_cut:
+                return l
+        return None
+        
     def _combined_event(self, pp_tracks, oo_tracks):
         """Merge pp tracks with background tracks."""
         combined = list(oo_tracks)

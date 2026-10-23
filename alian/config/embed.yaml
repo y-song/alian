@@ -1,9 +1,5 @@
-# Configuration for the embedding analysis (analysis/test/embed.py).
-#
-# File 1 (pp): Run3 MC -- pp events
-# File 2 (oo): Run3 data -- oo events
-
-# ---- pp (file 1) ---------------------------------------------------------
+# Configuration for analysis/test/embed.py.
+# File 1: pp Run3 MC; file 2: OO Run3 data.
 pp:
   pTHat_min: 5.0
   selections:
@@ -15,7 +11,6 @@ pp:
     pT_min: 5.0
     eta_max: 0.5
 
-# ---- oo (file 2) -----------------------------------------------------
 oo:
   selections:
     event:
@@ -25,21 +20,20 @@ oo:
     track:
       pt_min: 0.150
       track_sel: globalTrack
-  jet_finder:              # for clustering the combined (embedded) event
+  jet_finder:
     R: 0.4
     alg: antikt
     pT_min: 10.0
     eta_max: 0.5
 
-# ---- rho estimators -----------------------
 bkg_estimator:
-  max_eta: 0.9 
+  max_eta: 0.9
   bge_R: 0.4 # jet median
 
-# ---- analysis parameters -----------------------------------------------------
 analysis:
-  pt_min_pp_jet: 5.0      # minimum pp jet pT to include [GeV]
+  pt_min_pp_jet: 5.0
   pt_min_combined_jet: 20.0
+  pt_min_eec: 1.0
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
   z_cut: 0.2
@@ -53,12 +47,11 @@ output:
     area:       ['lin',-0.2,   2,  44]
     centrality: ['lin',   0, 100, 100]
     dR:         ['lin',   0, 1.0, 100]
+    RL:         ['log', 1.0e-4, 1.0, 51]
 
   histograms:
+    # --- Existing jet, background and matching histograms ---
 
-    # --- 1D jet pT distributions --------------------------------------------
-
-    # pp jets after pp-jet selection
     pp_pT: [1, "pp_pT",
       "pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);jet count",
       jet_pT]
@@ -67,7 +60,6 @@ output:
       "pp jet #it{N};#it{N}^{pp} (GeV);jet count",
       count]
 
-    # combined jets before subtracted-pT selection
     combined_pT_preselect: [1, "combined_pT_preselect",
       "Combined jet #it{p}_{T} before selection;#it{p}_{T}^{combined} (GeV);jet count",
       jet_pT]
@@ -76,7 +68,6 @@ output:
       "Subtracted combined jet #it{p}_{T} before selection;#it{p}_{T}^{sub} (GeV);jet count",
       jet_pT]
 
-    # combined jets after pT_sub >= pt_min_combined_jet
     combined_pT: [1, "combined_pT",
       "Combined jet #it{p}_{T};#it{p}_{T}^{combined} (GeV);jet count",
       jet_pT]
@@ -93,17 +84,14 @@ output:
       "Combined jet count vs pp jet count;pp jet count;combined jet count",
       count, count]
 
-    # pp jets with a matched combined jet
     pp_pT_matched: [1, "pp_pT_matched",
       "Matched pp jet #it{p}_{T};#it{p}_{T}^{pp} (GeV);jet count",
       jet_pT]
 
-    # --- rho ----------------------------------------------------------------
     cent_rho: [2, "cent_rho",
       "Jet-median #rho vs centrality;#rho (GeV);centrality (%)",
       rho, centrality]
 
-    # --- all selected combined jets -----------------------------------------
     combined_pT_sub_pT: [2, "combined_pT_sub_pT",
       "Combined jet #it{p}_{T} vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
       jet_pT, jet_pT]
@@ -116,7 +104,6 @@ output:
       "Groomed combined jet #it{p}_{T} vs subtracted groomed #it{p}_{T};#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{combined} (GeV)",
       jet_pT, jet_pT]
 
-    # --- matching checks
     combined_sub_cutflow: [1, "combined_sub_cutflow",
       "Combined jet cutflow;selections;jet count",
       count]
@@ -124,8 +111,6 @@ output:
     candidate_dR: [1, "candidate_dR",
       "Matched jet #Delta#it{R} (uniqueness not enforced yet);#Delta#it{R}(combined, pp det);jet count",
       dR]
-      
-    # --- matched combined jets ---------------------------------------------
 
     pp_pTg_pp_pT_matched: [2, "pp_pTg_pp_pT_matched",
       "Groomed pp jet #it{p}_{T} vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T,g}^{pp} (GeV)",
@@ -154,7 +139,7 @@ output:
     sub_n_pp_n_matched: [2, "sub_n_pp_n_matched",
       "Combined jet multiplicity vs pp jet multiplicity (matched);#it{N}^{pp};#it{N}^{combined}",
       count, count]
-      
+
     sub_ng_pp_ng_matched: [2, "sub_ng_pp_ng_matched",
       "Groomed combined jet multiplicity vs groomed pp jet multiplicity (matched);#it{N}_{g}^{pp};#it{N}_{g}^{combined}",
       count, count]
@@ -174,3 +159,93 @@ output:
     residual_sub_pTg_matched: [2, "residual_sub_pTg_matched",
       "Groomed residual vs subtracted groomed combined jet #it{p}_{T} (matched);#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{sub} - #it{p}_{T,g}^{pp} (GeV)",
       jet_pT, residual]
+
+    pp_pTg: [1, "pp_pTg",
+      "Groomed pp jet pT;#it{p}_{T,g}^{pp} (GeV);jet count",
+      jet_pT]
+
+    pp_pTg_matched: [1, "pp_pTg_matched",
+      "Groomed matched pp jet pT;#it{p}_{T,g}^{pp} (GeV);jet count",
+      jet_pT]
+
+    combined_pTg_matched: [1, "combined_pTg_matched",
+      "Subtracted groomed matched combined jet pT;#it{p}_{T,g}^{sub} (GeV);jet count",
+      jet_pT]
+
+    # --- pp EEC and groomed radius ---
+
+    pp_eec: [2, "pp_eec",
+      "pp EEC;#it{p}_{T}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_sdjet_eec: [2, "pp_sdjet_eec",
+      "pp EEC for SD-tagged jets (original constituents);#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_eec_aa: [2, "pp_eec_aa",
+      "pp EEC AA;#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_eec_bb: [2, "pp_eec_bb",
+      "pp EEC BB;#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_eec_ab: [2, "pp_eec_ab",
+      "pp EEC AB (one orientation);#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_rg: [2, "pp_rg",
+      "pp groomed radius;#it{p}_{T,g}^{pp} (GeV);R_{g}",
+      jet_pT, RL]
+
+    # --- Matched pp EEC and groomed radius ---
+
+    pp_matched_eec: [2, "pp_matched_eec",
+      "Matched pp EEC;#it{p}_{T}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_matched_sdjet_eec: [2, "pp_matched_sdjet_eec",
+      "Matched pp EEC for SD-tagged jets (original constituents);#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_matched_eec_aa: [2, "pp_matched_eec_aa",
+      "Matched pp EEC AA;#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_matched_eec_bb: [2, "pp_matched_eec_bb",
+      "Matched pp EEC BB;#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_matched_eec_ab: [2, "pp_matched_eec_ab",
+      "Matched pp EEC AB (one orientation);#it{p}_{T,g}^{pp} (GeV);R_{L}",
+      jet_pT, RL]
+
+    pp_matched_rg: [2, "pp_matched_rg",
+      "Matched pp groomed radius;#it{p}_{T,g}^{pp} (GeV);R_{g}",
+      jet_pT, RL]
+
+    # --- Matched combined EEC and groomed radius ---
+
+    combined_matched_eec: [2, "combined_matched_eec",
+      "Matched combined EEC;#it{p}_{T}^{combined} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_sdjet_eec: [2, "combined_matched_sdjet_eec",
+      "Matched combined EEC for SD-tagged jets (original constituents);#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_aa: [2, "combined_matched_eec_aa",
+      "Matched combined EEC AA;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_bb: [2, "combined_matched_eec_bb",
+      "Matched combined EEC BB;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_ab: [2, "combined_matched_eec_ab",
+      "Matched combined EEC AB (one orientation);#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_rg: [2, "combined_matched_rg",
+      "Matched combined groomed radius;#it{p}_{T,g}^{sub} (GeV);R_{g}",
+      jet_pT, RL]
