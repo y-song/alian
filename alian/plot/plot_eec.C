@@ -3,6 +3,7 @@
 #include <string>
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 
 #include <TStyle.h>
 #include <TCanvas.h>
@@ -157,118 +158,132 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
     gStyle->SetOptStat(0);
     SetStyle();
 
-    // std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    std::string infile  = "/home/youqi/temp/" + file_name + "/AnalysisResultsFinal.root";
+    std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    // std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed.root";
     std::string jetR    = "04";
     std::string jetR_str = "0.4";
-    std::string outfile = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
 
     std::cout << "pt min: " << pt_min << ", pt max: " << pt_max << std::endl;
     std::cout << "R = " << jetR_str << std::endl;
 
     double pt_lo = stof(pt_min);
     double pt_hi = stof(pt_max);
-
-    TFile *f     = new TFile(infile.c_str(), "READ");
-    TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
-
-    // Get jet pT histogram and compute njets once — shared normalization for all EEC variants
-    TH1 *h_JetPt = (TH1 *)f->Get("jet_pT");
-    std::cout << "Number of jets from pT bins " << pt_lo + 1 << "-" << pt_hi << ": ";
-    double njets = h_JetPt->Integral((int)h_JetPt->FindBin(pt_lo), (int)h_JetPt->FindBin(pt_hi));
-    std::cout << njets << std::endl;
-
-    TH1D *h_jet_eec = LoadAndProcess(f, "eec",pt_lo, pt_hi, njets);
-    TH1D *h_sdjet_eec = LoadAndProcess(f, "sdjet_eec",pt_lo, pt_hi, njets);
-    TH1D *h_aa  = LoadAndProcess(f, "eec_aa", pt_lo, pt_hi, njets);
-    TH1D *h_bb  = LoadAndProcess(f, "eec_bb", pt_lo, pt_hi, njets);
-    TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets, 2.0);
-    TH1D *h_rg  = LoadAndProcess(f, "rg", pt_lo, pt_hi, njets);
-    TH1D *h_zg  = LoadAndProcess(f, "zg", pt_lo, pt_hi, njets);
-
-    TH1D *h_sdjet_groomed_eec;
-    if (h_aa && h_bb && h_ab) {
-        h_sdjet_groomed_eec = (TH1D *)h_aa->Clone("h_sdjet_groomed_eec");
-        h_sdjet_groomed_eec->Add(h_bb);
-        h_sdjet_groomed_eec->Add(h_ab); // eec_ab was already scaled by 2
+    TFile *f = new TFile(infile.c_str(), "READ");
+    if (f->IsZombie())
+    {
+        std::cerr << "Cannot open " << infile << std::endl;
+        delete f;
+        return;
     }
-    // {hist name in file, legend label, color, marker style}
-    struct HistConfig {
-        const char *label;
-        int         color;
-        int         marker;
-        TH1D       *hist;
-    };
-    std::vector<HistConfig> configs = {
-        // {"inclusive EEC", kBlue, kFullCircle , h_jet_eec},
-        // {"SD jet EEC", kGray+2, kFullCircle , h_sdjet_eec},
-        {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
-        {"EEC,aa", kBlue,     kFullSquare    , h_aa},
-        {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
-        {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
-        // {"Rg",     kRed,      kFullTriangleUp, h_rg},
-    };
 
-    // Canvas
-    TCanvas *c = new TCanvas("c", "c", 800, 600);
-    ProcessCanvas(c);
-    c->cd();
-    gPad->SetLogx();
+    // Repeat the original plotting block for each embedding sample.
+    for (const std::string &sample : {std::string("pp"), std::string("pp_matched"), std::string("combined_matched")})
+    {
+        std::string outfile = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + "_" + sample + ".root";
 
-    // TH1F *frame = new TH1F("frame", "My Normalized Plot", 100, 0.001, 0.5);
-    // frame->SetMaximum(0.1); 
-    // frame->SetMinimum(0.0);
-    // frame->GetXaxis()->SetTitle("#it{R}_{L}");
-    // frame->Draw();
-
-    // Legend — info block + per-histogram entries
-    TLegend *l = new TLegend(0.5, 0.45, 0.9, 0.88);
-    std::string ptbin = pt_min + " < #it{p}_{T}^{jet} < " + pt_max + " GeV/#it{c}";
-    addLegendInfo(l, jetR_str, plot_text);
-    l->AddEntry("NULL", ptbin.c_str(), "h");
-
-    // Draw: first valid histogram uses "L" to set the frame; rest use "L same"
-    bool first = true;
-    for (auto &cfg : configs) {
-        if (!cfg.hist)
+        // Keep the original shared jet-count normalization within each sample.
+        TH1 *h_JetPt = nullptr;
+        if (sample == "pp")
+        {
+            h_JetPt = (TH1 *)f->Get("pp_pTg");
+        }
+        else if (sample == "pp_matched")
+        {
+            h_JetPt = (TH1 *)f->Get("pp_pTg_matched");
+        }
+        else
+        {
+            h_JetPt = (TH1 *)f->Get("combined_pTg_matched");
+        }
+        if (!h_JetPt)
+        {
+            std::cerr << "Missing jet pT histogram for " << sample << std::endl;
+            continue;
+        }
+        double njets = h_JetPt->Integral(h_JetPt->FindBin(pt_lo), h_JetPt->FindBin(pt_hi));
+        std::cout << sample << ": number of jets = " << njets << std::endl;
+        if (njets <= 0)
             continue;
 
-        TH1D *h = cfg.hist;
-        FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
-        h->GetXaxis()->SetRangeUser(0.001, 0.4);
-        h->GetYaxis()->SetRangeUser(0, 8);
-        h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
+        TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
+        TH1D *h_jet_eec = nullptr; // LoadAndProcess(f, (sample + "_eec").c_str(), pt_lo, pt_hi, njets);
+        TH1D *h_sdjet_eec = nullptr; // LoadAndProcess(f, (sample + "_sdjet_eec").c_str(), pt_lo, pt_hi, njets);
+        TH1D *h_aa = LoadAndProcess(f, (sample + "_eec_aa").c_str(), pt_lo, pt_hi, njets);
+        TH1D *h_bb = LoadAndProcess(f, (sample + "_eec_bb").c_str(), pt_lo, pt_hi, njets);
+        TH1D *h_ab = LoadAndProcess(f, (sample + "_eec_ab").c_str(), pt_lo, pt_hi, njets, 2.0);
+        TH1D *h_rg = nullptr; // LoadAndProcess(f, (sample + "_rg").c_str(), pt_lo, pt_hi, njets);
 
-        if (first) {
-            h->Draw("L same");
-            first = false;
-        } else {
-            h->Draw("L same");
+        TH1D *h_sdjet_groomed_eec = nullptr;
+        if (h_aa && h_bb && h_ab)
+        {
+            h_sdjet_groomed_eec = (TH1D *)h_aa->Clone("h_sdjet_groomed_eec");
+            h_sdjet_groomed_eec->Add(h_bb);
+            h_sdjet_groomed_eec->Add(h_ab); // eec_ab was already scaled by 2
         }
+        struct HistConfig
+        {
+            const char *label;
+            int color;
+            int marker;
+            TH1D *hist;
+        };
+        std::vector<HistConfig> configs =
+        {
+            // {"inclusive EEC", kBlue, kFullCircle, h_jet_eec},
+            // {"SD jet EEC", kGray+2, kFullCircle, h_sdjet_eec},
+            {"SD jet groomed EEC", kBlack, kFullCircle, h_sdjet_groomed_eec},
+            {"EEC,aa", kBlue, kFullSquare, h_aa},
+            {"EEC,bb", kRed, kFullTriangleUp, h_bb},
+            {"EEC,ab", kGreen+2, kFullDiamond, h_ab},
+            // {"Rg", kRed, kFullTriangleUp, h_rg},
+        };
+
+        TCanvas *c = new TCanvas("c", "c", 800, 600);
+        ProcessCanvas(c);
+        c->cd();
+        gPad->SetLogx();
+
+        TLegend *l = new TLegend(0.5, 0.45, 0.9, 0.88);
+        std::string ptbin = pt_min + " < #it{p}_{T}^{jet} < " + pt_max + " GeV/#it{c}";
+        addLegendInfo(l, jetR_str, plot_text);
+        l->AddEntry("NULL", sample.c_str(), "h");
+        l->AddEntry("NULL", ptbin.c_str(), "h");
+
+        bool first = true;
+        for (auto &cfg : configs)
+        {
+            if (!cfg.hist) continue;
+            TH1D *h = cfg.hist;
+            FormatHist(l, h, cfg.label, cfg.color, cfg.marker);
+            h->GetXaxis()->SetRangeUser(0.01, 0.4);
+            h->GetYaxis()->SetRangeUser(0, 8);
+            h->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
+            if (first)
+            {
+                h->Draw("L");
+                first = false;
+            }
+            else
+            {
+                h->Draw("L same");
+            }
+        }
+        // l->Draw("same");
+
+        std::string fname = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + "_" + sample + ".pdf";
+        c->SaveAs(fname.c_str());
+        delete c;
+        delete l;
+
+        f_out->cd();
+        for (TH1D *h : {h_jet_eec, h_sdjet_eec, h_sdjet_groomed_eec, h_aa, h_bb, h_ab, h_rg})
+        {
+            if (h)
+                h->Write();
+        }
+        f_out->Close();
+        delete f_out;
     }
-    // h_total->Draw("same");
-    // l->Draw("same");
-
-    // Save canvas
-    std::string fname = "/home/youqi/alian/alian/output/eec_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".pdf";
-    c->SaveAs(fname.c_str());
-    delete c;
-    delete l;
-
-    // Save processed histograms to output file
-    f_out->cd();
-
-    h_jet_eec->Write();
-    h_sdjet_eec->Write();
-    h_sdjet_groomed_eec->Write();
-
-    h_aa->Write();
-    h_bb->Write();
-    h_ab->Write();
-    h_rg->Write(); 
-    h_zg->Write(); 
-
-    f_out->Close();
     f->Close();
     delete f;
 }

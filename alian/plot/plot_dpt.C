@@ -85,6 +85,41 @@ void addLegendInfo(TLegend *l, string pt_min, string pt_max, string jetR)
     l->SetFillStyle(0); // turn legend transparent
 }
 
+void check_bump_fraction(vector<TH1D *> hists, vector<string> labels, double xcut = 5.)
+{
+    // thin dotted vertical lines at +/- xcut on the current pad
+    gPad->Update(); // pad range is not computed until the pad is painted
+    double ymin = gPad->GetUymin();
+    double ymax = gPad->GetUymax();
+    if (gPad->GetLogy())
+    {
+        ymin = pow(10, ymin);
+        ymax = pow(10, ymax);
+    }
+    for (double x : {-xcut, xcut})
+    {
+        TLine *line = new TLine(x, ymin, x, ymax);
+        line->SetLineStyle(3);
+        line->SetLineWidth(1);
+        line->SetLineColor(kBlack);
+        line->Draw("same");
+    }
+
+    // fraction of area outside [-xcut, xcut] over the whole range
+    for (size_t i = 0; i < hists.size(); i++)
+    {
+        TH1D *h = hists[i];
+        double total = h->Integral(1, h->GetNbinsX());
+        if (total <= 0)
+            continue;
+        int binLo = h->GetXaxis()->FindBin(-xcut + 1e-6);
+        int binHi = h->GetXaxis()->FindBin(xcut - 1e-6);
+        // binLo > binHi means an empty window (e.g. xcut = 0); ROOT would swap the bins instead of returning 0
+        double inside = (binLo <= binHi) ? h->Integral(binLo, binHi) : 0.0;
+        cout << labels[i] << ": fraction outside |#deltap_{T}| > " << xcut << " = " << (total - inside) / total << endl;
+    }
+}
+
 void plot_dpt(string jobID)
 {
     SetStyle();
@@ -94,8 +129,8 @@ void plot_dpt(string jobID)
 
     TFile *f = new TFile(("/rstorage/youqi/" + jobID + "/AnalysisResultsFinal.root").c_str(), "READ");
     // new TFile("/home/youqi/alian/alian/output/embed_092426.root", "READ");
-    TH2D *h_residual_pp_pT_matched = (TH2D *)f->Get("residual_pp_pT_matched");
-    TH2D *h_residual_sub_pT_matched = (TH2D *)f->Get("residual_sub_pT_matched");
+    TH2D *h_residual_pp_pT_matched = (TH2D *)f->Get("residual_pp_pTg_matched");
+    TH2D *h_residual_sub_pT_matched = (TH2D *)f->Get("residual_sub_pTg_matched");
 
     TH2D *h1 = (TH2D *)h_residual_pp_pT_matched->Clone("h1");
     TH2D *h2 = (TH2D *)h_residual_pp_pT_matched->Clone("h2");
@@ -150,8 +185,9 @@ void plot_dpt(string jobID)
     h2_proj->Draw("same");
     h3_proj->Draw("same");  
     leg1->Draw("same");
+    check_bump_fraction({h1_proj, h2_proj, h3_proj}, {"pp 20-40", "pp 40-60", "pp 60-80"});
 
-    c1->SaveAs(("output/dpT_vs_pp_pT_R" + jetR + "_matched.pdf").c_str());
+    c1->SaveAs(("output/dpT_vs_pp_pT_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
 
     // Second canvas
     TCanvas *c2 = new TCanvas();
@@ -172,7 +208,8 @@ void plot_dpt(string jobID)
     h5_proj->Draw("same");
     h6_proj->Draw("same");  
     leg2->Draw("same");
+    check_bump_fraction({h4_proj, h5_proj, h6_proj}, {"sub 20-40", "sub 40-60", "sub 60-80"});
 
-    c2->SaveAs(("output/dpT_vs_sub_pT_R" + jetR + "_matched.pdf").c_str());
-    // c2->SaveAs(("output/dpT_vs_sub_pT_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
+    // c2->SaveAs(("output/dpT_vs_sub_pT_R" + jetR + "_matched.pdf").c_str());
+    c2->SaveAs(("output/dpT_vs_sub_pT_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
 }
