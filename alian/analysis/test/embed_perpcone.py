@@ -212,22 +212,12 @@ class EmbeddingAnalysis:
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
         for j in pp_jets:
             self.do_eec(j, "pp_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
-            lund_seq = self.lund_gen.result(j)
-            l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
-            if l is None:
+            subjets = self.get_subjets(j, self.pt_min_pp_jet)
+            if subjets is None:
                 continue
-            gj = l.pair()
-            if gj.pt() < self.pt_min_pp_jet:
-                continue
-            self.hists['pp_pTg'].Fill(gj.pt(), weight)
-            subjet_a = l.harder()
-            subjet_b = l.softer()
-            self.do_eec(j, "pp_sdjet_eec", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight) # jet passes SD, but this includes stuff removed by SD
-            # self.do_eec(gj, "sdjet_eec", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight) # jet passes SD, and this only includes stuff passes by SD
-            self.do_eec(subjet_a, "pp_eec_aa", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
-            self.do_eec(subjet_b, "pp_eec_bb", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
-            self.do_eec_cross(subjet_a, subjet_b, "pp_eec_ab", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
-            self.hists['pp_rg'].Fill(gj.pt(), delta_R(subjet_a, subjet_b), weight)
+            gj, gj_pt, subjet_a, subjet_b = subjets
+            self.hists['pp_pTg'].Fill(gj_pt, weight)
+            self.do_subjet_eec(j, subjet_a, subjet_b, "pp", gj_pt, event_weight=weight)
         
         # --- combined event: pp jet tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
@@ -278,14 +268,10 @@ class EmbeddingAnalysis:
         for combined_ijet in range(0, len(combined_jets)):
 
             j = combined_jets[combined_ijet]
-            lund_seq = self.lund_gen.result(j)
-            l = self.select_soft_drop(lund_seq, z_cut=self.z_cut) # class is LundDeclustering
-            if l is None:
+            subjets = self.get_subjets(j, self.pt_min_combined_jet, rho)
+            if subjets is None:
                 continue
-            gj = l.pair()
-            gj_pt_sub = gj.pt()-gj.area()*rho
-            if gj_pt_sub < self.pt_min_combined_jet:
-                continue
+            gj, gj_pt_sub, subjet_a, subjet_b = subjets
             # keep going if combined passes grooming
             
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
@@ -300,13 +286,10 @@ class EmbeddingAnalysis:
             if (pp_ijet != -1): # mateched to pp
 
                 pp_j = pp_jets[pp_ijet]
-                pp_lund_seq = self.lund_gen.result(pp_j)
-                pp_l = self.select_soft_drop(pp_lund_seq, z_cut=self.z_cut) # class is LundDeclustering
-                if pp_l is None:
+                pp_subjets = self.get_subjets(pp_j, self.pt_min_pp_jet)
+                if pp_subjets is None:
                     continue
-                pp_gj = pp_l.pair()
-                if pp_gj.pt() < self.pt_min_pp_jet:
-                    continue
+                pp_gj, pp_gj_pt, pp_subjet_a, pp_subjet_b = pp_subjets
                 # keep going if pp passes grooming
 
                 self.hists['pp_pT_matched'].Fill(pp_j.pt(), weight)
@@ -328,24 +311,10 @@ class EmbeddingAnalysis:
                 self.hists['residual_sub_pTg_matched'].Fill(gj_pt_sub, gj_pt_sub-pp_gj.pt(), weight)
 
                 self.do_eec(pp_j, "pp_matched_eec", ew_denom=pp_j.pt(), jet_pt_bin=pp_j.pt(), event_weight=weight)
-                pp_subjet_a = pp_l.harder()
-                pp_subjet_b = pp_l.softer()
-                self.do_eec(pp_j, "pp_matched_sdjet_eec", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight) # jet passes SD, but this includes stuff removed by SD
-                # self.do_eec(pp_gj, "sdjet_eec", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight) # jet passes SD, and this only includes stuff passes by SD
-                self.do_eec(pp_subjet_a, "pp_matched_eec_aa", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
-                self.do_eec(pp_subjet_b, "pp_matched_eec_bb", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
-                self.do_eec_cross(pp_subjet_a, pp_subjet_b, "pp_matched_eec_ab", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
-                self.hists['pp_matched_rg'].Fill(pp_gj.pt(), delta_R(pp_subjet_a, pp_subjet_b), weight)
-                
+                self.do_subjet_eec(pp_j, pp_subjet_a, pp_subjet_b, "pp_matched", pp_gj_pt, event_weight=weight)
+
                 self.do_eec(j, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
-                subjet_a = l.harder()
-                subjet_b = l.softer()
-                self.do_eec(j, "combined_matched_sdjet_eec", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight) # jet passes SD, but this includes stuff removed by SD
-                # self.do_eec(gj, "sdjet_eec", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight) # jet passes SD, and this only includes stuff passes by SD
-                self.do_eec(subjet_a, "combined_matched_eec_aa", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
-                self.do_eec(subjet_b, "combined_matched_eec_bb", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
-                self.do_eec_cross(subjet_a, subjet_b, "combined_matched_eec_ab", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
-                self.hists['combined_matched_rg'].Fill(gj_pt_sub, delta_R(subjet_a, subjet_b), weight)
+                self.do_subjet_eec(j, subjet_a, subjet_b, "combined_matched", gj_pt_sub, event_weight=weight)
 
                 if event_ghosts is None:
                     event_ghosts = self._event_ghosts(self.combined_jet_finder.cs)
@@ -575,6 +544,31 @@ class EmbeddingAnalysis:
                 parts_b.append(p)
         return parts_a, parts_b
 
+    def get_subjets(self, jet, pt_min, rho=0.0):
+        """
+        Groom jet with soft drop (z_cut) on its Lund declustering.
+
+        Return (groomed jet, groomed pT - rho*area, harder subjet, softer subjet),
+        or None if no splitting passes SD or the (subtracted) groomed pT < pt_min.
+        rho = 0 for jets clustered without area.
+        """
+        l = self.select_soft_drop(self.lund_gen.result(jet), z_cut=self.z_cut) # class is LundDeclustering
+        if l is None:
+            return None
+        gj = l.pair()
+        gj_pt = gj.pt() - rho*gj.area() if rho else gj.pt()
+        if gj_pt < pt_min:
+            return None
+        return gj, gj_pt, l.harder(), l.softer()
+
+    def do_subjet_eec(self, jet, subjet_a, subjet_b, prefix, gj_pt, event_weight=1.0):
+        """Fill {prefix}_sdjet_eec, _eec_aa, _eec_bb, _eec_ab and _rg, normalized and binned by groomed pT."""
+        self.do_eec(jet, f"{prefix}_sdjet_eec", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight) # jet passes SD, but this includes stuff removed by SD
+        self.do_eec(subjet_a, f"{prefix}_eec_aa", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
+        self.do_eec(subjet_b, f"{prefix}_eec_bb", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
+        self.do_eec_cross(subjet_a, subjet_b, f"{prefix}_eec_ab", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
+        self.hists[f'{prefix}_rg'].Fill(gj_pt, delta_R(subjet_a, subjet_b), event_weight)
+
     def select_soft_drop(self, lund_seq, z_cut=0.1):
         """
         Return the first primary Lund splitting satisfying z > z_cut (soft-drop
@@ -590,17 +584,6 @@ class EmbeddingAnalysis:
         combined = list(oo_tracks)
         combined.extend(pp_tracks)
         return std.vector[fj.PseudoJet](combined)
-
-    def _find_perpcone_rho(self, ref_jet, combined, coneR=0.4):
-        perpcone1 = fj.PseudoJet()
-        perpcone1.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + np.pi/2, ref_jet.m())
-        perpcone2 = fj.PseudoJet()
-        perpcone2.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() - np.pi/2, ref_jet.m())
-        perpcone_pt = 0
-        for part in combined:
-          if perpcone1.delta_R(part) <= coneR or perpcone2.delta_R(part) <= coneR:
-            perpcone_pt += part.perp()
-        return perpcone_pt / (2*np.pi*coneR*coneR)
 
     def _make_event_display(
         self,
