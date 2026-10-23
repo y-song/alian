@@ -88,15 +88,15 @@ void plot_data_pt(std::string file_name)
     // std::string infile = "/home/youqi/alian/alian/output/embed_092726.root";
     TFile *f = new TFile(infile.c_str(), "READ");
 
-    TH1D *h_all = (TH1D *)f->Get("sub_pT");
-    // TH1D *h_all = (TH1D *)f->Get("pp_pT"); // for pp
+    // TH1D *h_all = (TH1D *)f->Get("sub_pT");
+    TH1D *h_all = (TH1D *)f->Get("pp_pT"); // for pp
 
     TH2 *h_sub_pT_pp_pT_matched = (TH2 *)f->Get("sub_pT_pp_pT_matched");
     TH2 *h_sub_pTg_pp_pTg_matched = (TH2 *)f->Get("sub_pTg_pp_pTg_matched");
-    TH1D *h_matched = h_sub_pT_pp_pT_matched->ProjectionY(Form("%s_projy", h_sub_pT_pp_pT_matched->GetName()));
-    TH1D *h_g_matched = h_sub_pTg_pp_pTg_matched->ProjectionY(Form("%s_projy", h_sub_pTg_pp_pTg_matched->GetName()));
-    // TH1D *h_matched = h_sub_pT_pp_pT_matched->ProjectionX(Form("%s_projx", h_sub_pT_pp_pT_matched->GetName())); // for pp
-    // TH1D *h_g_matched = h_sub_pTg_pp_pTg_matched->ProjectionX(Form("%s_projx", h_sub_pTg_pp_pTg_matched->GetName())); // for pp
+    // TH1D *h_matched = h_sub_pT_pp_pT_matched->ProjectionY(Form("%s_projy", h_sub_pT_pp_pT_matched->GetName()));
+    // TH1D *h_g_matched = h_sub_pTg_pp_pTg_matched->ProjectionY(Form("%s_projy", h_sub_pTg_pp_pTg_matched->GetName()));
+    TH1D *h_matched = h_sub_pT_pp_pT_matched->ProjectionX(Form("%s_projx", h_sub_pT_pp_pT_matched->GetName())); // for pp
+    TH1D *h_g_matched = h_sub_pTg_pp_pTg_matched->ProjectionX(Form("%s_projx", h_sub_pTg_pp_pTg_matched->GetName())); // for pp
 
     TCanvas *c = new TCanvas("c", "c", 700, 500);
     ProcessCanvas(c);
@@ -115,9 +115,11 @@ void plot_data_pt(std::string file_name)
     c->SaveAs(("output/embed_pt_" + file_name +".png").c_str());
 
     TH1D *h_ratio = (TH1D *)h_matched->Clone("h_matched_over_all");
-    h_ratio->Rebin(5);
-    h_all->Rebin(5);
+    // h_ratio->Rebin(5);
+    // h_all->Rebin(5);
     h_ratio->Divide(h_all);
+    // h_ratio->SetMinimum(0.9);
+    h_ratio->SetMaximum(1.);
     
     TCanvas *c_ratio = new TCanvas("c_ratio", "c_ratio", 700, 500);
     ProcessCanvas(c_ratio);
