@@ -18,6 +18,13 @@ The jet-jet term is combined_matched_eec_xy itself. Pair orientations follow
 combined_matched_eec_xy (both orders for aa/bb, one A-B orientation for ab), so
   signal_xy ~ eec_xy - (jetperp_xy - perp1perp2_xy) - perpperp_xy
 
+For closure, combined_matched_eec_xy is also split by the truth origin of the
+two tracks (pp: user_index >= 0, OO: user_index < 0):
+  combined_matched_eec_xy_sigsig      pp-pp pairs   (compare to signal_xy)
+  combined_matched_eec_xy_sigbkg      pp-OO pairs   (compare to jetperp_xy - perp1perp2_xy)
+  combined_matched_eec_xy_bkgbkg      OO-OO pairs   (compare to perpperp_xy)
+with sigsig + sigbkg + bkgbkg = combined_matched_eec_xy.
+
 Example usage:
 python analysis/test/embed_perpcone.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_perpcone.root
 """
@@ -315,6 +322,7 @@ class EmbeddingAnalysis:
 
                 self.do_eec(j, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
                 self.do_subjet_eec(j, subjet_a, subjet_b, "combined_matched", gj_pt_sub, event_weight=weight)
+                self.do_subjet_eec_truth(subjet_a, subjet_b, "combined_matched", gj_pt_sub, event_weight=weight)
 
                 if event_ghosts is None:
                     event_ghosts = self._event_ghosts(self.combined_jet_finder.cs)
@@ -568,6 +576,25 @@ class EmbeddingAnalysis:
         self.do_eec(subjet_b, f"{prefix}_eec_bb", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
         self.do_eec_cross(subjet_a, subjet_b, f"{prefix}_eec_ab", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
         self.hists[f'{prefix}_rg'].Fill(gj_pt, delta_R(subjet_a, subjet_b), event_weight)
+
+    def do_subjet_eec_truth(self, subjet_a, subjet_b, prefix, gj_pt, event_weight=1.0):
+        """
+        Split {prefix}_eec_aa, _bb, _ab by the truth origin of the pair: fills
+        {prefix}_eec_xy_sigsig / _sigbkg / _bkgbkg (signal = user_index >= 0).
+        Same pairs and weights as do_subjet_eec, so the three sum to {prefix}_eec_xy.
+        """
+        tracks_a = list(self.eec_trk_selector(subjet_a.constituents()))
+        tracks_b = list(self.eec_trk_selector(subjet_b.constituents()))
+        pair_types = ('bkgbkg', 'sigbkg', 'sigsig') # indexed by number of signal tracks in the pair
+        for xy, pairs in (
+            ('aa', itertools.permutations(tracks_a, 2)),
+            ('bb', itertools.permutations(tracks_b, 2)),
+            ('ab', itertools.product(tracks_a, tracks_b)),
+        ):
+            for p1, p2 in pairs:
+                pair_type = pair_types[(p1.user_index() >= 0) + (p2.user_index() >= 0)]
+                ew = p1.pt() * p2.pt() / gj_pt / gj_pt
+                self.hists[f'{prefix}_eec_{xy}_{pair_type}'].Fill(gj_pt, delta_R(p1, p2), ew*event_weight)
 
     def select_soft_drop(self, lund_seq, z_cut=0.1):
         """
