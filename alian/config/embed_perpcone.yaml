@@ -287,3 +287,41 @@ output:
     combined_matched_eec_bb_perp1perp2: [2, "combined_matched_eec_bb_perp1perp2",
       "Matched combined EEC BB, perp1-perp2;#it{p}_{T,g}^{sub} (GeV);R_{L}",
       jet_pT, RL]
+
+    # --- Matched combined subjet EEC split by truth pair origin ---
+
+    combined_matched_eec_aa_sigsig: [2, "combined_matched_eec_aa_sigsig",
+      "Matched combined EEC AA, truth sig-sig;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_aa_sigbkg: [2, "combined_matched_eec_aa_sigbkg",
+      "Matched combined EEC AA, truth sig-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_aa_bkgbkg: [2, "combined_matched_eec_aa_bkgbkg",
+      "Matched combined EEC AA, truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_ab_sigsig: [2, "combined_matched_eec_ab_sigsig",
+      "Matched combined EEC AB (one orientation), truth sig-sig;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_ab_sigbkg: [2, "combined_matched_eec_ab_sigbkg",
+      "Matched combined EEC AB (one orientation), truth sig-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_ab_bkgbkg: [2, "combined_matched_eec_ab_bkgbkg",
+      "Matched combined EEC AB (one orientation), truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_bb_sigsig: [2, "combined_matched_eec_bb_sigsig",
+      "Matched combined EEC BB, truth sig-sig;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_bb_sigbkg: [2, "combined_matched_eec_bb_sigbkg",
+      "Matched combined EEC BB, truth sig-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_eec_bb_bkgbkg: [2, "combined_matched_eec_bb_bkgbkg",
+      "Matched combined EEC BB, truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
