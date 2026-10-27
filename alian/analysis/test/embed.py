@@ -319,7 +319,7 @@ class EmbeddingAnalysis:
                 self.do_eec_cross(pp_subjet_a, pp_subjet_b, "pp_matched_eec_ab", ew_denom=pp_gj.pt(), jet_pt_bin=pp_gj.pt(), event_weight=weight)
                 self.hists['pp_matched_rg'].Fill(pp_gj.pt(), delta_R(pp_subjet_a, pp_subjet_b), weight)
                 
-                self.do_eec(j, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
+                self.do_eec(j, "combined_matched_eec", ew_denom=j.pt()-j.area()*rho, jet_pt_bin=j.pt()-j.area()*rho, event_weight=weight)
                 subjet_a = l.harder()
                 subjet_b = l.softer()
                 self.do_eec(j, "combined_matched_sdjet_eec", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight) # jet passes SD, but this includes stuff removed by SD

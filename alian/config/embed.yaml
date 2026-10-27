@@ -47,7 +47,7 @@ output:
     area:       ['lin',-0.2,   2,  44]
     centrality: ['lin',   0, 100, 100]
     dR:         ['lin',   0, 1.0, 100]
-    RL:         ['log', 1.0e-4, 1.0, 51]
+    RL:         ['log', 1.0e-4, 1.0, 48]
 
   histograms:
     # --- Existing jet, background and matching histograms ---
@@ -227,7 +227,7 @@ output:
     # --- Matched combined EEC and groomed radius ---
 
     combined_matched_eec: [2, "combined_matched_eec",
-      "Matched combined EEC;#it{p}_{T}^{combined} (GeV);R_{L}",
+      "Matched combined EEC;#it{p}_{T}^{sub} (GeV);R_{L}",
       jet_pT, RL]
 
     combined_matched_sdjet_eec: [2, "combined_matched_sdjet_eec",
