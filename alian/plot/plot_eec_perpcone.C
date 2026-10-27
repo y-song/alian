@@ -28,7 +28,7 @@ using namespace std;
 void SetStyle(Bool_t graypalette = true)
 {
     gStyle->Reset("Plain");
-    gStyle->SetOptTitle(0);
+    gStyle->SetOptTitle(1);
     gStyle->SetOptStat(0);
     if (graypalette)
         gStyle->SetPalette(8, 0);
@@ -85,7 +85,7 @@ void FormatHist(TLegend *l, TH1 *hist, std::string text, int markercolor = 1, in
     hist->SetMarkerColor(markercolor);
     hist->SetMarkerStyle(markerstyle);
     hist->SetMarkerSize(0.5);
-    l->AddEntry(hist, text.c_str(), "pl");
+    // l->AddEntry(hist, text.c_str(), "pl");
 
     hist->GetYaxis()->SetTitleOffset(1.05);
     hist->GetYaxis()->SetTitleSize(0.042);
@@ -120,8 +120,8 @@ TLine *drawHoriLine(double x1, double x2, double y1, int color, int linestyle = 
 void addLegendInfo(TLegend *l, TString jetR, TString plot_text)
 {
     l->SetTextSize(0.045);
-    l->AddEntry("NULL", "JEWEL " + plot_text, "h");
-    l->AddEntry("NULL", "#sqrt{#it{s}} = 5.02 TeV, #hat{#it{p}}_{T} > 90 GeV", "h");
+    l->AddEntry("NULL", "pp jets + OO 0#minus100% " + plot_text, "h");
+    // l->AddEntry("NULL", "#sqrt{#it{s}} = 5.02 TeV, #hat{#it{p}}_{T} > 90 GeV", "h");
     l->AddEntry("NULL", "Anti-#it{k}_{T} full jets, #it{R} = " + jetR, "h");
     l->AddEntry("NULL", "#it{p}_{T}^{track} > 1 GeV/#it{c}", "h");
     l->SetTextSize(0.037);
@@ -166,7 +166,7 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
     SetStyle();
 
     std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    // std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed_perpcone.root";
+    // std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed.root";
     std::string jetR    = "04";
     std::string jetR_str = "0.4";
     const std::string sample = "combined_matched";
@@ -204,7 +204,7 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
 
     // "all" is the combined EEC itself; the others are suffixes of it.
     const std::vector<std::string> terms = {"all", "sigsig", "sigbkg", "bkgbkg", "jetperp", "perpperp", "perp1perp2"};
-    const std::vector<std::string> sets = {"aa", "bb", "ab", "sum"};
+    const std::vector<std::string> sets = {"aa", "bb", "ab", "sum", "sdjet"};
     std::map<std::string, std::map<std::string, TH1D *>> h; // h[set][term]
 
     for (const std::string &xy : {std::string("aa"), std::string("bb"), std::string("ab")})
@@ -227,6 +227,12 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
         h["sum"][term] = (TH1D *)h["aa"][term]->Clone(("h_" + sample + "_eec_sum" + (term == "all" ? "" : "_" + term)).c_str());
         h["sum"][term]->Add(h["bb"][term]);
         h["sum"][term]->Add(h["ab"][term]);
+    }
+    // Inclusive EEC for jets that passed SD
+    for (const std::string &term : terms)
+    {
+        std::string hname = sample + "_sdjet_eec" + (term == "all" ? "" : "_" + term);
+        h["sdjet"][term] = LoadAndProcess(f, hname.c_str(), pt_lo, pt_hi, njets);
     }
 
     std::string outfile = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
@@ -264,7 +270,7 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
             {"sig-sig", kBlue, kFullCircle, t["sigsig"]},
             {"sig-bkg", kGreen+2, 33, t["sigbkg"]},
             {"bkg-bkg", kRed, 21, t["bkgbkg"]},
-            {"all comb.", kBlack, 29, t["all"]},
+            // {"all comb.", kBlack, 29, t["all"]},
             {"all comb. #minus [(jet-perp #minus perp1-perp2) + perp-perp]", kBlue+1, 24, h_sub},
             {"jet-perp #minus perp1-perp2", kGreen+3, 24, h_cross},
             {"perp-perp", kRed+1, 24, h_bkgbkg_est},
@@ -275,10 +281,10 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
         c->cd();
         gPad->SetLogx();
 
-        TLegend *l = new TLegend(0.5, 0.35, 0.9, 0.88);
+        TLegend *l = new TLegend(0.2, 0.65, 0.6, 0.88);
         std::string ptbin = pt_min + " < #it{p}_{T,g}^{sub} < " + pt_max + " GeV/#it{c}";
         addLegendInfo(l, jetR_str, plot_text);
-        l->AddEntry("NULL", (sample + ", EEC " + set).c_str(), "h");
+        // l->AddEntry("NULL", (sample + ", EEC " + set).c_str(), "h");
         l->AddEntry("NULL", ptbin.c_str(), "h");
 
         bool first = true;
@@ -287,9 +293,10 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
             TH1D *h1 = cfg.hist;
             FormatHist(l, h1, cfg.label, cfg.color, cfg.marker);
             h1->GetXaxis()->SetRangeUser(0.01, 0.4);
-            h1->GetYaxis()->SetRangeUser(0, 8);
+            h1->GetYaxis()->SetRangeUser(0, 6);
             h1->GetXaxis()->SetTitle("#it{R}_{L}");
             h1->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
+            h1->SetTitle(("EEC " + set).c_str());
             if (first)
             {
                 h1->Draw("L");

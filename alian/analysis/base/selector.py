@@ -361,6 +361,10 @@ class TrackSelector(Selector):
     def __call__(self, track):
         return self.selects(track)
 
+    def select_from(self, tracks):
+        """Return the tracks (any iterable of PseudoJets) that pass the selection, as a list."""
+        return [t for t in tracks if self.selects(t)]
+
 class ClusterSelector(Selector):
     """An cluster selector, configured via YAML.
 

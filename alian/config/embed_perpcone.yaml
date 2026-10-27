@@ -47,7 +47,7 @@ output:
     area:       ['lin',-0.2,   2,  44]
     centrality: ['lin',   0, 100, 100]
     dR:         ['lin',   0, 1.0, 100]
-    RL:         ['log', 1.0e-4, 1.0, 51]
+    RL:         ['log', 1.0e-4, 1.0, 48]
 
   histograms:
     # --- Existing jet, background and matching histograms ---
@@ -227,7 +227,7 @@ output:
     # --- Matched combined EEC and groomed radius ---
 
     combined_matched_eec: [2, "combined_matched_eec",
-      "Matched combined EEC;#it{p}_{T}^{combined} (GeV);R_{L}",
+      "Matched combined EEC;#it{p}_{T}^{sub} (GeV);R_{L}",
       jet_pT, RL]
 
     combined_matched_sdjet_eec: [2, "combined_matched_sdjet_eec",
@@ -324,4 +324,30 @@ output:
 
     combined_matched_eec_bb_bkgbkg: [2, "combined_matched_eec_bb_bkgbkg",
       "Matched combined EEC BB, truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    # --- Matched combined SD-jet EEC: perp-cone terms and truth pair origin ---
+
+    combined_matched_sdjet_eec_jetperp: [2, "combined_matched_sdjet_eec_jetperp",
+      "Matched combined EEC for SD-tagged jets (original constituents), jet-perp;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_sdjet_eec_perpperp: [2, "combined_matched_sdjet_eec_perpperp",
+      "Matched combined EEC for SD-tagged jets (original constituents), perp-perp;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_sdjet_eec_perp1perp2: [2, "combined_matched_sdjet_eec_perp1perp2",
+      "Matched combined EEC for SD-tagged jets (original constituents), perp1-perp2;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_sdjet_eec_sigsig: [2, "combined_matched_sdjet_eec_sigsig",
+      "Matched combined EEC for SD-tagged jets (original constituents), truth sig-sig;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_sdjet_eec_sigbkg: [2, "combined_matched_sdjet_eec_sigbkg",
+      "Matched combined EEC for SD-tagged jets (original constituents), truth sig-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
+      jet_pT, RL]
+
+    combined_matched_sdjet_eec_bkgbkg: [2, "combined_matched_sdjet_eec_bkgbkg",
+      "Matched combined EEC for SD-tagged jets (original constituents), truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
       jet_pT, RL]

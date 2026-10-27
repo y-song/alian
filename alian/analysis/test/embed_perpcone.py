@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Same as embed.py, plus perpendicular-cone background estimates for the
-matched combined subjet EECs (combined_matched_eec_aa/_ab/_bb).
+Modified based on embed.py, plus perpendicular-cone background estimates for the
+matched combined subjet EECs (combined_matched_eec_aa/_ab/_bb) and inclusive EEC
+(combined_matched_sdjet_eec, for jets that pass SD). 
 
 For each matched combined jet passing SD, two perp cones of radius perpcone_R
 are taken from the combined event at phi +/- pi/2 of the ungroomed jet axis and
 rotated under the jet. Each rotated perp-cone particle is assigned to subjet A
-or B according to the ghost (from the combined-event clustering) it is closest
-to; particles whose closest ghost is in neither subjet are dropped.
+or B according to the closest ghost of the (ungroomed) jet; particles whose
+closest ghost was groomed away are dropped.
 
 Filled per subjet pair type xy in (aa, ab, bb), with P1 (P2) the perp cone at
 phi + pi/2 (phi - pi/2):
@@ -48,6 +49,7 @@ from alian.analysis.base import (
     set_up_logger, delta_R,
 )
 from alian.analysis.base.output import Output
+from alian.analysis.base.selector import TrackSelector
 from alian.analysis.base.event import Event, get_selected_tracks, get_selected_particles
 from alian.analysis.base.utils import read_yaml, is_slurm
 from alian.io.data_io import DataInput
@@ -137,6 +139,7 @@ class EmbeddingAnalysis:
 
         # --- jet finders ---
         pp_jf_opts = {**JetFinder._defaults, **pp_cfg.get('jet_finder', {})}
+        self.pp_particle_jet_finder = JetFinder(**pp_jf_opts)
         self.pp_jet_finder = JetFinder(**pp_jf_opts)
         combined_jf_opts = {**JetFinder._defaults, **oo_cfg.get('jet_finder', {})}
         self.combined_jet_finder = JetFinder(**combined_jf_opts)
@@ -144,7 +147,7 @@ class EmbeddingAnalysis:
         self.area_cut = 0.56*np.pi*self.R*self.R
 
         # --- substructure tools ---
-        self.eec_trk_selector = fj.SelectorPtMin(self.pt_min_eec)
+        self.eec_trk_selector = TrackSelector(pt_min=self.pt_min_eec)
         self.lund_gen = fj.contrib.LundGenerator()
         # self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
@@ -194,7 +197,7 @@ class EmbeddingAnalysis:
         # --- pp particles, tracks, particle jets and det jets ---
         pp_particles = get_selected_particles(pp_ev, self.pp_selector.track)
         pp_tracks = get_selected_tracks(pp_ev, self.pp_selector.track)
-        pp_particle_jets = self.pp_jet_finder.find_jets(pp_particles, use_area=False)
+        pp_particle_jets = self.pp_particle_jet_finder.find_jets(pp_particles, use_area=False)
         pp_particle_jets = [j for j in pp_particle_jets if j.pt() >= self.pt_min_pp_jet]
         pp_jets_preselect = self.pp_jet_finder.find_jets(pp_tracks, use_area=False)
         pp_jets_preselect = [j for j in pp_jets_preselect if j.pt() >= self.pt_min_pp_jet]
@@ -208,24 +211,22 @@ class EmbeddingAnalysis:
 
         # --- match pp det jets to pp partice jets ---
         pp_jet_matched_indices = self.match_pp_particle_to_pp_det(pp_particle_jets, pp_jets)
-        pp_jets = [j for index, j in enumerate(pp_jets) if pp_jet_matched_indices[index] >= 0] 
+        pp_jets = [j for index, j in enumerate(pp_jets) if pp_jet_matched_indices[index] >= 0]
 
         # !!! from now on, only look at pp jets with a truth match !!!
-        pp_jet_tracks = []
-        for j in pp_jets:
-            pp_jet_tracks.extend(j.constituents())        
-        
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
-        for j in pp_jets:
+        pp_jet_tracks = [c for j in pp_jets for c in j.constituents()]
+        pp_subjets_list = [self.get_subjets(j, self.pt_min_pp_jet) for j in pp_jets] # one entry per jet: (gj, gj_pt, subjet_a, subjet_b), or None if that jet fails grooming
+        
+        for j, subjets in zip(pp_jets, pp_subjets_list):
             self.do_eec(j, "pp_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
-            subjets = self.get_subjets(j, self.pt_min_pp_jet)
             if subjets is None:
                 continue
             gj, gj_pt, subjet_a, subjet_b = subjets
             self.hists['pp_pTg'].Fill(gj_pt, weight)
-            self.do_subjet_eec(j, subjet_a, subjet_b, "pp", gj_pt, event_weight=weight)
-        
+            self.do_subjet_eec(j, subjet_a, subjet_b, "pp", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=weight)
+
         # --- combined event: pp jet tracks + oo tracks ---
         oo_tracks = get_selected_tracks(oo_ev, self.oo_selector.track, index_offset=-9999)
         combined = self._combined_event(pp_jet_tracks, oo_tracks)
@@ -249,7 +250,6 @@ class EmbeddingAnalysis:
         # Match the retained pp det jets to combined jets.
         # This starts a fresh matching pass, clearing the truth-match JetInfo.
         combined_jet_matched_indices = self.match_pp_det_to_combined(pp_jets, combined_jets)
-        event_ghosts = None # ghosts of the combined clustering, filled lazily for perp cones
 
         # --- fill cut flow histogram ---
         for combined_jet in combined_jets:
@@ -260,7 +260,7 @@ class EmbeddingAnalysis:
             deltaR_matches = []
             for pp_jet in pp_jets:
                 if self.is_geo_matched(combined_jet, pp_jet):
-                    deltaR_matches.append(pp_jet)  
+                    deltaR_matches.append(pp_jet)
             if len(deltaR_matches) > 0:
                 self.hists['combined_sub_cutflow'].Fill(1.5, weight) # combined jets with pp jets within delta R
                 for pp_jet in deltaR_matches:
@@ -279,21 +279,22 @@ class EmbeddingAnalysis:
             if subjets is None:
                 continue
             gj, gj_pt_sub, subjet_a, subjet_b = subjets
+            j_pt_sub = j.pt() - j.area()*rho
             # keep going if combined passes grooming
-            
+
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
             combined_constituents = [t for t in j.constituents() if not t.is_pure_ghost()]
             combined_g_constituents = [t for t in gj.constituents() if not t.is_pure_ghost()]
-            
+
             self.hists['combined_pTg'].Fill(gj.pt(), weight)
             self.hists['combined_pTg_sub_pTg'].Fill(gj_pt_sub, gj.pt(), weight)
-            self.hists['combined_pT_sub_pT'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
-            self.hists['combined_area_sub_pT'].Fill(j.pt()-j.area()*rho, j.area(), weight)
+            self.hists['combined_pT_sub_pT'].Fill(j_pt_sub, j.pt(), weight)
+            self.hists['combined_area_sub_pT'].Fill(j_pt_sub, j.area(), weight)
 
             if (pp_ijet != -1): # mateched to pp
 
                 pp_j = pp_jets[pp_ijet]
-                pp_subjets = self.get_subjets(pp_j, self.pt_min_pp_jet)
+                pp_subjets = pp_subjets_list[pp_ijet]
                 if pp_subjets is None:
                     continue
                 pp_gj, pp_gj_pt, pp_subjet_a, pp_subjet_b = pp_subjets
@@ -304,33 +305,41 @@ class EmbeddingAnalysis:
                 self.hists['pp_pTg_pp_pT_matched'].Fill(pp_j.pt(), pp_gj.pt(), weight)
 
                 self.hists['combined_pTg_matched'].Fill(gj_pt_sub, weight)
-                self.hists['combined_pT_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt(), weight)
-                self.hists['combined_area_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.area(), weight)
+                self.hists['combined_pT_sub_pT_matched'].Fill(j_pt_sub, j.pt(), weight)
+                self.hists['combined_area_sub_pT_matched'].Fill(j_pt_sub, j.area(), weight)
                 self.hists['combined_pTg_sub_pTg_matched'].Fill(gj_pt_sub, gj.pt(), weight)
 
-                self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho, weight)
+                self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j_pt_sub, weight)
                 self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj_pt_sub, weight)
                 self.hists['sub_n_pp_n_matched'].Fill(len(pp_j.constituents()), len(combined_constituents), weight)
                 self.hists['sub_ng_pp_ng_matched'].Fill(len(pp_gj.constituents()), len(combined_g_constituents), weight)
-                self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j.pt()-j.area()*rho-pp_j.pt(), weight)
-                self.hists['residual_sub_pT_matched'].Fill(j.pt()-j.area()*rho, j.pt()-j.area()*rho-pp_j.pt(), weight)
+                self.hists['residual_pp_pT_matched'].Fill(pp_j.pt(), j_pt_sub-pp_j.pt(), weight)
+                self.hists['residual_sub_pT_matched'].Fill(j_pt_sub, j_pt_sub-pp_j.pt(), weight)
                 self.hists['residual_pp_pTg_matched'].Fill(pp_gj.pt(), gj_pt_sub-pp_gj.pt(), weight)
                 self.hists['residual_sub_pTg_matched'].Fill(gj_pt_sub, gj_pt_sub-pp_gj.pt(), weight)
 
                 self.do_eec(pp_j, "pp_matched_eec", ew_denom=pp_j.pt(), jet_pt_bin=pp_j.pt(), event_weight=weight)
-                self.do_subjet_eec(pp_j, pp_subjet_a, pp_subjet_b, "pp_matched", pp_gj_pt, event_weight=weight)
+                self.do_subjet_eec(pp_j, pp_subjet_a, pp_subjet_b, "pp_matched", ew_denom=pp_gj_pt, jet_pt_bin=pp_gj_pt, event_weight=weight)
 
-                self.do_eec(j, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
-                self.do_subjet_eec(j, subjet_a, subjet_b, "combined_matched", gj_pt_sub, event_weight=weight)
-                self.do_subjet_eec_truth(subjet_a, subjet_b, "combined_matched", gj_pt_sub, event_weight=weight)
-
-                if event_ghosts is None:
-                    event_ghosts = self._event_ghosts(self.combined_jet_finder.cs)
-                self.do_perpcone_eec(j, subjet_a, subjet_b, combined, event_ghosts, "combined_matched_eec", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
+                self.do_eec(j, "combined_matched_eec", ew_denom=j_pt_sub, jet_pt_bin=j_pt_sub, event_weight=weight)
+                self.do_subjet_eec(j, subjet_a, subjet_b, "combined_matched", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
+                self.do_subjet_eec_truth(j, subjet_a, subjet_b, "combined_matched", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
+                self.do_subjet_eec_perpcone(j, subjet_a, subjet_b, combined, "combined_matched", ew_denom=gj_pt_sub, jet_pt_bin=gj_pt_sub, event_weight=weight)
 
     # -----------------------------------------------------------------------
-    # helpers
+    # event building
     # -----------------------------------------------------------------------
+
+    def _combined_event(self, pp_tracks, oo_tracks):
+        """Merge pp tracks with background tracks."""
+        combined = list(oo_tracks)
+        combined.extend(pp_tracks)
+        return std.vector[fj.PseudoJet](combined)
+
+    # -----------------------------------------------------------------------
+    # pp jet selection and jet matching
+    # -----------------------------------------------------------------------
+
     def reject_high_track_pt_jets(self, jets_preselect):
         jets = []
         for j in jets_preselect:
@@ -375,7 +384,7 @@ class EmbeddingAnalysis:
                 if require_mc_fraction:
                     if not (self.mc_fraction(source_jet, target_jet) > self.mc_fraction_threshold):
                         continue
-                deltaR = source_jet.delta_R(target_jet)
+                deltaR = delta_R(source_jet, target_jet)
                 self.set_jet_info(source_jet, target_index, deltaR)
                 self.set_jet_info(target_jet, source_index, deltaR)
 
@@ -392,13 +401,13 @@ class EmbeddingAnalysis:
 
         return matched_indices
 
-    #---------------------------------------------------------------
-    # Set 'jet_match' as a matching candidate in user_info of 'jet'
-    #
-    # Adapted directly from:
-    # pyjetty/alice_analysis/process/base/process_base.py
-    #---------------------------------------------------------------
     def set_jet_info(self, jet, jet_match_index, deltaR):
+        """
+        Add jet_match_index as a matching candidate in the JetInfo of jet, and
+        update the closest match
+        Adapted directly from:
+        pyjetty/alice_analysis/process/base/process_base.py
+        """
         if jet.has_user_info[alian.JetInfo]():
             jet_user_info = jet.user_info[alian.JetInfo]()
         else:
@@ -408,10 +417,13 @@ class EmbeddingAnalysis:
         if deltaR < jet_user_info.closest_jet_deltaR:
             jet_user_info.closest_jet_index = jet_match_index
             jet_user_info.closest_jet_deltaR = deltaR
-    #---------------------------------------------------------------
-    # Return whether a jet has a unique match
-    #---------------------------------------------------------------
+
     def is_match_unique(self, jet, matched_jets):
+        """
+        Return whether a jet has a unique match
+        Adapted directly from:
+        pyjetty/alice_analysis/process/base/process_base.py
+        """
         if jet.has_user_info[alian.JetInfo]():
             jet_info = jet.user_info[alian.JetInfo]()
             if jet_info.matching_candidates.size() == 1:
@@ -423,7 +435,7 @@ class EmbeddingAnalysis:
         return False
 
     def is_geo_matched(self, jet1, jet2):
-        deltaR = jet1.delta_R(jet2)
+        deltaR = delta_R(jet1, jet2)
 
         # Add a matching candidate to the list if it is within the geometrical cut
         if deltaR < 0.6 * self.R:
@@ -431,10 +443,10 @@ class EmbeddingAnalysis:
         else:
             return False
 
-    #---------------------------------------------------------------
-    # Return pt-fraction of tracks in jet_pp that are contained in jet_combined
-    #---------------------------------------------------------------
     def mc_fraction(self, jet_pp, jet_combined):
+        """
+        Return pt-fraction of tracks in jet_pp that are contained in jet_combined
+        """
         pt_total = jet_pp.pt()
         pt_contained = 0.
         for track in jet_combined.constituents():
@@ -442,115 +454,19 @@ class EmbeddingAnalysis:
             pt_contained += track.pt()
         return pt_contained/pt_total
 
-    def do_eec(self, jet, hist_name, ew_denom=None, jet_pt_bin=None, event_weight=1.0):
-        if ew_denom is None:
-            ew_denom = jet.pt()
-        if jet_pt_bin is None:
-            jet_pt_bin = jet.pt()
-        tracks = self.eec_trk_selector(jet.constituents())
-        for p1, p2 in itertools.permutations(tracks, 2):
-            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
-            rl = delta_R(p1, p2)
-            self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
+    # -----------------------------------------------------------------------
+    # grooming
+    # -----------------------------------------------------------------------
 
-    def do_eec_cross(self, subjet_a, subjet_b, hist_name, ew_denom, jet_pt_bin, event_weight=1.0):
-        tracks_a = self.eec_trk_selector(subjet_a.constituents())
-        tracks_b = self.eec_trk_selector(subjet_b.constituents())
-        for p1 in tracks_a:
-            for p2 in tracks_b:
-                ew = p1.pt() * p2.pt() / ew_denom / ew_denom
-                rl = delta_R(p1, p2)
-                self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
-
-    def do_perpcone_eec(self, jet, subjet_a, subjet_b, combined, ghosts, hist_prefix, ew_denom, jet_pt_bin, event_weight=1.0):
+    def select_soft_drop(self, lund_seq, z_cut=0.1):
         """
-        Fill perp-cone EEC terms for subjets A and B of jet.
-
-        Perp cones are placed at phi +/- pi/2 of the ungroomed jet axis, rotated
-        under the jet, and their particles are assigned to A or B via the
-        closest ghost. See the module docstring for the histograms filled.
+        Return the first primary Lund splitting satisfying z > z_cut (soft-drop
+        condition with beta=0), or None if no splitting passes.
         """
-        perp1 = self._eec_tracks(self._perpcone_parts(jet, combined, +np.pi/2))
-        perp2 = self._eec_tracks(self._perpcone_parts(jet, combined, -np.pi/2))
-        perp1_a, perp1_b = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b)
-        perp2_a, perp2_b = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
-        jet_a = self._eec_tracks(subjet_a.constituents())
-        jet_b = self._eec_tracks(subjet_b.constituents())
-
-        for xy, (jet_x, p1_x, p2_x), (jet_y, p1_y, p2_y) in (
-            ('aa', (jet_a, perp1_a, perp2_a), (jet_a, perp1_a, perp2_a)),
-            ('ab', (jet_a, perp1_a, perp2_a), (jet_b, perp1_b, perp2_b)),
-            ('bb', (jet_b, perp1_b, perp2_b), (jet_b, perp1_b, perp2_b)),
-        ):
-            jetperp = itertools.chain(itertools.product(jet_x, p1_y), itertools.product(p1_x, jet_y))
-            perp1perp2 = itertools.chain(itertools.product(p1_x, p2_y), itertools.product(p2_x, p1_y))
-            if xy == 'ab':
-                perpperp = itertools.product(p1_x, p1_y)
-            else:
-                perpperp = itertools.permutations(p1_x, 2)
-            self._fill_eec_pairs(jetperp, f"{hist_prefix}_{xy}_jetperp", ew_denom, jet_pt_bin, event_weight)
-            self._fill_eec_pairs(perpperp, f"{hist_prefix}_{xy}_perpperp", ew_denom, jet_pt_bin, event_weight)
-            self._fill_eec_pairs(perp1perp2, f"{hist_prefix}_{xy}_perp1perp2", ew_denom, jet_pt_bin, event_weight)
-
-    def _fill_eec_pairs(self, pairs, hist_name, ew_denom, jet_pt_bin, event_weight=1.0):
-        for p1, p2 in pairs:
-            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
-            rl = delta_R(p1, p2)
-            self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
-
-    def _eec_tracks(self, parts):
-        """Python-list equivalent of eec_trk_selector (also drops ghosts)."""
-        return [p for p in parts if p.pt() >= self.pt_min_eec]
-
-    def _perpcone_parts(self, ref_jet, parts, dphi):
-        """Return copies of parts within perpcone_R of ref_jet rotated by dphi, rotated back by -dphi."""
-        perpcone = fj.PseudoJet()
-        perpcone.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + dphi, ref_jet.m())
-        rotated = []
-        for part in parts:
-            if perpcone.delta_R(part) > self.perpcone_R:
-                continue
-            p = fj.PseudoJet()
-            p.reset_PtYPhiM(part.pt(), part.rapidity(), part.phi() - dphi, part.m())
-            p.set_user_index(part.user_index())
-            rotated.append(p)
-        return rotated
-
-    def _event_ghosts(self, cs):
-        """Return (rapidity, phi) arrays of all explicit ghosts in cs."""
-        ys, phis = [], []
-        for cs_jet in cs.inclusive_jets():
-            for c in cs_jet.constituents():
-                if c.is_pure_ghost():
-                    ys.append(c.rap())
-                    phis.append(c.phi())
-        return np.array(ys), np.array(phis)
-
-    def _assign_to_subjets(self, parts, ghosts, subjet_a, subjet_b):
-        """
-        Split parts into (parts_a, parts_b) by the subjet holding each part's
-        closest ghost. Parts whose closest ghost is in neither subjet are dropped.
-
-        Ghosts are identified by (rapidity, phi): the Lund subjets come from a
-        reclustering (fastjet::Recluster) with its own cluster history, so
-        cluster_hist_index does not carry over, but the ghost momenta are copied.
-        """
-        ghost_y, ghost_phi = ghosts
-        if len(ghost_y) == 0:
-            return [], []
-        ghosts_a = {(c.rap(), c.phi()) for c in subjet_a.constituents() if c.is_pure_ghost()}
-        ghosts_b = {(c.rap(), c.phi()) for c in subjet_b.constituents() if c.is_pure_ghost()}
-        parts_a, parts_b = [], []
-        for p in parts:
-            dphi = np.abs(ghost_phi - p.phi())
-            dphi = np.minimum(dphi, 2*np.pi - dphi)
-            closest = np.argmin((ghost_y - p.rap())**2 + dphi**2)
-            ghost = (float(ghost_y[closest]), float(ghost_phi[closest]))
-            if ghost in ghosts_a:
-                parts_a.append(p)
-            elif ghost in ghosts_b:
-                parts_b.append(p)
-        return parts_a, parts_b
+        for l in lund_seq:
+            if l.z() > z_cut:
+                return l
+        return None
 
     def get_subjets(self, jet, pt_min, rho=0.0):
         """
@@ -569,48 +485,143 @@ class EmbeddingAnalysis:
             return None
         return gj, gj_pt, l.harder(), l.softer()
 
-    def do_subjet_eec(self, jet, subjet_a, subjet_b, prefix, gj_pt, event_weight=1.0):
-        """Fill {prefix}_sdjet_eec, _eec_aa, _eec_bb, _eec_ab and _rg, normalized and binned by groomed pT."""
-        self.do_eec(jet, f"{prefix}_sdjet_eec", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight) # jet passes SD, but this includes stuff removed by SD
-        self.do_eec(subjet_a, f"{prefix}_eec_aa", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
-        self.do_eec(subjet_b, f"{prefix}_eec_bb", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
-        self.do_eec_cross(subjet_a, subjet_b, f"{prefix}_eec_ab", ew_denom=gj_pt, jet_pt_bin=gj_pt, event_weight=event_weight)
-        self.hists[f'{prefix}_rg'].Fill(gj_pt, delta_R(subjet_a, subjet_b), event_weight)
+    # -----------------------------------------------------------------------
+    # EECs
+    # -----------------------------------------------------------------------
 
-    def do_subjet_eec_truth(self, subjet_a, subjet_b, prefix, gj_pt, event_weight=1.0):
+    def do_eec(self, jet, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
+        tracks = self.eec_trk_selector.select_from(jet.constituents())
+        self._fill_eec_pairs(itertools.permutations(tracks, 2), hist_name, ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+
+    def do_eec_cross(self, subjet_a, subjet_b, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
+        tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector.select_from(subjet_b.constituents())
+        self._fill_eec_pairs(itertools.product(tracks_a, tracks_b), hist_name, ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+
+    def do_subjet_eec(self, jet, subjet_a, subjet_b, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
+        """Fill {prefix}_sdjet_eec, _eec_aa, _eec_bb, _eec_ab and _rg, binned by groomed pT."""
+        self.do_eec(jet, f"{prefix}_sdjet_eec", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight) # jet passes SD, but this includes stuff removed by SD
+        self.do_eec(subjet_a, f"{prefix}_eec_aa", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+        self.do_eec(subjet_b, f"{prefix}_eec_bb", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+        self.do_eec_cross(subjet_a, subjet_b, f"{prefix}_eec_ab", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+        self.hists[f'{prefix}_rg'].Fill(jet_pt_bin, delta_R(subjet_a, subjet_b), event_weight)
+
+    def do_subjet_eec_truth(self, jet, subjet_a, subjet_b, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
         """
-        Split {prefix}_eec_aa, _bb, _ab by the truth origin of the pair: fills
-        {prefix}_eec_xy_sigsig / _sigbkg / _bkgbkg (signal = user_index >= 0).
-        Same pairs and weights as do_subjet_eec, so the three sum to {prefix}_eec_xy.
+        Split {prefix}_sdjet_eec, _eec_aa, _eec_bb, _eec_ab by the truth origin of the pair:
+        fills {prefix}_<region>_sigsig / _sigbkg / _bkgbkg (signal = user_index >= 0).
+        Same pairs and weights as do_subjet_eec, so the three sum to {prefix}_<region>.
         """
-        tracks_a = list(self.eec_trk_selector(subjet_a.constituents()))
-        tracks_b = list(self.eec_trk_selector(subjet_b.constituents()))
+        tracks = self.eec_trk_selector.select_from(jet.constituents())
+        tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector.select_from(subjet_b.constituents())
         pair_types = ('bkgbkg', 'sigbkg', 'sigsig') # indexed by number of signal tracks in the pair
-        for xy, pairs in (
-            ('aa', itertools.permutations(tracks_a, 2)),
-            ('bb', itertools.permutations(tracks_b, 2)),
-            ('ab', itertools.product(tracks_a, tracks_b)),
+        for region, pairs in (
+            ('sdjet_eec', itertools.permutations(tracks, 2)),
+            ('eec_aa', itertools.permutations(tracks_a, 2)),
+            ('eec_bb', itertools.permutations(tracks_b, 2)),
+            ('eec_ab', itertools.product(tracks_a, tracks_b)),
         ):
             for p1, p2 in pairs:
-                pair_type = pair_types[(p1.user_index() >= 0) + (p2.user_index() >= 0)]
-                ew = p1.pt() * p2.pt() / gj_pt / gj_pt
-                self.hists[f'{prefix}_eec_{xy}_{pair_type}'].Fill(gj_pt, delta_R(p1, p2), ew*event_weight)
+                pair_type = pair_types[(p1.user_index() >= 0) + (p2.user_index() >= 0)] # adding 2 booleans, index will be 0, 1 or 2
+                ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+                self.hists[f'{prefix}_{region}_{pair_type}'].Fill(jet_pt_bin, delta_R(p1, p2), ew*event_weight)
 
-    def select_soft_drop(self, lund_seq, z_cut=0.1):
+    def do_subjet_eec_perpcone(self, jet, subjet_a, subjet_b, combined, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
         """
-        Return the first primary Lund splitting satisfying z > z_cut (soft-drop
-        condition with beta=0), or None if no splitting passes.
+        Fill perp-cone EEC terms for the SD jet and for subjets A and B of jet.
+
+        Perp cones are placed at phi +/- pi/2 of the ungroomed jet axis, rotated
+        under the jet, and their particles are assigned to A or B via the
+        closest ghost. See the module docstring for the histograms filled.
         """
-        for l in lund_seq:
-            if l.z() > z_cut:
-                return l
-        return None
-        
-    def _combined_event(self, pp_tracks, oo_tracks):
-        """Merge pp tracks with background tracks."""
-        combined = list(oo_tracks)
-        combined.extend(pp_tracks)
-        return std.vector[fj.PseudoJet](combined)
+        perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2))
+        perp2 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, -np.pi/2))
+        ghosts = self._jet_ghosts(jet)
+        perp1_a, perp1_b = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b)
+        perp2_a, perp2_b = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
+
+        tracks = self.eec_trk_selector.select_from(jet.constituents())
+        tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector.select_from(subjet_b.constituents())
+
+        terms = [] # (region, jet-P1 pairs, P1-P1 pairs, P1-P2 pairs)
+        # inclusive, eec_aa and eec_bb
+        for region, jet_tracks, p1, p2 in (
+            ('sdjet_eec', tracks, perp1, perp2),
+            ('eec_aa', tracks_a, perp1_a, perp2_a),
+            ('eec_bb', tracks_b, perp1_b, perp2_b),
+        ):
+            terms.append((
+                region,
+                itertools.chain(itertools.product(jet_tracks, p1), itertools.product(p1, jet_tracks)),
+                itertools.permutations(p1, 2),
+                itertools.chain(itertools.product(p1, p2), itertools.product(p2, p1)),
+            ))
+        # eec_ab
+        terms.append((
+            'eec_ab',
+            itertools.chain(itertools.product(tracks_a, perp1_b), itertools.product(perp1_a, tracks_b)),
+            itertools.product(perp1_a, perp1_b),
+            itertools.chain(itertools.product(perp1_a, perp2_b), itertools.product(perp2_a, perp1_b)),
+        ))
+
+        for region, jetperp, perpperp, perp1perp2 in terms:
+            self._fill_eec_pairs(jetperp, f"{prefix}_{region}_jetperp", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+            self._fill_eec_pairs(perpperp, f"{prefix}_{region}_perpperp", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+            self._fill_eec_pairs(perp1perp2, f"{prefix}_{region}_perp1perp2", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+
+    def _fill_eec_pairs(self, pairs, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
+        for p1, p2 in pairs:
+            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
+            rl = delta_R(p1, p2)
+            self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
+
+    def _perpcone_parts(self, ref_jet, parts, dphi):
+        """Return copies of parts within perpcone_R of ref_jet rotated by dphi, rotated back by -dphi."""
+        perpcone = fj.PseudoJet()
+        perpcone.reset_PtYPhiM(ref_jet.perp(), ref_jet.rapidity(), ref_jet.phi() + dphi, ref_jet.m())
+        rotated = []
+        for part in parts:
+            if delta_R(perpcone, part) > self.perpcone_R:
+                continue
+            p = fj.PseudoJet()
+            p.reset_PtYPhiM(part.pt(), part.rapidity(), part.phi() - dphi, part.m())
+            p.set_user_index(part.user_index())
+            rotated.append(p)
+        return rotated
+
+    def _jet_ghosts(self, jet):
+        """Return the explicit ghosts in jet."""
+        return [c for c in jet.constituents() if c.is_pure_ghost()]
+
+    def _assign_to_subjets(self, parts, ghosts, subjet_a, subjet_b):
+        """
+        Split parts into (parts_a, parts_b) by the subjet holding each part's
+        closest ghost in delta_R (eta-phi). Parts whose closest ghost is in
+        neither subjet are dropped.
+
+        Ghosts are identified by (eta, phi): the Lund subjets come from a
+        reclustering (fastjet::Recluster) with its own cluster history, so
+        cluster_hist_index does not carry over, but the ghost momenta are copied.
+        """
+        if len(ghosts) == 0:
+            return [], []
+        ghosts_a = {(c.eta(), c.phi()) for c in subjet_a.constituents() if c.is_pure_ghost()}
+        ghosts_b = {(c.eta(), c.phi()) for c in subjet_b.constituents() if c.is_pure_ghost()}
+        parts_a, parts_b = [], []
+        for p in parts:
+            closest = min(ghosts, key=lambda g: delta_R(g, p))
+            ghost = (closest.eta(), closest.phi())
+            if ghost in ghosts_a:
+                parts_a.append(p)
+            elif ghost in ghosts_b:
+                parts_b.append(p)
+        return parts_a, parts_b
+    
+    # -----------------------------------------------------------------------
+    # event display
+    # -----------------------------------------------------------------------
 
     def _make_event_display(
         self,
