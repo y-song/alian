@@ -25,6 +25,7 @@ oo:
     alg: antikt
     pT_min: 10.0
     eta_max: 0.5
+    ghost_area: 0.01 # lower to check convergence of the perp-cone A/B ghost assignment
 
 bkg_estimator:
   max_eta: 0.9
@@ -48,6 +49,8 @@ output:
     centrality: ['lin',   0, 100, 100]
     dR:         ['lin',   0, 1.0, 100]
     RL:         ['log', 1.0e-4, 1.0, 48]
+    ghost_dR:   ['lin',   0, 0.2, 80]
+    assign:     ['custom', [-0.5, 0.5, 1.5, 2.5]]
 
   histograms:
     # --- Existing jet, background and matching histograms ---
@@ -351,3 +354,33 @@ output:
     combined_matched_sdjet_eec_bkgbkg: [2, "combined_matched_sdjet_eec_bkgbkg",
       "Matched combined EEC for SD-tagged jets (original constituents), truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
       jet_pT, RL]
+
+    # --- Ghost-based A/B assignment diagnostics (perp cones and closure) ---
+
+    combined_matched_perp_ghost_dR_a: [2, "combined_matched_perp_ghost_dR_a",
+      "Perp-cone particles assigned to A;#it{p}_{T,g}^{sub} (GeV);#Delta#it{R}(particle, closest ghost)",
+      jet_pT, ghost_dR]
+
+    combined_matched_perp_ghost_dR_b: [2, "combined_matched_perp_ghost_dR_b",
+      "Perp-cone particles assigned to B;#it{p}_{T,g}^{sub} (GeV);#Delta#it{R}(particle, closest ghost)",
+      jet_pT, ghost_dR]
+
+    combined_matched_perp_ghost_dR_none: [2, "combined_matched_perp_ghost_dR_none",
+      "Perp-cone particles assigned to neither;#it{p}_{T,g}^{sub} (GeV);#Delta#it{R}(particle, closest ghost)",
+      jet_pT, ghost_dR]
+
+    combined_matched_perp_assign: [2, "combined_matched_perp_assign",
+      "Perp-cone particle assignment (0: A, 1: B, 2: neither);#it{p}_{T,g}^{sub} (GeV);category",
+      jet_pT, assign]
+
+    combined_matched_perp_assign_rg: [2, "combined_matched_perp_assign_rg",
+      "Perp-cone particle assignment (0: A, 1: B, 2: neither);R_{g};category",
+      RL, assign]
+
+    combined_matched_ghost_closure: [2, "combined_matched_ghost_closure",
+      "Ghost assignment of jet A/B tracks (0: correct, 1: swapped, 2: dropped);R_{g};outcome",
+      RL, assign]
+
+    combined_matched_ghost_closure_bkg: [2, "combined_matched_ghost_closure_bkg",
+      "Ghost assignment of jet A/B OO tracks (0: correct, 1: swapped, 2: dropped);R_{g};outcome",
+      RL, assign]

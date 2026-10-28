@@ -26,6 +26,15 @@ two tracks (pp: user_index >= 0, OO: user_index < 0):
   combined_matched_eec_xy_bkgbkg      OO-OO pairs   (compare to perpperp_xy)
 with sigsig + sigbkg + bkgbkg = combined_matched_eec_xy.
 
+To check that the ghost density (oo.jet_finder.ghost_area) is sufficient for the
+A/B assignment, the following are also filled (see _fill_ghost_diagnostics):
+  combined_matched_perp_ghost_dR_{a,b,none}  dR of perp particle to closest ghost
+  combined_matched_perp_assign[_rg]          perp particle category (A, B, neither)
+  combined_matched_ghost_closure[_bkg]       ghost assignment of the jet's own A/B tracks
+Rerun with decreasing ghost_area: the assignment fractions, closure and perp-cone
+EEC terms should converge. dR to the closest ghost scales as sqrt(ghost_area) by
+construction and does not converge.
+
 Example usage:
 python analysis/test/embed_perpcone.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_perpcone.root
 """
@@ -53,6 +62,10 @@ from alian.analysis.base.selector import TrackSelector
 from alian.analysis.base.event import Event, get_selected_tracks, get_selected_particles
 from alian.analysis.base.utils import read_yaml, is_slurm
 from alian.io.data_io import DataInput
+
+# ghost assignment categories and closure outcomes (values filled on the "assign" axis)
+ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
+CLOSURE_CORRECT, CLOSURE_SWAPPED, CLOSURE_DROPPED = 0, 1, 2
 
 # source code locations
 # /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
@@ -534,12 +547,14 @@ class EmbeddingAnalysis:
         Perp cones are placed at phi +/- pi/2 of the ungroomed jet axis, rotated
         under the jet, and their particles are assigned to A or B via the
         closest ghost. See the module docstring for the histograms filled.
+        Also fills the ghost-assignment diagnostics (_fill_ghost_diagnostics).
         """
         perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2))
         perp2 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, -np.pi/2))
         ghosts = self._jet_ghosts(jet)
-        perp1_a, perp1_b = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b)
-        perp2_a, perp2_b = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
+        perp1_a, perp1_b, perp1_info = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b)
+        perp2_a, perp2_b, perp2_info = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
+        self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, ghosts, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet.constituents())
         tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
@@ -601,23 +616,62 @@ class EmbeddingAnalysis:
         closest ghost in delta_R (eta-phi). Parts whose closest ghost is in
         neither subjet are dropped.
 
+        Also return one (category, dR) per part, with category ASSIGN_A,
+        ASSIGN_B or ASSIGN_NONE and dR the distance to the closest ghost.
+
         Ghosts are identified by (eta, phi): the Lund subjets come from a
         reclustering (fastjet::Recluster) with its own cluster history, so
         cluster_hist_index does not carry over, but the ghost momenta are copied.
         """
         if len(ghosts) == 0:
-            return [], []
+            return [], [], [(ASSIGN_NONE, -1.0) for _ in parts]
         ghosts_a = {(c.eta(), c.phi()) for c in subjet_a.constituents() if c.is_pure_ghost()}
         ghosts_b = {(c.eta(), c.phi()) for c in subjet_b.constituents() if c.is_pure_ghost()}
-        parts_a, parts_b = [], []
+        parts_a, parts_b, info = [], [], []
         for p in parts:
-            closest = min(ghosts, key=lambda g: delta_R(g, p))
+            dR, closest = min(((delta_R(g, p), g) for g in ghosts), key=lambda x: x[0])
             ghost = (closest.eta(), closest.phi())
             if ghost in ghosts_a:
                 parts_a.append(p)
+                info.append((ASSIGN_A, dR))
             elif ghost in ghosts_b:
                 parts_b.append(p)
-        return parts_a, parts_b
+                info.append((ASSIGN_B, dR))
+            else:
+                info.append((ASSIGN_NONE, dR))
+        return parts_a, parts_b, info
+
+    def _fill_ghost_diagnostics(self, perp_info, subjet_a, subjet_b, ghosts, prefix, *, jet_pt_bin, event_weight=1.0):
+        """
+        Diagnostics for the ghost-based A/B assignment, to check convergence in
+        ghost_area:
+          {prefix}_perp_ghost_dR_{a,b,none}  dR of perp-cone particle to its closest ghost vs pT_g
+          {prefix}_perp_assign               assignment category of perp-cone particles vs pT_g
+          {prefix}_perp_assign_rg            assignment category of perp-cone particles vs R_g
+          {prefix}_ghost_closure[_bkg]       ghost assignment of the jet's own A/B tracks
+                                             (all / OO-origin only) vs R_g: correct, swapped, dropped
+        """
+        rg = delta_R(subjet_a, subjet_b)
+        suffixes = {ASSIGN_A: 'a', ASSIGN_B: 'b', ASSIGN_NONE: 'none'}
+        for category, dR in perp_info:
+            self.hists[f'{prefix}_perp_ghost_dR_{suffixes[category]}'].Fill(jet_pt_bin, dR, event_weight)
+            self.hists[f'{prefix}_perp_assign'].Fill(jet_pt_bin, category, event_weight)
+            self.hists[f'{prefix}_perp_assign_rg'].Fill(rg, category, event_weight)
+
+        # closure: assign the jet's own subjet tracks via ghosts and compare to their true subjet
+        for true_category, subjet in ((ASSIGN_A, subjet_a), (ASSIGN_B, subjet_b)):
+            tracks = self.eec_trk_selector.select_from(subjet.constituents())
+            _, _, info = self._assign_to_subjets(tracks, ghosts, subjet_a, subjet_b)
+            for t, (category, _) in zip(tracks, info):
+                if category == true_category:
+                    outcome = CLOSURE_CORRECT
+                elif category == ASSIGN_NONE:
+                    outcome = CLOSURE_DROPPED
+                else:
+                    outcome = CLOSURE_SWAPPED
+                self.hists[f'{prefix}_ghost_closure'].Fill(rg, outcome, event_weight)
+                if t.user_index() < 0:
+                    self.hists[f'{prefix}_ghost_closure_bkg'].Fill(rg, outcome, event_weight)
     
     # -----------------------------------------------------------------------
     # event display

@@ -19,12 +19,14 @@ class JetFinder:
         R (str): The jet resolution / radius parameter.
         alg (fastjet.JetDefinition): The jet definition.
         pT_min (int): The minimum jet transverse momentum in GeV.
+        ghost_area (float): The area per ghost for jet areas (fastjet default 0.01).
     """
 
     _defaults = {
         'R': 0.4,
         'alg': fj.antikt_algorithm,
         'pT_min': 10,
+        'ghost_area': 0.01,
     }
     _defaults["eta_max"] = 0.9 - _defaults["R"]
 
@@ -39,7 +41,7 @@ class JetFinder:
         for key in keys
     }
 
-    def __init__(self, alg = fj.antikt_algorithm, R = 0.4, eta_max = None, pT_min = 10):
+    def __init__(self, alg = fj.antikt_algorithm, R = 0.4, eta_max = None, pT_min = 10, ghost_area = 0.01):
         self.logger = set_up_logger(__name__)
         self.R = R
         if eta_max is None:
@@ -49,9 +51,10 @@ class JetFinder:
         self.alg = self._parse_jet_alg(alg)
         self.jet_def = fj.JetDefinition(self.alg, self.R)
         self.pT_min = pT_min
+        self.ghost_area = ghost_area
         self.jet_selector = fj.SelectorAbsEtaMax(self.eta_max) * fj.SelectorPtMin(pT_min)
         fj.ClusterSequence.print_banner()
-        self.area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(self.eta_max + self.R))
+        self.area_def = fj.AreaDefinition(fj.active_area_explicit_ghosts, fj.GhostedAreaSpec(self.eta_max + self.R, 1, self.ghost_area))
 
     @singledispatchmethod
     @classmethod
