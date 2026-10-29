@@ -11,8 +11,8 @@
 
 FILE_LIST_PP=list/MC_pp_anchored_OO_hadd50.txt
 FILE_LIST_OO=list/OO_mb.txt
-CONFIG=config/embed.yaml
-ANALYSIS_CODE=analysis/test/embed.py
+CONFIG=config/embed_perpcone.yaml
+ANALYSIS_CODE=analysis/test/embed_perpcone.py
 OUTPUT_DIR=/rstorage/youqi/$SLURM_ARRAY_JOB_ID
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     mkdir -p "$OUTPUT_DIR"

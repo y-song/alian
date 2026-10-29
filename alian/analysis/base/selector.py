@@ -293,7 +293,7 @@ class EventSelector(Selector):
            and self.pass_occupancy_min(event) and self.pass_occupancy_max(event)
 
 class TrackSelector(Selector):
-    """An track selector, configured via YAML.
+    """A track selector, configured via YAML.
 
     The TrackSelector contains all track-level selections. To ignore a particular selection,
     set the relevant selection to None.  Multiple `track_sel` can be combined with
@@ -362,7 +362,8 @@ class TrackSelector(Selector):
         return self.selects(track)
 
     def select_from(self, tracks):
-        """Return the tracks (any iterable of PseudoJets) that pass the selection, as a list."""
+        """Take in tracks (any iterable, could be cppyy.gbl.std.vector[fj.PseudoJet] or a Python list)
+        and return the selected tracks in a Python list"""
         return [t for t in tracks if self.selects(t)]
 
 class ClusterSelector(Selector):

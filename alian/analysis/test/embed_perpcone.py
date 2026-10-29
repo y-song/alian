@@ -549,10 +549,10 @@ class EmbeddingAnalysis:
         closest ghost. See the module docstring for the histograms filled.
         Also fills the ghost-assignment diagnostics (_fill_ghost_diagnostics).
         """
-        perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2))
+        perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2)) # a list of PseudoJets
         perp2 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, -np.pi/2))
-        ghosts = self._jet_ghosts(jet)
-        perp1_a, perp1_b, perp1_info = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b)
+        ghosts = self._jet_ghosts(jet) # a list of PseudoJets
+        perp1_a, perp1_b, perp1_info = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b) # lists of PseudoJets, list of (category, dR) tuples
         perp2_a, perp2_b, perp2_info = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
         self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, ghosts, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
@@ -612,24 +612,25 @@ class EmbeddingAnalysis:
 
     def _assign_to_subjets(self, parts, ghosts, subjet_a, subjet_b):
         """
-        Split parts into (parts_a, parts_b) by the subjet holding each part's
-        closest ghost in delta_R (eta-phi). Parts whose closest ghost is in
-        neither subjet are dropped.
+        Assign each part to subjet A or B by which subjet holds its closest ghost.
 
-        Also return one (category, dR) per part, with category ASSIGN_A,
-        ASSIGN_B or ASSIGN_NONE and dR the distance to the closest ghost.
+        Returns (parts_a, parts_b, info):
+          parts_a, parts_b  lists of PseudoJets, the subsets of parts assigned to A / B
+          info              list of (category, dR) tuples, one per part, with category
+                            ASSIGN_A/ASSIGN_B/ASSIGN_NONE and dR to the closest ghost
+                            (-1.0 if there are no ghosts)
 
-        Ghosts are identified by (eta, phi): the Lund subjets come from a
-        reclustering (fastjet::Recluster) with its own cluster history, so
-        cluster_hist_index does not carry over, but the ghost momenta are copied.
+        Ghosts are matched by (eta, phi), since the reclustered Lund subjets do not
+        keep cluster_hist_index.
         """
         if len(ghosts) == 0:
             return [], [], [(ASSIGN_NONE, -1.0) for _ in parts]
-        ghosts_a = {(c.eta(), c.phi()) for c in subjet_a.constituents() if c.is_pure_ghost()}
+        ghosts_a = {(c.eta(), c.phi()) for c in subjet_a.constituents() if c.is_pure_ghost()} # a set of tuples
         ghosts_b = {(c.eta(), c.phi()) for c in subjet_b.constituents() if c.is_pure_ghost()}
         parts_a, parts_b, info = [], [], []
         for p in parts:
-            dR, closest = min(((delta_R(g, p), g) for g in ghosts), key=lambda x: x[0])
+            # for each p, find the ghost g that gives the min of delta_R(g, p). assign this ghost to "closest"
+            dR, closest = min(((delta_R(g, p), g) for g in ghosts), key=lambda x: x[0]) # x is a tuple, x[0] is delta_R(g, p) and x[1] is g
             ghost = (closest.eta(), closest.phi())
             if ghost in ghosts_a:
                 parts_a.append(p)

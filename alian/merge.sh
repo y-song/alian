@@ -1,6 +1,6 @@
 #! /bin/bash
 
-JOB_ID=2013681
+JOB_ID=2013714
 
 FILE_DIR=/rstorage/youqi/$JOB_ID
 # FILE_DIR=~/temp/$JOB_ID
