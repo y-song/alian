@@ -8,6 +8,8 @@
 #include <TMatrixD.h>
 #include <TSystem.h>
 #include <TString.h>
+#include <TRandom3.h>
+#include <TF1.h>
 #include </global/cfs/cdirs/alice/blianggi/mypyjetty/heppy/external/roounfold/roounfold-current/include/RooUnfoldBayes.h>
 #include </global/cfs/cdirs/alice/blianggi/mypyjetty/heppy/external/roounfold/roounfold-current/include/RooUnfoldResponse.h>
 
@@ -91,56 +93,170 @@ TH1D* th1_manual_refold_from_raw_migration(TH2* h_mig_raw, TH1D* h_meas_template
 }
 
 
-/*
-//----// h_truth_train_all is full truth-level distribution from MC sample used to fill the migration matrix
-static TH2D* th2_manual_refold_from_raw_migration(TH2D* h_mig_raw, TH2D* h_meas_template, TH2D* h_true_template, TH2D* h_truth_train_all,
-                                                  TH2D* h_unfolded_truth, TH2D* h_fake_to_add, const char* name) {
-    const int nx_meas = h_meas_template->GetNbinsX();
-    const int ny_meas = h_meas_template->GetNbinsY();
-    const int nx_true = h_true_template->GetNbinsX();
-    const int ny_true = h_true_template->GetNbinsY();
+// Error treatment used for all closure unfoldings (pyjetty's Hreco() defaults to diagonal errors;
+// kCovariance matches what you use for the data unfolding)
+static RooUnfold::ErrorTreatment kClosureErr = RooUnfold::kCovariance;
 
-    TH2D* h_refold = static_cast<TH2D*>(h_meas_template->Clone(name));
-    h_refold->Reset();
+//------------------------------------------------------------------------------------------------
+// Relative statistical errors of the measured data, per bin (analogue of getMeasuredErrors)
+//------------------------------------------------------------------------------------------------
+std::vector<double> getMeasuredErrors(const TH1* hData) {
+    const int n = hData->GetNbinsX();
+    std::vector<double> rel(n + 2, 0.);
+    for (int i = 1; i <= n; ++i) {
+        const double c = hData->GetBinContent(i), e = hData->GetBinError(i);
+        rel[i] = (c > 0) ? e / c : 0.;
+    }
+    return rel;
+}
 
-    for (int iy_m = 1; iy_m <= ny_meas; ++iy_m) {
-        for (int ix_m = 1; ix_m <= nx_meas; ++ix_m) {
+//------------------------------------------------------------------------------------------------
+// Smear a spectrum by the measured relative errors (analogue of smearSpectrum).
+// Each bin: content -> Gaus(content, content*relErr), error -> content*relErr.
+// Returns a new histogram (input is not modified).
+//------------------------------------------------------------------------------------------------
+TH1D* smearSpectrum(const TH1* h, const std::vector<double>& relErr, TRandom3& rng, const TString& name) {
+    const int n = h->GetNbinsX();
+    if ((int) relErr.size() != n + 2) {
+        std::cerr << "smearSpectrum: binning mismatch (" << n << " bins vs " << relErr.size() - 2 << " errors)" << std::endl;
+        return nullptr;
+    }
+    TH1D* hs = (TH1D*) h->Clone(name);
+    hs->SetDirectory(0);
+    for (int i = 1; i <= n; ++i) {
+        const double mu = h->GetBinContent(i), sig = mu * relErr[i];
+        double val = (sig > 0) ? rng.Gaus(mu, sig) : mu;
+        if (val < 0) val = 0;
+        hs->SetBinContent(i, val);
+        hs->SetBinError(i, sig);
+    }
+    return hs;
+}
 
-            int i_m = flat_meas_bin(ix_m, iy_m, nx_meas);
-            double pred = 0.0;
-            double pred_error_sq = 0.0;
+//------------------------------------------------------------------------------------------------
+// Project a response matrix (x = reco, y = truth) to det- and truth-level spectra.
+// Truth: all reco incl. under/overflow. Det: reco for truth inside the truth range.
+//------------------------------------------------------------------------------------------------
+void projectResponse(const TH2* RM, TH1D*& hDet, TH1D*& hTruth, const TString& tag) {
+    const int nr = RM->GetNbinsX(), nt = RM->GetNbinsY();
+    hDet   = RM->ProjectionX("hMC_Det_"   + tag, 1, nt);
+    hTruth = RM->ProjectionY("hMC_Truth_" + tag, 0, nr + 1);
+    hDet->SetDirectory(0);
+    hTruth->SetDirectory(0);
+}
 
-            for (int iy_t = 1; iy_t <= ny_true; ++iy_t) {
-                for (int ix_t = 1; ix_t <= nx_true; ++ix_t) {
-                    int i_t = flat_true_bin(ix_t, iy_t, nx_true);
-
-                    double ntrue_train = h_truth_train_all->GetBinContent(ix_t, iy_t);
-                    if (ntrue_train <= 0.0) continue;
-
-                    double mij = h_mig_raw->GetBinContent(i_m, i_t);
-                    if (mij <= 0.0) continue;
-
-                    double u_j = h_unfolded_truth->GetBinContent(ix_t, iy_t);
-                    double u_j_err = h_unfolded_truth->GetBinError(ix_t, iy_t);
-
-                    double transfer_coeff = mij / ntrue_train;
-                    pred += transfer_coeff * u_j;
-                    pred_error_sq += std::pow(transfer_coeff * u_j_err, 2.);
-                }
-            }
-
-            h_refold->SetBinContent(ix_m, iy_m, pred);
-            h_refold->SetBinError(ix_m, iy_m, std::sqrt(pred_error_sq));
+//------------------------------------------------------------------------------------------------
+// Scale a response matrix along the truth axis by f(truth bin center)
+//------------------------------------------------------------------------------------------------
+TH2* scaleResponseTruth(const TH2* RM, TF1* f, const TString& name) {
+    TH2* s = (TH2*) RM->Clone(name);
+    s->SetDirectory(0);
+    const int nx = RM->GetNbinsX(), ny = RM->GetNbinsY();
+    for (int iy = 1; iy <= ny; ++iy) {
+        const double w = f->Eval(RM->GetYaxis()->GetBinCenter(iy));
+        for (int ix = 0; ix <= nx + 1; ++ix) {
+            s->SetBinContent(ix, iy, RM->GetBinContent(ix, iy) * w);
+            s->SetBinError  (ix, iy, RM->GetBinError(ix, iy)   * w);
         }
     }
+    return s;
+}
 
-    if (h_fake_to_add) {
-        h_refold->Add(h_fake_to_add);
+//------------------------------------------------------------------------------------------------
+// Rebin a finely binned RM into the binning of a template RM (bin edges must align)
+//------------------------------------------------------------------------------------------------
+TH2* rebinResponseTo(const TH2* fine, const TH2* tmpl, const TString& name) {
+    auto checkEdges = [](const TAxis* f, const TAxis* c, const char* ax) {
+        for (int i = 1; i <= c->GetNbins() + 1; ++i) {
+            const double e = c->GetBinLowEdge(i);
+            const int b = f->FindFixBin(e);
+            if (b >= 1 && b <= f->GetNbins() && std::fabs(f->GetBinLowEdge(b) - e) > 1e-6)
+                printf("  rebinResponseTo: %s edge %g not aligned with fine binning\n", ax, e);
+        }
+    };
+    checkEdges(fine->GetXaxis(), tmpl->GetXaxis(), "reco");
+    checkEdges(fine->GetYaxis(), tmpl->GetYaxis(), "truth");
+
+    TH2* c = (TH2*) tmpl->Clone(name);
+    c->SetDirectory(0);
+    c->Reset();
+    for (int ix = 0; ix <= fine->GetNbinsX() + 1; ++ix)
+        for (int iy = 0; iy <= fine->GetNbinsY() + 1; ++iy) {
+            const int bx = c->GetXaxis()->FindFixBin(fine->GetXaxis()->GetBinCenter(ix));
+            const int by = c->GetYaxis()->FindFixBin(fine->GetYaxis()->GetBinCenter(iy));
+            const int b  = c->GetBin(bx, by);
+            const double e_old = c->GetBinError(b), e_new = fine->GetBinError(ix, iy);
+            c->SetBinContent(b, c->GetBinContent(b) + fine->GetBinContent(ix, iy));
+            c->SetBinError(b, std::sqrt(e_old * e_old + e_new * e_new));
+        }
+    return c;
+}
+
+//------------------------------------------------------------------------------------------------
+// Common piece: unfold hDet with the NOMINAL response at iteration i, compare to hTruth
+//------------------------------------------------------------------------------------------------
+void closure_at_iter(RooUnfoldResponse* response, TH1* hDet, TH1* hTruth, int i,
+                     const TString& prefix, std::vector<TH1*>& out) {
+    RooUnfoldBayes unf(response, hDet, i);
+    unf.SetVerbose(0);
+    TH1* hu = (TH1*) unf.Hunfold(kClosureErr);
+    TH1* hUnf = (TH1*) hu->Clone(prefix + TString::Format("_Unfolded1Diter%d", i));
+    hUnf->SetDirectory(0);
+    delete hu;
+
+    // Ratio: unfolded / truth, with unfolded errors only (truth is the reference)
+    TH1* hRatio = (TH1*) hUnf->Clone(prefix + TString::Format("_RatioToTruth_iter%d", i));
+    hRatio->SetDirectory(0);
+    hRatio->Reset();
+    printf("  %-28s iter %2d  unf/truth:", prefix.Data(), i);
+    for (int j = 1; j <= hTruth->GetNbinsX(); ++j) {
+        const double t = hTruth->GetBinContent(j);
+        if (t > 0) {
+            hRatio->SetBinContent(j, hUnf->GetBinContent(j) / t);
+            hRatio->SetBinError(j, hUnf->GetBinError(j) / t);
+        }
+        printf(" %6.3f", hRatio->GetBinContent(j));
+    }
+    printf("\n");
+    out.insert(out.end(), {hUnf, hRatio});
+}
+
+//------------------------------------------------------------------------------------------------
+// Shape variation: scaled RM, its projections, smeared det-level
+//------------------------------------------------------------------------------------------------
+struct ShapeVariation {
+    double  param;
+    TString label;
+    TH2*    RM_scaled;
+    TH1D*   hMC_Truth;
+    TH1D*   hMC_Det;          // unsmeared
+    TH1D*   hMC_Det_smeared;
+};
+
+// RM_for_scaling: RM on which the scaling is applied (finely binned if available, else RM_2D)
+// RM_template   : nominal RM binning (the one used for unfolding)
+ShapeVariation make_shape_variation(TH2* RM_for_scaling, TH2* RM_template, TF1* f_shape, double param,
+                                    const std::vector<double>& measuredErrors, TRandom3& rng) {
+    ShapeVariation sv;
+    sv.param = param;
+    sv.label = TString::Format("shape%g", param);
+    sv.label.ReplaceAll(".", "").ReplaceAll("-", "m");
+
+    f_shape->SetParameter(0, param);
+    TH2* scaled = scaleResponseTruth(RM_for_scaling, f_shape, "RM_scaled_tmp_" + sv.label);
+    if (RM_for_scaling != RM_template) {
+        sv.RM_scaled = rebinResponseTo(scaled, RM_template, "RM_scaled_" + sv.label);
+        delete scaled;
+    } else {
+        sv.RM_scaled = scaled;
+        sv.RM_scaled->SetName("RM_scaled_" + sv.label);
     }
 
-    return h_refold;
+    projectResponse(sv.RM_scaled, sv.hMC_Det, sv.hMC_Truth, sv.label);
+    sv.hMC_Det_smeared = smearSpectrum(sv.hMC_Det, measuredErrors, rng, "hMC_Det_smeared_" + sv.label);
+    return sv;
 }
-*/
+
 
 
 // REFOLDING TEST
@@ -281,31 +397,72 @@ std::vector<TH1*> trivial_closure_test(TH1D * rec, TH1D *gen, RooUnfoldResponse*
 
 }
 
-void shape_closure_test(RooUnfoldResponse* response, TH2* RM_2D, TF1* w) {
-    cout << "Doing closure test now" << endl;
-    const int nr = RM_2D->GetNbinsX(), nt = RM_2D->GetNbinsY();
-    TH1D* t_rw = (TH1D*) response->Htruth()->Clone("t_rw");  t_rw->SetDirectory(0);
-    TH1D* r_rw = RM_2D->ProjectionX("r_rw", 1, nt);          r_rw->SetDirectory(0);
-    r_rw->Reset();
-    for (int j = 1; j <= nt; ++j) {
-        double wj = w->Eval(RM_2D->GetYaxis()->GetBinCenter(j));
-        t_rw->SetBinContent(j, t_rw->GetBinContent(j) * wj);
-        for (int i = 1; i <= nr; ++i)
-            r_rw->SetBinContent(i, r_rw->GetBinContent(i) + RM_2D->GetBinContent(i, j) * wj);
+
+
+// STATISTICAL CLOSURE TEST
+// 1. MC det-level spectrum (reco projection of RM) is smeared by the relative stat. errors of data
+// 2. Smeared spectrum is unfolded with the nominal response for i = 1..iter
+// 3. Compared to MC truth (truth projection of RM)
+std::vector<TH1*> statistical_closure_test(RooUnfoldResponse* response, TH2* RM_2D, TH1D* h1_raw,
+                                           int iter, UInt_t seed = 12345) {
+    cout << "================ STATISTICAL CLOSURE TEST ================" << endl;
+    std::vector<TH1*> out;
+    TRandom3 rng(seed);
+
+    TH1D *hMC_Det = nullptr, *hMC_Truth = nullptr;
+    projectResponse(RM_2D, hMC_Det, hMC_Truth, "nominal");
+
+    // Sanity check: are there misses/fakes in the response?
+    for (int j = 1; j <= hMC_Truth->GetNbinsX(); ++j) {
+        const double h = response->Htruth()->GetBinContent(j);
+        if (h > 0 && std::fabs(hMC_Truth->GetBinContent(j) / h - 1) > 1e-3)
+            printf("  WARNING: truth bin %d: RM projection / Htruth = %.4f\n", j, hMC_Truth->GetBinContent(j) / h);
     }
-    for (int it : {1, 3, 5, 10, 20, 30}) {
-        RooUnfoldBayes unf(response, r_rw, it);
-        unf.SetVerbose(0);
-        TH1* u = unf.Hunfold(RooUnfold::kNoError);
-        TH1D* rf = th1_manual_refold_from_raw_migration(RM_2D, r_rw, t_rw, u, TString::Format("rf_sc%d", it));
-        printf("iter %2d  unf/true:", it);
-        for (int j = 1; j <= nt; ++j) printf(" %6.3f", u->GetBinContent(j) / t_rw->GetBinContent(j));
-        printf("   refold/input:");
-        for (int i = 1; i <= nr; ++i) printf(" %6.3f", rf->GetBinContent(i) / r_rw->GetBinContent(i));
-        printf("\n");
-        delete u; delete rf;
+    for (int i = 1; i <= hMC_Det->GetNbinsX(); ++i) {
+        const double h = response->Hmeasured()->GetBinContent(i);
+        if (h > 0 && std::fabs(hMC_Det->GetBinContent(i) / h - 1) > 1e-3)
+            printf("  WARNING: reco bin %d: RM projection / Hmeasured = %.4f\n", i, hMC_Det->GetBinContent(i) / h);
     }
+
+    // Smear once, reuse for all iterations
+    std::vector<double> measuredErrors = getMeasuredErrors(h1_raw);
+    TH1D* hMC_Det_smeared = smearSpectrum(hMC_Det, measuredErrors, rng, "hMC_Det_smeared_nominal");
+    if (!hMC_Det_smeared) return out;
+
+    for (int i = 1; i <= iter; ++i)
+        closure_at_iter(response, hMC_Det_smeared, hMC_Truth, i, "Statistical", out);
+
+    out.insert(out.end(), {hMC_Det, hMC_Truth, hMC_Det_smeared});
+    return out;
 }
+
+// SHAPE CLOSURE TEST
+// 1. RM scaled along truth axis by f_shape (one variation per parameter), projected to det/truth
+// 2. Scaled det-level spectrum smeared by the relative stat. errors of data
+// 3. Unfolded with the NOMINAL response for i = 1..iter, compared to scaled truth
+std::vector<TH1*> shape_closure_test(RooUnfoldResponse* response, TH2* RM_2D, TH1D* h1_raw, int iter,
+                                     TF1* f_shape, const std::vector<double>& shape_params,
+                                     TH2* RM_fine = nullptr, UInt_t seed = 54321) {
+    cout << "================ SHAPE CLOSURE TEST ================" << endl;
+    std::vector<TH1*> out;
+    TRandom3 rng(seed);
+
+    std::vector<double> measuredErrors = getMeasuredErrors(h1_raw);
+    TH2* RM_scale_input = RM_fine ? RM_fine : RM_2D;
+
+    for (double s : shape_params) {
+        ShapeVariation sv = make_shape_variation(RM_scale_input, RM_2D, f_shape, s, measuredErrors, rng);
+        if (!sv.hMC_Det_smeared) continue;
+
+        for (int i = 1; i <= iter; ++i)
+            closure_at_iter(response, sv.hMC_Det_smeared, sv.hMC_Truth, i, "Shape_" + sv.label, out);
+
+        out.insert(out.end(), {(TH1*) sv.RM_scaled, sv.hMC_Det, sv.hMC_Truth, sv.hMC_Det_smeared});
+    }
+    return out;
+}
+
+
 
 
 void refold_convergence_check(RooUnfoldResponse* response, TH2* RM_2D, TH1D* h1_raw, TH1D* purity) {
@@ -334,8 +491,8 @@ void refold_convergence_check(RooUnfoldResponse* response, TH2* RM_2D, TH1D* h1_
     cout << "OUT OF REFOLD CONVERGENCE CHECK NOW" << endl;
 }
 
-void unfolding1D_tests(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/58919321/response_groomed_forunfolding_merged.root",
-                       const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60017705/AnalysisResultsMerged_groomedbins.root",
+void unfolding1D_tests(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/60403841/response_groomed_forunfolding_merged.root",
+                       const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60320414/AnalysisResultsMerged_groomedbins.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60017705/AnalysisResultsMerged_groomedbins.root",
                        const TString& unfolded_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/unfolding/unfolded1D.root",
                        const TString& outfile="/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/unfolding/unfolded1D_tests.root",
                        const TString& resp_name="roounfold_response_1D_groomed_oldversion",
@@ -409,7 +566,7 @@ void unfolding1D_tests(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/
     efficiency->SetDirectory(0);
     efficiency->Divide(gen_num, gen_den, 1., 1., "B"); //h = (c1 * h1) / (c2 * h2), bin by bin, with binomial errors
 
-    refold_convergence_check(response, RM_2D, h1_raw, purity);
+    // refold_convergence_check(response, RM_2D, h1_raw, purity);
 
 
 
@@ -438,9 +595,15 @@ void unfolding1D_tests(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/
     // // check: do the version with no eff/pur
     // std::vector<TH1*> refolding_out_hists_noeffpur = refolding_test(f_unf_noeffpur, RM_2D, h1_raw, iter, efficiency, purity, false, false, "NoEffPur_");
 
-    // ======================= SHAPE CLOSURE TEST ! =======================
-    TF1 w("w", "pow(x/20., [0])", 10, 500); w.SetParameter(0, 0.2);
-    shape_closure_test(response, RM_2D, &w);
+    
+    // ======================= STATISTICAL CLOSURE ! =======================
+    std::vector<TH1*> stat_closure_hists = statistical_closure_test(response, RM_2D, h1_raw, iter + 2);
+
+    // ======================= SHAPE CLOSURE ! =======================
+    // PLACEHOLDER: replace with pyjetty's shape variation function and parameters
+    TF1 f_shape("f_shape", "pow(x, [0])", RM_2D->GetYaxis()->GetXmin(), RM_2D->GetYaxis()->GetXmax());
+    std::vector<TH1*> shape_closure_hists = shape_closure_test(response, RM_2D, h1_raw, iter + 2,
+                                                               &f_shape, {0.5, -0.5});
 
 
 
@@ -476,6 +639,21 @@ void unfolding1D_tests(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/
     dir_refold->cd();
     for (auto h : refolding_out_hists) h->Write();
     // for (auto h : refolding_out_hists_noeffpur) h->Write();
+
+    cout << "writing statistical closure test hists" << endl;
+    TDirectory* dir_stat = fout->mkdir("statistical_closure");
+    dir_stat->cd();
+    for (auto h : stat_closure_hists) h->Write();
+
+    cout << "writing shape closure test hists" << endl;
+    TDirectory* dir_shape = fout->mkdir("shape_closure");
+    dir_shape->cd();
+    for (auto h : shape_closure_hists) h->Write();
+
+    cout << "writing prior closure test hists" << endl;
+    TDirectory* dir_prior = fout->mkdir("prior_closure");
+    dir_prior->cd();
+    // for (auto h : prior_closure_hists) h->Write();
     
     fout->Close();
     cout << "Wrote output to " << outfile << endl;

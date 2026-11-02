@@ -27,8 +27,8 @@
 //const TString& rm_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/response.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/57911278/response_groomed_forunfolding_merged.root", //58411425
 //const TString& data_file="/global/cfs/cdirs/alice/blianggi/mypyjetty/analysis/testing/AnalysisResults.root", //"/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/58416144/AnalysisResultsMerged_groomedbins.root",
               
-void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/58919321/response_groomed_forunfolding_merged.root", //58411425
-              const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60017705/AnalysisResultsMerged_groomedbins.root",
+void unfold1D(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/60403841/response_groomed_forunfolding_merged.root", //58411425
+              const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60320414/AnalysisResultsMerged_groomedbins.root",
               const TString& outfile="/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/unfolding/unfolded1D.root",
               int iter=9, bool do_purity=true) {
     

@@ -21,8 +21,8 @@
 // const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/58411425/response_groomed_forunfolding_merged.root", 
 // const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/58416144/AnalysisResultsMerged_groomedbins.root",
 
-void unfold(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/58919321/response_groomed_forunfolding_merged.root", 
-            const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60017705/AnalysisResultsMerged_groomedbins.root",
+void unfold(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/rms/60403841/response_groomed_forunfolding_merged.root", 
+            const TString& data_file="/global/cfs/cdirs/alice/alicepro/hiccup/rstorage/alice/AnalysisResults/blianggi/jse/data/60320414/AnalysisResultsMerged_groomedbins.root",
             const TString& outfile="/global/cfs/cdirs/alice/blianggi/mypyjetty/storage/jse/rootfiles/unfolding/unfolded.root", 
             int iter=5, bool do_purity=true) { //iter=9
     
@@ -62,12 +62,12 @@ void unfold(const TString& rm_file="/global/cfs/cdirs/alice/alicepro/hiccup/rsto
         TH3D* purity;
         if (do_purity)
         {
-            TH3D* h3_reco           = (TH3D*) f->Get(TString::Format("groomed_%s_reco", o));
-            TH3D* h3_reco_unmatched = (TH3D*) f->Get(TString::Format("groomed_%s_reco_unmatched", o));
-            h3_reco->Sumw2(1);
-            h3_reco_unmatched->Sumw2(1);
-            purity = (TH3D*) h3_reco->Clone(TString::Format("purity_%s", o));
-            purity->Divide(h3_reco_unmatched); // (reco / reco_unmatched)
+            TH3D* h3_reco_matched           = (TH3D*) f->Get(TString::Format("groomed_%s_reco_matched", o));
+            TH3D* h3_reco_all = (TH3D*) f->Get(TString::Format("groomed_%s_reco_all", o));
+            h3_reco_matched->Sumw2(1);
+            h3_reco_all->Sumw2(1);
+            purity = (TH3D*) h3_reco_matched->Clone(TString::Format("purity_%s", o));
+            purity->Divide(h3_reco_all); // (reco_matched / reco_all)
             h3_raw->Multiply(purity);
         }
         
