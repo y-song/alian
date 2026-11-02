@@ -29,8 +29,8 @@ ROOT.TH2.SetDefaultSumw2()
 JET_R = 0.4
 JET_ETA_MAX = 0.9 - JET_R          # fiducial jet |eta| acceptance
 JET_PT_MIN = 8.0                   # minimum jet pt to keep (GeV) -- tune as needed
-# PTHAT_OUTLIER_FACTOR = 4.0         # reject events with pt_jet / pThat > this
 MATCH_DR_MAX = 0.6 * JET_R         # geometric matching radius (dR)
+HIGH_TRACK_PT = 100.0              # remove det jets containing a track above this (GeV)
 
 PION_MASS = 0.13957                # assumed constituent mass
 
@@ -38,24 +38,37 @@ PION_MASS = 0.13957                # assumed constituent mass
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-# ---- In script 1, modify make_pseudojets to carry the label as user_index ----
-
 def make_pseudojets(pt, eta, phi, label, mass=PION_MASS):
-    """Build PseudoJets; store the particle's label in user_index so it
-    survives clustering and can be recovered from jet constituents."""
+    """Build PseudoJets from (pt, eta, phi) with a pion mass hypothesis.
+    The particle's label is stored in user_index so it survives clustering."""
     pjets = []
     for i in range(len(pt)):
-        pj = fastjet.PseudoJet()
-        pj.reset_PtYPhiM(float(pt[i]), float(eta[i]), float(phi[i]), mass)
-        pj.set_user_index(int(label[i]))   # <-- store LABEL, not position index
+        # FIX 1: build the four-vector from PSEUDOrapidity.
+        # reset_PtYPhiM expects RAPIDITY (y), and y != eta for massive particles.
+        pt_i, eta_i, phi_i = float(pt[i]), float(eta[i]), float(phi[i])
+        px = pt_i * np.cos(phi_i)
+        py = pt_i * np.sin(phi_i)
+        pz = pt_i * np.sinh(eta_i)
+        e = np.sqrt(px * px + py * py + pz * pz + mass * mass)
+        pj = fastjet.PseudoJet(float(px), float(py), float(pz), float(e))
+        pj.set_user_index(int(label[i]))
         pjets.append(pj)
     return pjets
 
 
-def cluster_jets(pt, eta, phi, label, pdg=None, jet_def=None, pt_min=0, eta_max=1.0, highjetcut=False):
+def cluster_jets(pt, eta, phi, label, pdg=None, jet_def=None, pt_min=0, eta_max=1.0):
     consts = make_pseudojets(pt, eta, phi, label)
     if len(consts) == 0:
         return []
+
+    # FIX 2: build the label -> PDG lookup ONCE, not once per jet.
+    if pdg is None:
+        label_to_pdg = {}
+    elif isinstance(pdg, dict):
+        label_to_pdg = pdg
+    else:
+        label_to_pdg = {int(lab): int(p) for lab, p in zip(label, pdg)}
+
     cs = fastjet.ClusterSequence(consts, jet_def)
     jets = fastjet.sorted_by_pt(cs.inclusive_jets(pt_min))
     out = []
@@ -63,28 +76,8 @@ def cluster_jets(pt, eta, phi, label, pdg=None, jet_def=None, pt_min=0, eta_max=
         j_eta = j.eta()
         if abs(j_eta) >= eta_max:
             continue
-        highpttrack = False
-        if highjetcut:
-            for c in j.constituents():
-                if c.pt() > 100:
-                    highpttrack = True
-                    break
-        if highpttrack:
-            continue
         cparts = j.constituents()
-
-        # Recover PDG codes if provided
-        const_pdgs = []
-        if pdg is not None:
-            if isinstance(pdg, dict):
-                # Use the map directly (perfect for detector jets)
-                const_pdgs = [pdg.get(c.user_index(), 0) for c in cparts]
-            else:
-                # Use the array (perfect for particle jets)
-                label_to_pdg = {lab: p for lab, p in zip(label, pdg)}
-                const_pdgs = [label_to_pdg.get(c.user_index(), 0) for c in cparts]
-        else:
-            const_pdgs = [0] * len(cparts)
+        const_pdgs = [label_to_pdg.get(c.user_index(), 0) for c in cparts]
 
         out.append({
             "pt": j.pt(), "eta": j_eta, "phi": j.phi_std(),
@@ -96,6 +89,11 @@ def cluster_jets(pt, eta, phi, label, pdg=None, jet_def=None, pt_min=0, eta_max=
             "const_label": [c.user_index() for c in cparts],
         })
     return out
+
+
+def remove_hightrackjets(jets_in, max_track_pt=HIGH_TRACK_PT):
+    """Drop jets that contain any constituent with pt > max_track_pt."""
+    return [j for j in jets_in if max(j["const_pt"], default=0.0) <= max_track_pt]
 
 
 def delta_phi(phi1, phi2):
@@ -148,6 +146,7 @@ class Hist1D:
         self.xhigh = xhigh
         self.edges = np.linspace(xlow, xhigh, nbins + 1)
         self.counts = np.zeros(nbins, dtype=np.float64)
+        self.sumw2 = np.zeros(nbins, dtype=np.float64)   # FIX 3: sum of weights^2
 
     def fill(self, value, weight=1.0):
         if value < self.xlow or value >= self.xhigh:
@@ -155,10 +154,19 @@ class Hist1D:
         idx = int((value - self.xlow) / (self.xhigh - self.xlow) * self.nbins)
         if 0 <= idx < self.nbins:
             self.counts[idx] += weight
+            self.sumw2[idx] += weight * weight           # FIX 3
 
     def fill_array(self, values, weight=1.0):
         for v in values:
             self.fill(v, weight)
+
+    def to_root(self):
+        """FIX 3: convert to a ROOT TH1D with correct errors sqrt(sum w^2)."""
+        th = ROOT.TH1D(self.name, self.title, self.nbins, self.xlow, self.xhigh)
+        for i in range(self.nbins):
+            th.SetBinContent(i + 1, self.counts[i])
+            th.SetBinError(i + 1, np.sqrt(self.sumw2[i]))
+        return th
 
 
 # ---------------------------------------------------------------------------
@@ -174,59 +182,49 @@ def main():
     ap.add_argument("-t", "--tree", default="eventTree", help="tree name")
     ap.add_argument("-n", "--nevents", type=int, default=-1,
                     help="number of events to process (-1 = all)")
-    ap.add_argument("--pthat-outlier-factor", default=4.0, help="reject events with pt_jet / pThat > this value")
+    ap.add_argument("--pthat-outlier-factor", type=float, default=4.0,
+                    help="reject events with pt_jet / pThat > this value")
     args = ap.parse_args()
 
     # -----------------------------------------------------------------------
     # Histograms
     # -----------------------------------------------------------------------
+    TWO_PI = 2 * np.pi
     h = {
         "det_track_pt":  Hist1D("det_track_pt",  "Detector track p_{T};p_{T} (GeV);counts", 100, 0, 100),
         "det_track_eta": Hist1D("det_track_eta", "Detector track #eta;#eta;counts",         60, -1.5, 1.5),
-        "det_track_phi": Hist1D("det_track_phi", "Detector track #phi;#phi;counts",         64, -np.pi, np.pi),
+        "det_track_phi": Hist1D("det_track_phi", "Detector track #phi;#phi;counts",         64, 0, TWO_PI),
         "mc_part_pt":    Hist1D("mc_part_pt",    "MC particle p_{T};p_{T} (GeV);counts",    100, 0, 100),
         "mc_part_eta":   Hist1D("mc_part_eta",   "MC particle #eta;#eta;counts",             60, -1.5, 1.5),
-        "mc_part_phi":   Hist1D("mc_part_phi",   "MC particle #phi;#phi;counts",             64, -np.pi, np.pi),
+        "mc_part_phi":   Hist1D("mc_part_phi",   "MC particle #phi;#phi;counts",             64, 0, TWO_PI),
         "det_jet_pt":    Hist1D("det_jet_pt",    "Detector jet p_{T};p_{T} (GeV);counts",   100, 0, 200),
         "det_jet_eta":   Hist1D("det_jet_eta",   "Detector jet #eta;#eta;counts",            60, -1.0, 1.0),
-        "det_jet_phi":   Hist1D("det_jet_phi",   "Detector jet #phi;#phi;counts",            64, 0, 2*np.pi),
+        "det_jet_phi":   Hist1D("det_jet_phi",   "Detector jet #phi;#phi;counts",            64, -np.pi, np.pi),
         "part_jet_pt":   Hist1D("part_jet_pt",   "Particle jet p_{T};p_{T} (GeV);counts",   100, 0, 200),
         "part_jet_eta":  Hist1D("part_jet_eta",  "Particle jet #eta;#eta;counts",            60, -1.0, 1.0),
-        "part_jet_phi":  Hist1D("part_jet_phi",  "Particle jet #phi;#phi;counts",            64, 0, 2*np.pi),
+        "part_jet_phi":  Hist1D("part_jet_phi",  "Particle jet #phi;#phi;counts",            64, -np.pi, np.pi),
         "matched_det_pt":  Hist1D("matched_det_pt",  "Matched det jet p_{T};p_{T} (GeV);counts",  100, 0, 200),
         "matched_part_pt": Hist1D("matched_part_pt", "Matched part jet p_{T};p_{T} (GeV);counts", 100, 0, 200),
-        "track_eff_num":   Hist1D("track_eff_num",   "Matched Tracks;p_{T} (GeV);counts",       100, 0, 100),
-        "track_eff_den":   Hist1D("track_eff_den",   "All MC Particles;p_{T} (GeV);counts",      100, 0, 100),
-        "det_const_pdg":     Hist1D("det_const_pdg",     "Det Jet Constituent |PDG|; |PDG|;counts",   2500, 0, 2500),
-        "part_const_pdg":    Hist1D("part_const_pdg",    "Part Jet Constituent |PDG|; |PDG|;counts",  2500, 0, 2500),
+        "track_eff_num":   Hist1D("track_eff_num",   "Matched Tracks;p_{T}^{gen} (GeV);counts",  100, 0, 100),
+        "track_eff_den":   Hist1D("track_eff_den",   "All MC Particles;p_{T}^{gen} (GeV);counts", 100, 0, 100),
+        "det_const_pdg":   Hist1D("det_const_pdg",   "Det Jet Constituent |PDG|; |PDG|;counts",   2500, 0, 2500),
+        "part_const_pdg":  Hist1D("part_const_pdg",  "Part Jet Constituent |PDG|; |PDG|;counts",  2500, 0, 2500),
+        "leading_ratio":   Hist1D("leading_ratio",   "max p_{T,jet}/#hat{p}_{T} (before cut);ratio;counts", 100, 0, 10),  # FIX 6
     }
     resp_bins = np.linspace(0, 200, 101)
-    resp = np.zeros((len(resp_bins) - 1, len(resp_bins) - 1), dtype=np.float64)
+    n_resp = len(resp_bins) - 1
+    resp = np.zeros((n_resp, n_resp), dtype=np.float64)
+    resp_w2 = np.zeros((n_resp, n_resp), dtype=np.float64)   # FIX 3: errors for response
 
     # -----------------------------------------------------------------------
     # Parquet accumulator: one row per jet.
-    # We store constituents as variable-length (list) columns so awkward /
-    # pyarrow can read them back as jagged arrays.
     # -----------------------------------------------------------------------
     rows = {
-        "event": [],          # event index (running counter)
-        "level": [],          # "det" or "part"
-        "jet_index": [],      # index of jet within its level for this event
-        "jet_pt": [],
-        "jet_eta": [],
-        "jet_phi": [],
-        "nconst": [],
-        "const_pt": [],       # list<float>
-        "const_eta": [],      # list<float>
-        "const_phi": [],      # list<float>
-        "const_pdg": [],      # list<float>
-        "is_matched": [],     # bool
-        "match_index": [],    # index of partner jet at the other level (-1 if none)
-        "match_pt": [],       # pt of matched partner (-1 if none)
-        "match_dr": [],       # dR to matched partner (-1 if none)
-        "mc_weight": [],
-        "mc_pThat": [],
-        "const_label": [],    
+        "event": [], "level": [], "jet_index": [],
+        "jet_pt": [], "jet_eta": [], "jet_phi": [], "nconst": [],
+        "const_pt": [], "const_eta": [], "const_phi": [], "const_pdg": [],
+        "is_matched": [], "match_index": [], "match_pt": [], "match_dr": [],
+        "mc_weight": [], "mc_pThat": [], "const_label": [],
     }
 
     def add_jet_row(event, level, jidx, jet, is_matched,
@@ -249,7 +247,6 @@ def main():
         rows["mc_weight"].append(weight)
         rows["mc_pThat"].append(pthat)
         rows["const_label"].append(jet["const_label"])
-        
 
     # -----------------------------------------------------------------------
     # anti-kt R=0.4
@@ -265,12 +262,14 @@ def main():
     ]
 
     SEL8_BIT = 0
-    GLOBAL_TRACK_BIT = 1        
-    PTHAT_OUTLIER_FACTOR = args.pthat_outlier_factor #4.0  # reject events with pt_jet / pThat > this
+    GLOBAL_TRACK_BIT = 1
+    PTHAT_OUTLIER_FACTOR = args.pthat_outlier_factor   # already a float from argparse
 
     tree_path = f"{args.input}:{args.tree}"
     n_processed = 0
-    n_rejected = 0
+    n_sel8_rejected = 0      # FIX 5: separate counters
+    n_pthat_rejected = 0
+    n_accepted = 0
 
     for chunk in uproot.iterate(tree_path, branches, library="ak", step_size=10000):
         n_in_chunk = len(chunk["mc_pThat"])
@@ -284,9 +283,10 @@ def main():
             # event selection (sel8)
             evsel = int(chunk["event_selection"][ie])
             if not (evsel & (1 << SEL8_BIT)):
+                n_sel8_rejected += 1
                 n_processed += 1
                 continue
-    
+
             # --- detector tracks with selection ---
             d_pt  = ak.to_numpy(chunk["track_data_pt"][ie])
             d_eta = ak.to_numpy(chunk["track_data_eta"][ie])
@@ -295,64 +295,54 @@ def main():
             d_sel = ak.to_numpy(chunk["track_data_tracksel"][ie]).astype(np.uint32)
             dmask = (d_pt >= 0.15) & (np.abs(d_eta) <= 0.9) & ((d_sel & (1 << GLOBAL_TRACK_BIT)) != 0)
             d_pt, d_eta, d_phi, d_lab = d_pt[dmask], d_eta[dmask], d_phi[dmask], d_lab[dmask]
-    
+
             # --- MC particles with selection ---
             p_pt  = ak.to_numpy(chunk["mc_particle_pt"][ie])
             p_eta = ak.to_numpy(chunk["mc_particle_eta"][ie])
             p_phi = ak.to_numpy(chunk["mc_particle_phi"][ie])
             p_id  = ak.to_numpy(chunk["mc_particle_partID"][ie])
-            p_pdg  = ak.to_numpy(chunk["mc_particle_pdgcode"][ie])
+            p_pdg = ak.to_numpy(chunk["mc_particle_pdgcode"][ie])
             pmask = (p_pt >= 0.15) & (np.abs(p_eta) <= 0.9)
             p_pt, p_eta, p_phi, p_id, p_pdg = p_pt[pmask], p_eta[pmask], p_phi[pmask], p_id[pmask], p_pdg[pmask]
 
-            # Map particle ID to PDG code for easy lookup
-            particle_pdg_map = {pid: pdg_val for pid, pdg_val in zip(p_id, p_pdg)}
+            # label -> PDG code, with plain Python ints as keys
+            particle_pdg_map = {int(pid): int(pdg_val) for pid, pdg_val in zip(p_id, p_pdg)}
 
-
-            # ---- Single track efficiency calculation ----
-            # Track is "matched" if its label exists in the selected MC particle set
-            # Since d_lab are the labels of selected detector tracks,
-            # and p_id are the labels of selected MC particles,
-            # we check which d_lab are in p_id.
-            mc_labels_set = set(p_id)
-            for lab in d_lab:
-                if lab in mc_labels_set:
-                    # Find the pT of the matching MC particle
-                    # (Usually label is unique per event)
-                    idx = np.where(p_id == lab)[0]
-                    if len(idx) > 0:
-                        # Fill numerator with the detector track pT (or MC pT, but det pT is standard)
-                        # Since we are looping over d_lab, we need the index of the track.
-                        pass
-
-            # Correct way to fill:
-            for i in range(len(d_lab)):
-                label = d_lab[i]
-                pt = d_pt[i]
-                if label in mc_labels_set:
-                    h["track_eff_num"].fill(pt, weight)
-
-            # Denominator is all MC particles that pass the same cuts
-            h["track_eff_den"].fill_array(p_pt, weight)
-    
-            det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, pdg=particle_pdg_map, jet_def=jet_def, pt_min=JET_PT_MIN, eta_max=JET_ETA_MAX, highjetcut=True)
-            part_jets = cluster_jets(p_pt, p_eta, p_phi, p_id, pdg=p_pdg, jet_def=jet_def, pt_min=JET_PT_MIN, eta_max=JET_ETA_MAX)
+            det_jets  = cluster_jets(d_pt, d_eta, d_phi, d_lab, pdg=particle_pdg_map,
+                                     jet_def=jet_def, pt_min=JET_PT_MIN, eta_max=JET_ETA_MAX)
+            part_jets = cluster_jets(p_pt, p_eta, p_phi, p_id, pdg=p_pdg,
+                                     jet_def=jet_def, pt_min=JET_PT_MIN, eta_max=JET_ETA_MAX)
 
             # ---- pt,jet / pThat outlier rejection (event-level veto) ----
+            # Uses ALL jets, before the high-pt-track removal, so outliers can't hide.
             all_jet_pts = [j["pt"] for j in det_jets] + [j["pt"] for j in part_jets]
             if pthat > 0 and len(all_jet_pts) > 0:
-                if max(all_jet_pts) / pthat > PTHAT_OUTLIER_FACTOR:
-                    n_rejected += 1
+                ratio = max(all_jet_pts) / pthat
+                h["leading_ratio"].fill(ratio, weight)          # FIX 6: monitor the cut
+                if ratio > PTHAT_OUTLIER_FACTOR:
+                    n_pthat_rejected += 1
                     n_processed += 1
                     continue
+
+            # Remove detector jets containing a track above HIGH_TRACK_PT
+            det_jets = remove_hightrackjets(det_jets)
+
+            # ---- Single track efficiency ----
+            # FIX 4: fill numerator AND denominator with the GENERATOR-level pT,
+            # and count each MC particle at most once (set() removes split tracks).
+            pt_by_label = {int(lab): float(pt) for lab, pt in zip(p_id, p_pt)}
+            for lab in set(int(l) for l in d_lab):
+                if lab in pt_by_label:
+                    h["track_eff_num"].fill(pt_by_label[lab], weight)
+            h["track_eff_den"].fill_array(p_pt, weight)
 
             # ---- constituent histograms ----
             h["det_track_pt"].fill_array(d_pt, weight)
             h["det_track_eta"].fill_array(d_eta, weight)
-            h["det_track_phi"].fill_array(d_phi, weight)
+            h["det_track_phi"].fill_array(np.mod(d_phi, TWO_PI), weight)   # FIX 7: wrap into [0, 2pi)
             h["mc_part_pt"].fill_array(p_pt, weight)
             h["mc_part_eta"].fill_array(p_eta, weight)
-            h["mc_part_phi"].fill_array(p_phi, weight)
+            h["mc_part_phi"].fill_array(np.mod(p_phi, TWO_PI), weight)     # FIX 7
 
             # ---- jet histograms ----
             for j in det_jets:
@@ -368,7 +358,6 @@ def main():
 
             # ---- matching ----
             matches = match_jets(det_jets, part_jets, MATCH_DR_MAX)
-            # build lookup maps: det_idx -> part_idx and vice versa
             det_to_part = {}
             part_to_det = {}
             for id_, ip_ in matches:
@@ -379,8 +368,9 @@ def main():
                 h["matched_part_pt"].fill(part["pt"], weight)
                 ix = np.searchsorted(resp_bins, part["pt"], side="right") - 1
                 iy = np.searchsorted(resp_bins, det["pt"], side="right") - 1
-                if 0 <= ix < resp.shape[0] and 0 <= iy < resp.shape[1]:
+                if 0 <= ix < n_resp and 0 <= iy < n_resp:
                     resp[ix, iy] += weight
+                    resp_w2[ix, iy] += weight * weight           # FIX 3
 
             # ---- fill parquet rows: detector jets ----
             for id_, det in enumerate(det_jets):
@@ -406,26 +396,39 @@ def main():
                     add_jet_row(n_processed, "part", ip_, part, False,
                                 -1, -1.0, -1.0, weight, pthat)
 
+            n_accepted += 1
             n_processed += 1
 
         if args.nevents >= 0 and n_processed >= args.nevents:
             break
 
-    print(f"Processed {n_processed} events, rejected {n_rejected} as pThat outliers.")
+    # FIX 5: clearer summary
+    print(f"Read {n_processed} events: "
+          f"{n_sel8_rejected} failed sel8, "
+          f"{n_pthat_rejected} rejected as pThat outliers, "
+          f"{n_accepted} accepted.")
 
     # -----------------------------------------------------------------------
-    # Write histograms
+    # Write histograms with ROOT so errors are sqrt(sum of w^2)   (FIX 3)
     # -----------------------------------------------------------------------
-    with uproot.recreate(args.output) as fout:
-        for hist in h.values():
-            fout[hist.name] = (hist.counts, hist.edges)
-        fout["response_jetpt_part_vs_det"] = (resp, resp_bins, resp_bins)
+    fout = ROOT.TFile(args.output, "RECREATE")
+    for hist in h.values():
+        hist.to_root().Write()
+
+    th2 = ROOT.TH2D("response_jetpt_part_vs_det",
+                    "Response;p_{T}^{part} (GeV);p_{T}^{det} (GeV)",
+                    n_resp, resp_bins[0], resp_bins[-1],
+                    n_resp, resp_bins[0], resp_bins[-1])
+    for ix in range(n_resp):
+        for iy in range(n_resp):
+            th2.SetBinContent(ix + 1, iy + 1, resp[ix, iy])
+            th2.SetBinError(ix + 1, iy + 1, np.sqrt(resp_w2[ix, iy]))
+    th2.Write()
+    fout.Close()
     print(f"Wrote histograms to {args.output}")
 
     # -----------------------------------------------------------------------
     # Write per-jet table to Parquet.
-    # Using an awkward array preserves the jagged constituent lists cleanly,
-    # then convert to an arrow table via ak.to_arrow_table.
     # -----------------------------------------------------------------------
     jets_ak = ak.Array({
         "event":       np.asarray(rows["event"], dtype=np.int64),

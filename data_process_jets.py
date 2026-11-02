@@ -57,7 +57,7 @@ class DataAnalysis:
         self.unweighted = False        
 
         # histogram axes
-        self.RL_NBINS = 25  # 75
+        self.RL_NBINS = 24 # 25  # 75
         RL_MIN, RL_MAX = 0.01, 1.0
         self.RL_BINS = np.logspace(np.log10(RL_MIN), np.log10(RL_MAX), self.RL_NBINS + 1)
         
