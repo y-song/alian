@@ -471,31 +471,51 @@ class EmbeddingAnalysis:
     # grooming
     # -----------------------------------------------------------------------
 
-    def select_soft_drop(self, lund_seq, z_cut=0.1):
+    def select_soft_drop(self, lund_seq, z_cut=0.1, rho=0.0):
         """
-        Return the first primary Lund splitting satisfying z > z_cut (soft-drop
-        condition with beta=0), or None if no splitting passes.
+        Return (l, swapped) for the first primary Lund splitting l satisfying
+        z > z_cut (soft-drop condition with beta=0), or None if no splitting passes.
+
+        If rho > 0, z is computed from the area-subtracted branch pTs
+        (pt - rho*area); a branch with subtracted pT <= 0 fails. swapped is True
+        if the subtracted pT of l.softer() exceeds that of l.harder().
+        If rho = 0 (jets clustered without area), the raw pTs are used.
+
+        Note: the primary sequence still follows the branch that is harder by
+        raw pT (LundGenerator), which can differ from the harder by subtracted
+        pT when the raw pTs are close and the areas very different.
         """
         for l in lund_seq:
-            if l.z() > z_cut:
-                return l
+            h, s = l.harder(), l.softer()
+            pt_h = h.pt() - rho*h.area() if rho else h.pt()
+            pt_s = s.pt() - rho*s.area() if rho else s.pt()
+            pt_hi, pt_lo = max(pt_h, pt_s), min(pt_h, pt_s)
+            if pt_lo <= 0:
+                continue
+            if pt_lo / (pt_hi + pt_lo) > z_cut:
+                return l, pt_s > pt_h
         return None
 
     def get_subjets(self, jet, pt_min, rho=0.0):
         """
-        Groom jet with soft drop (z_cut) on its Lund declustering.
+        Groom jet with soft drop (z_cut) on its Lund declustering, with the SD
+        condition evaluated on area-subtracted branch pTs if rho > 0.
 
         Return (groomed jet, groomed pT - rho*area, harder subjet, softer subjet),
         or None if no splitting passes SD or the (subtracted) groomed pT < pt_min.
-        rho = 0 for jets clustered without area.
+        Harder/softer are ordered by subtracted pT. rho = 0 for jets clustered
+        without area.
         """
-        l = self.select_soft_drop(self.lund_gen.result(jet), z_cut=self.z_cut) # class is LundDeclustering
-        if l is None:
+        sd = self.select_soft_drop(self.lund_gen.result(jet), z_cut=self.z_cut, rho=rho)
+        if sd is None:
             return None
+        l, swapped = sd # l is a LundDeclustering
         gj = l.pair()
         gj_pt = gj.pt() - rho*gj.area() if rho else gj.pt()
         if gj_pt < pt_min:
             return None
+        if swapped:
+            return gj, gj_pt, l.softer(), l.harder()
         return gj, gj_pt, l.harder(), l.softer()
 
     # -----------------------------------------------------------------------
