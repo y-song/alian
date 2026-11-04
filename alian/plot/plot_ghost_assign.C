@@ -18,8 +18,9 @@
 //                              (unit-normalized shapes)
 //   perp_assign                fraction of perp-cone particles assigned to A, B, neither vs pT_g
 //   perp_assign_rg             same vs R_g (all pT_g)
-//   ghost_closure[_bkg]        fraction of the jet's own A/B tracks (all / OO-origin) that the
-//                              ghosts assign correctly, swapped or dropped vs R_g (all pT_g)
+//   area_{a,b}                 area of subjets A and B, in the pT_g range (unit-normalized shapes)
+//   perp_assign_agree_rg       closest-ghost vs reclustered assignment of perp-cone particles vs R_g
+//                              (all pT_g); filled only with analysis.perp_recluster_closure: true
 // Compare outputs for decreasing oo.jet_finder.ghost_area to check convergence.
 // Example Usage:
 // root -l 'plot/plot_ghost_assign.C("2013681", "40", "60", "OO")'
@@ -248,12 +249,10 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
     TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
 
     // Category bins of the 'assign' axis (bin = category + 1), as in embed_perpcone.py:
-    // ASSIGN_A, ASSIGN_B, ASSIGN_NONE and CLOSURE_CORRECT, CLOSURE_SWAPPED, CLOSURE_DROPPED.
+    // ASSIGN_A, ASSIGN_B, ASSIGN_NONE.
     const int kColors[3] = {kBlue, kGreen + 2, kRed};
     const int kMarkers[3] = {kFullCircle, 33, 21};
-    const int kOpenMarkers[3] = {24, 27, 25};
     const char *assign_labels[3] = {"A", "B", "neither"};
-    const char *closure_labels[3] = {"correct", "swapped", "dropped"};
 
     // 1) dR of perp-cone particle to its closest ghost, in the pT_g range.
     {
@@ -315,35 +314,52 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
                     outdir + "perp_assign_rg_" + tag + ".pdf");
     }
 
-    // 4) Ghost-assignment closure of the jet's own A/B tracks vs R_g (all pT_g):
-    //    all tracks (filled markers) and OO-origin tracks (open markers).
-    TH2 *h2_closure = GetHist2D(f, sample + "_ghost_closure");
-    TH2 *h2_closure_bkg = GetHist2D(f, sample + "_ghost_closure_bkg");
-    if (h2_closure || h2_closure_bkg)
+    // 4) Areas of subjets A and B, in the pT_g range.
     {
+        const char *suffixes[2] = {"a", "b"};
         std::vector<HistConfig> configs;
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 2; i++)
         {
-            if (h2_closure)
+            TH2 *h2 = GetHist2D(f, sample + "_area_" + suffixes[i]);
+            TH1D *h1 = h2 ? ProjectYShape(h2, pt_lo, pt_hi, Form("h_%s_area_%s_%s_%s", sample.c_str(), suffixes[i], pt_min.c_str(), pt_max.c_str())) : nullptr;
+            std::string label = std::string(assign_labels[i]);
+            if (h1)
             {
-                TH1D *h1 = CategoryFraction(h2_closure, i + 1, Form("h_%s_ghost_closure_frac_%s", sample.c_str(), closure_labels[i]));
-                h1->GetXaxis()->SetRangeUser(0.01, 0.4);
+                label += Form(", #LT#it{A}#GT = %.3f", h1->GetMean());
+                std::cout << "area_" << suffixes[i] << ": mean = " << h1->GetMean() << ", RMS = " << h1->GetRMS() << std::endl;
                 f_out->cd();
                 h1->Write();
-                configs.push_back({strdup(Form("%s, all tracks", closure_labels[i])), kColors[i], kMarkers[i], h1});
             }
-            if (h2_closure_bkg)
-            {
-                TH1D *h1 = CategoryFraction(h2_closure_bkg, i + 1, Form("h_%s_ghost_closure_bkg_frac_%s", sample.c_str(), closure_labels[i]));
-                h1->GetXaxis()->SetRangeUser(0.01, 0.4);
-                f_out->cd();
-                h1->Write();
-                configs.push_back({strdup(Form("%s, OO tracks", closure_labels[i])), kColors[i], kOpenMarkers[i], h1});
-            }
+            configs.push_back({strdup(label.c_str()), kColors[i], kMarkers[i], h1});
         }
-        DrawAndSave(configs, "Ghost assignment of jet A/B tracks", "#it{R}_{g}",
-                    "fraction of subjet tracks", 0., 1.5, true, false, jetR_str, "all #it{p}_{T,g}^{sub}",
-                    outdir + "ghost_closure_" + tag + ".pdf");
+        DrawAndSave(configs, "Subjet areas", "#it{A}_{subjet}",
+                    "normalized counts", 1e-4, 1., false, true, jetR_str, ptbin,
+                    outdir + "subjet_area_" + tag + ".pdf");
+    }
+
+    // 5) Closest-ghost vs reclustered assignment of perp-cone particles vs R_g (all pT_g).
+    //    Outcome bins (bin = outcome + 1), as in embed_perpcone.py: OUTCOME_AGREE,
+    //    OUTCOME_SWAPPED, OUTCOME_GHOST_ONLY, OUTCOME_RECLUSTER_ONLY.
+    TH2 *h2_agree_rg = GetHist2D(f, sample + "_perp_assign_agree_rg");
+    if (h2_agree_rg && h2_agree_rg->GetEntries() > 0)
+    {
+        const char *outcome_labels[4] = {"agree", "A #leftrightarrow B swapped", "A/B by ghost only", "A/B by reclustering only"};
+        const int kOutcomeColors[4] = {kBlack, kBlue, kRed, kGreen + 2};
+        const int kOutcomeMarkers[4] = {kFullCircle, 33, 21, 22};
+        std::vector<HistConfig> configs;
+        for (int i = 0; i < 4; i++)
+        {
+            TH1D *h1 = CategoryFraction(h2_agree_rg, i + 1, Form("h_%s_perp_assign_agree_rg_frac_%d", sample.c_str(), i));
+            h1->GetXaxis()->SetRangeUser(0.01, 0.4);
+            std::cout << "perp_assign_agree_rg " << outcome_labels[i] << " fraction (all R_g): "
+                      << IntegratedFraction(h2_agree_rg, i + 1, 1e-4, 1.) << std::endl;
+            f_out->cd();
+            h1->Write();
+            configs.push_back({outcome_labels[i], kOutcomeColors[i], kOutcomeMarkers[i], h1});
+        }
+        DrawAndSave(configs, "Ghost vs reclustered assignment", "#it{R}_{g}",
+                    "fraction of perp-cone particles", 1e-4, 2., true, true, jetR_str, "all #it{p}_{T,g}^{sub}",
+                    outdir + "perp_assign_agree_rg_" + tag + ".pdf");
     }
 
     f_out->Close();
