@@ -19,8 +19,9 @@
 //   perp_assign                fraction of perp-cone particles assigned to A, B, neither vs pT_g
 //   perp_assign_rg             same vs R_g (all pT_g)
 //   area_{a,b}                 area of subjets A and B, in the pT_g range (unit-normalized shapes)
-//   perp_assign_agree_rg       closest-ghost vs reclustered assignment of perp-cone particles vs R_g
-//                              (all pT_g); filled only with analysis.perp_recluster_closure: true
+//   perp_assign[_rg]_recl      perp_assign[_rg] with the perp-cone particles assigned by reclustering,
+//                              overlaid on the ghost assignment (open vs filled markers); filled only
+//                              with analysis.perp_recluster_closure: true
 // Compare outputs for decreasing oo.jet_finder.ghost_area to check convergence.
 // Example Usage:
 // root -l 'plot/plot_ghost_assign.C("2013681", "40", "60", "OO")'
@@ -252,6 +253,7 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
     // ASSIGN_A, ASSIGN_B, ASSIGN_NONE.
     const int kColors[3] = {kBlue, kGreen + 2, kRed};
     const int kMarkers[3] = {kFullCircle, 33, 21};
+    const int kOpenMarkers[3] = {24, 27, 25};
     const char *assign_labels[3] = {"A", "B", "neither"};
 
     // 1) dR of perp-cone particle to its closest ghost, in the pT_g range.
@@ -337,29 +339,50 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
                     outdir + "subjet_area_" + tag + ".pdf");
     }
 
-    // 5) Closest-ghost vs reclustered assignment of perp-cone particles vs R_g (all pT_g).
-    //    Outcome bins (bin = outcome + 1), as in embed_perpcone.py: OUTCOME_AGREE,
-    //    OUTCOME_SWAPPED, OUTCOME_GHOST_ONLY, OUTCOME_RECLUSTER_ONLY.
-    TH2 *h2_agree_rg = GetHist2D(f, sample + "_perp_assign_agree_rg");
-    if (h2_agree_rg && h2_agree_rg->GetEntries() > 0)
+    // 5) Ghost vs reclustering assignment fractions vs pT_g (filled: ghost, open: reclustering);
+    //    integrated fractions in the pT_g range printed.
+    TH2 *h2_assign_recl = GetHist2D(f, sample + "_perp_assign_recl");
+    if (h2_assign && h2_assign_recl && h2_assign_recl->GetEntries() > 0)
     {
-        const char *outcome_labels[4] = {"agree", "A #leftrightarrow B swapped", "A/B by ghost only", "A/B by reclustering only"};
-        const int kOutcomeColors[4] = {kBlack, kBlue, kRed, kGreen + 2};
-        const int kOutcomeMarkers[4] = {kFullCircle, 33, 21, 22};
         std::vector<HistConfig> configs;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 3; i++)
         {
-            TH1D *h1 = CategoryFraction(h2_agree_rg, i + 1, Form("h_%s_perp_assign_agree_rg_frac_%d", sample.c_str(), i));
-            h1->GetXaxis()->SetRangeUser(0.01, 0.4);
-            std::cout << "perp_assign_agree_rg " << outcome_labels[i] << " fraction (all R_g): "
-                      << IntegratedFraction(h2_agree_rg, i + 1, 1e-4, 1.) << std::endl;
+            TH1D *h_ghost = CategoryFraction(h2_assign, i + 1, Form("h_%s_perp_assign_frac_%s_cmp", sample.c_str(), assign_labels[i]), pt_rebin);
+            TH1D *h_recl = CategoryFraction(h2_assign_recl, i + 1, Form("h_%s_perp_assign_recl_frac_%s", sample.c_str(), assign_labels[i]), pt_rebin);
+            h_ghost->GetXaxis()->SetRangeUser(10., 200.);
+            h_recl->GetXaxis()->SetRangeUser(10., 200.);
+            std::cout << "perp_assign " << assign_labels[i] << " fraction in pT_g range: ghost "
+                      << IntegratedFraction(h2_assign, i + 1, pt_lo, pt_hi) << ", reclustering "
+                      << IntegratedFraction(h2_assign_recl, i + 1, pt_lo, pt_hi) << std::endl;
             f_out->cd();
-            h1->Write();
-            configs.push_back({outcome_labels[i], kOutcomeColors[i], kOutcomeMarkers[i], h1});
+            h_recl->Write();
+            configs.push_back({strdup(Form("%s, ghost", assign_labels[i])), kColors[i], kMarkers[i], h_ghost});
+            configs.push_back({strdup(Form("%s, reclustering", assign_labels[i])), kColors[i], kOpenMarkers[i], h_recl});
         }
-        DrawAndSave(configs, "Ghost vs reclustered assignment", "#it{R}_{g}",
-                    "fraction of perp-cone particles", 1e-4, 2., true, true, jetR_str, "all #it{p}_{T,g}^{sub}",
-                    outdir + "perp_assign_agree_rg_" + tag + ".pdf");
+        DrawAndSave(configs, "Perp-cone particle assignment, ghost vs reclustering", "#it{p}_{T,g}^{sub} (GeV/#it{c})",
+                    "fraction of perp-cone particles", 0., 1.5, false, false, jetR_str, "",
+                    outdir + "perp_assign_cmp_" + tag + ".pdf");
+    }
+
+    // 6) Ghost vs reclustering assignment fractions vs R_g (all pT_g).
+    TH2 *h2_assign_rg_recl = GetHist2D(f, sample + "_perp_assign_rg_recl");
+    if (h2_assign_rg && h2_assign_rg_recl && h2_assign_rg_recl->GetEntries() > 0)
+    {
+        std::vector<HistConfig> configs;
+        for (int i = 0; i < 3; i++)
+        {
+            TH1D *h_ghost = CategoryFraction(h2_assign_rg, i + 1, Form("h_%s_perp_assign_rg_frac_%s_cmp", sample.c_str(), assign_labels[i]));
+            TH1D *h_recl = CategoryFraction(h2_assign_rg_recl, i + 1, Form("h_%s_perp_assign_rg_recl_frac_%s", sample.c_str(), assign_labels[i]));
+            h_ghost->GetXaxis()->SetRangeUser(0.01, 0.4);
+            h_recl->GetXaxis()->SetRangeUser(0.01, 0.4);
+            f_out->cd();
+            h_recl->Write();
+            configs.push_back({strdup(Form("%s, ghost", assign_labels[i])), kColors[i], kMarkers[i], h_ghost});
+            configs.push_back({strdup(Form("%s, reclustering", assign_labels[i])), kColors[i], kOpenMarkers[i], h_recl});
+        }
+        DrawAndSave(configs, "Perp-cone particle assignment, ghost vs reclustering", "#it{R}_{g}",
+                    "fraction of perp-cone particles", 0., 1.5, true, false, jetR_str, "all #it{p}_{T,g}^{sub}",
+                    outdir + "perp_assign_rg_cmp_" + tag + ".pdf");
     }
 
     f_out->Close();

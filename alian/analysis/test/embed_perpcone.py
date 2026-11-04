@@ -35,13 +35,10 @@ Rerun with decreasing ghost_area: the assignment fractions and perp-cone
 EEC terms should converge. dR to the closest ghost scales as sqrt(ghost_area) by
 construction and does not converge.
 
-With analysis.perp_recluster_closure: true, the ghost assignment is also compared
-to an exact one, from reclustering the jet's constituents with scaled copies of the
-perp-cone particles (see _recluster_assign), filling
-  combined_matched_perp_assign_matrix        ghost category vs reclustered category
-  combined_matched_perp_assign_agree_rg      outcome vs R_g: agree, A<->B swapped,
-                                             ghost-only (A/B by ghost, neither by reclustering),
-                                             recluster-only (neither by ghost, A/B by reclustering)
+With analysis.perp_recluster_closure: true, the perp-cone particles are also
+assigned by reclustering the jet's constituents with scaled copies of them (see
+_recluster_assign), filling the same assignment histograms for comparison:
+  combined_matched_perp_assign[_rg]_recl     perp particle category (A, B, neither)
 
 Example usage:
 python analysis/test/embed_perpcone.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_perpcone.root
@@ -73,11 +70,9 @@ from alian.io.data_io import DataInput
 
 # ghost assignment categories (values filled on the "assign" axis)
 ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
-# reclustering closure (perp_recluster_closure): extra category for jets whose SD
-# splitting is not found in the reclustered tree (sanity check, should not happen),
-# and ghost-vs-recluster outcomes
+# reclustering assignment (perp_recluster_closure): returned for all particles if the
+# SD splitting is not found in the reclustered tree (sanity check, should not happen)
 ASSIGN_UNMATCHED = 3
-OUTCOME_AGREE, OUTCOME_SWAPPED, OUTCOME_GHOST_ONLY, OUTCOME_RECLUSTER_ONLY = 0, 1, 2, 3
 # perp-cone particles are reclustered as scaled copies with negligible pT, tagged by
 # user_index = offset - (index in the cone's particle list)
 RECLUSTER_SCALE = 1e-50
@@ -596,7 +591,7 @@ class EmbeddingAnalysis:
         self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
         if getattr(self, 'perp_recluster_closure', False):
             recl1, recl2 = self._recluster_assign(jet, perp1, perp2, subjet_a, subjet_b)
-            self._fill_recluster_closure(perp1_info + perp2_info, recl1 + recl2, subjet_a, subjet_b, prefix, event_weight=event_weight)
+            self._fill_recluster_assign(recl1 + recl2, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet.constituents())
         tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
@@ -764,27 +759,21 @@ class EmbeddingAnalysis:
         """Whether j1 and j2 have the same pT within relative tolerance rel_tol."""
         return abs(j1.pt() - j2.pt()) <= rel_tol * max(j1.pt(), j2.pt())
 
-    def _fill_recluster_closure(self, ghost_info, recluster_categories, subjet_a, subjet_b, prefix, *, event_weight=1.0):
+    def _fill_recluster_assign(self, categories, subjet_a, subjet_b, prefix, *, jet_pt_bin, event_weight=1.0):
         """
-        Compare the closest-ghost assignment (ghost_info, list of (category, dR)) to
-        the reclustered one (recluster_categories), per perp-cone particle:
-          {prefix}_perp_assign_matrix    ghost category vs reclustered category
-          {prefix}_perp_assign_agree_rg  outcome vs R_g (skipped if the splitting was not found)
+        Fill the reclustering counterparts of the ghost assignment histograms, for
+        an ensemble-level comparison of the two methods:
+          {prefix}_perp_assign_recl      assignment category of perp-cone particles vs pT_g
+          {prefix}_perp_assign_rg_recl   assignment category of perp-cone particles vs R_g
+        Nothing is filled if the SD splitting was not found (ASSIGN_UNMATCHED).
         """
+        if len(categories) > 0 and categories[0] == ASSIGN_UNMATCHED:
+            self.logger.warning("SD splitting not found in the reclustered jet; perp-cone particles not filled.")
+            return
         rg = delta_R(subjet_a, subjet_b)
-        for (ghost_category, _), recluster_category in zip(ghost_info, recluster_categories):
-            self.hists[f'{prefix}_perp_assign_matrix'].Fill(ghost_category, recluster_category, event_weight)
-            if recluster_category == ASSIGN_UNMATCHED:
-                continue
-            if ghost_category == recluster_category:
-                outcome = OUTCOME_AGREE
-            elif ghost_category != ASSIGN_NONE and recluster_category != ASSIGN_NONE:
-                outcome = OUTCOME_SWAPPED
-            elif recluster_category == ASSIGN_NONE:
-                outcome = OUTCOME_GHOST_ONLY
-            else:
-                outcome = OUTCOME_RECLUSTER_ONLY
-            self.hists[f'{prefix}_perp_assign_agree_rg'].Fill(rg, outcome, event_weight)
+        for category in categories:
+            self.hists[f'{prefix}_perp_assign_recl'].Fill(jet_pt_bin, category, event_weight)
+            self.hists[f'{prefix}_perp_assign_rg_recl'].Fill(rg, category, event_weight)
 
     # -----------------------------------------------------------------------
     # event display
