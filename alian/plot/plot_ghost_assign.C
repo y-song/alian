@@ -171,7 +171,7 @@ struct HistConfig
 // Draw configs on a new canvas with the standard legend and save as pdf.
 void DrawAndSave(std::vector<HistConfig> &configs, const std::string &title, const std::string &xtitle,
                  const std::string &ytitle, double ymin, double ymax, bool logx, bool logy,
-                 const std::string &jetR_str, const std::string &plot_text, const std::string &extra_text,
+                 const std::string &jetR_str, const std::string &extra_text,
                  const std::string &fname)
 {
     TCanvas *c = new TCanvas("c", "c", 800, 600);
@@ -183,7 +183,7 @@ void DrawAndSave(std::vector<HistConfig> &configs, const std::string &title, con
         gPad->SetLogy();
 
     TLegend *l = new TLegend(0.2, 0.55, 0.6, 0.88);
-    addLegendInfo(l, jetR_str, plot_text);
+    addLegendInfo(l, jetR_str, "");
     if (!extra_text.empty())
         l->AddEntry("NULL", extra_text.c_str(), "h");
 
@@ -217,13 +217,13 @@ void DrawAndSave(std::vector<HistConfig> &configs, const std::string &title, con
     delete l;
 }
 
-void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt_max, std::string plot_text = "", int pt_rebin = 1)
+void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt_max, std::string plot_text = "", int pt_rebin = 5)
 {
     gStyle->SetOptStat(0);
     SetStyle();
 
-    std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    // std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed.root";
+    // std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
+    std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed_test.root";
     std::string jetR = "04";
     std::string jetR_str = "0.4";
     const std::string sample = "combined_matched";
@@ -274,7 +274,7 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
             configs.push_back({strdup(label.c_str()), kColors[i], kMarkers[i], h1});
         }
         DrawAndSave(configs, "Perp-cone particle to closest ghost", "#Delta#it{R}(particle, closest ghost)",
-                    "normalized counts", 1e-4, 1., false, true, jetR_str, plot_text, ptbin,
+                    "normalized counts", 1e-4, 0.2, false, false, jetR_str, ptbin,
                     outdir + "ghost_dR_" + tag + ".pdf");
     }
 
@@ -293,7 +293,7 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
             configs.push_back({assign_labels[i], kColors[i], kMarkers[i], h1});
         }
         DrawAndSave(configs, "Perp-cone particle assignment", "#it{p}_{T,g}^{sub} (GeV/#it{c})",
-                    "fraction of perp-cone particles", 0., 1.2, false, false, jetR_str, plot_text, "",
+                    "fraction of perp-cone particles", 0., 1.5, false, false, jetR_str, "",
                     outdir + "perp_assign_" + tag + ".pdf");
     }
 
@@ -311,7 +311,7 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
             configs.push_back({assign_labels[i], kColors[i], kMarkers[i], h1});
         }
         DrawAndSave(configs, "Perp-cone particle assignment", "#it{R}_{g}",
-                    "fraction of perp-cone particles", 0., 1.2, true, false, jetR_str, plot_text, "all #it{p}_{T,g}^{sub}",
+                    "fraction of perp-cone particles", 0., 1.5, true, false, jetR_str, "all #it{p}_{T,g}^{sub}",
                     outdir + "perp_assign_rg_" + tag + ".pdf");
     }
 
@@ -342,7 +342,7 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
             }
         }
         DrawAndSave(configs, "Ghost assignment of jet A/B tracks", "#it{R}_{g}",
-                    "fraction of subjet tracks", 0., 1.4, true, false, jetR_str, plot_text, "all #it{p}_{T,g}^{sub}",
+                    "fraction of subjet tracks", 0., 1.5, true, false, jetR_str, "all #it{p}_{T,g}^{sub}",
                     outdir + "ghost_closure_" + tag + ".pdf");
     }
 
