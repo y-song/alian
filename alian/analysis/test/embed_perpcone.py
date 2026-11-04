@@ -36,7 +36,8 @@ EEC terms should converge. dR to the closest ghost scales as sqrt(ghost_area) by
 construction and does not converge.
 
 With analysis.perp_recluster_closure: true, the ghost assignment is also compared
-to an exact one (see _recluster_assign), filling
+to an exact one, from reclustering the jet's constituents with scaled copies of the
+perp-cone particles (see _recluster_assign), filling
   combined_matched_perp_assign_matrix        ghost category vs reclustered category
   combined_matched_perp_assign_agree_rg      outcome vs R_g: agree, A<->B swapped,
                                              ghost-only (A/B by ghost, neither by reclustering),
@@ -73,7 +74,8 @@ from alian.io.data_io import DataInput
 # ghost assignment categories (values filled on the "assign" axis)
 ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
 # reclustering closure (perp_recluster_closure): extra category for jets whose SD
-# splitting is not found in the reclustered tree, and ghost-vs-recluster outcomes
+# splitting is not found in the reclustered tree (sanity check, should not happen),
+# and ghost-vs-recluster outcomes
 ASSIGN_UNMATCHED = 3
 OUTCOME_AGREE, OUTCOME_SWAPPED, OUTCOME_GHOST_ONLY, OUTCOME_RECLUSTER_ONLY = 0, 1, 2, 3
 # perp-cone particles are reclustered as scaled copies with negligible pT, tagged by
@@ -177,6 +179,8 @@ class EmbeddingAnalysis:
         # --- substructure tools ---
         self.eec_trk_selector = TrackSelector(pt_min=self.pt_min_eec)
         self.lund_gen = fj.contrib.LundGenerator()
+        # C/A with R large enough to merge all inputs into one jet (perp_recluster_closure)
+        self.recluster_jet_def = fj.JetDefinition(fj.cambridge_algorithm, fj.JetDefinition.max_allowable_R)
         # self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
         # --- event displays ---
@@ -591,7 +595,7 @@ class EmbeddingAnalysis:
         perp2_a, perp2_b, perp2_info = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
         self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
         if getattr(self, 'perp_recluster_closure', False):
-            recl1, recl2 = self._recluster_assign(jet, combined, perp1, perp2, subjet_a, subjet_b)
+            recl1, recl2 = self._recluster_assign(jet, perp1, perp2, subjet_a, subjet_b)
             self._fill_recluster_closure(perp1_info + perp2_info, recl1 + recl2, subjet_a, subjet_b, prefix, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet.constituents())
@@ -699,45 +703,37 @@ class EmbeddingAnalysis:
         self.hists[f'{prefix}_area_a'].Fill(jet_pt_bin, subjet_a.area(), event_weight)
         self.hists[f'{prefix}_area_b'].Fill(jet_pt_bin, subjet_b.area(), event_weight)
 
-    def _recluster_assign(self, jet, combined, perp1, perp2, subjet_a, subjet_b):
+    def _recluster_assign(self, jet, perp1, perp2, subjet_a, subjet_b):
         """
         Exact A/B assignment of perp-cone particles, as a closure test of the
         closest-ghost assignment.
 
         Scaled copies (momentum x RECLUSTER_SCALE) of the perp1 and perp2
-        particles are clustered with the combined event (anti-kT, no ghosts), and
-        the jet matching jet is reclustered with C/A by the LundGenerator. The
-        copies have negligible pT, so they do not change the jets, the C/A merging
-        of the real particles or the SD splitting; each copy ends up where a soft
-        particle at its position would. No ghosts are generated, so FastJet's ghost
-        random numbers (and thus the main analysis) are unaffected.
+        particles are clustered with C/A together with the real (non-ghost)
+        constituents of jet, into a single jet, which the LundGenerator then
+        declusters. The copies have negligible pT, so they do not change the C/A
+        merging of the real particles or the SD splitting; each copy ends up where
+        a soft particle at its position would. Only the jet's constituents are
+        used, so every copy is assigned somewhere in the jet's tree: unlike the
+        ghosts, this does not test whether a perp-cone particle lies outside the
+        jet area. No ghosts are generated, so FastJet's ghost random numbers (and
+        thus the main analysis) are unaffected.
 
         Returns (categories1, categories2), one category per particle of perp1 /
         perp2: ASSIGN_A or ASSIGN_B if its copy is in subjet A / B, ASSIGN_NONE if
-        it is outside the jet or in a branch groomed away, and ASSIGN_UNMATCHED for
-        all particles if the jet or the SD splitting is not found.
+        it is in a branch groomed away, and ASSIGN_UNMATCHED for all particles if
+        the SD splitting is not found (should not happen).
         """
-        unmatched = ([ASSIGN_UNMATCHED] * len(perp1), [ASSIGN_UNMATCHED] * len(perp2))
-
-        inputs = list(combined)
+        inputs = [c for c in jet.constituents() if not c.is_pure_ghost()]
         for offset, parts in ((PERP1_INDEX_OFFSET, perp1), (PERP2_INDEX_OFFSET, perp2)):
             for i, p in enumerate(parts):
                 copy = fj.PseudoJet(p.px() * RECLUSTER_SCALE, p.py() * RECLUSTER_SCALE,
                                     p.pz() * RECLUSTER_SCALE, p.e() * RECLUSTER_SCALE)
                 copy.set_user_index(offset - i)
                 inputs.append(copy)
-        # local ClusterSequence: combined_jet_finder.find_jets would replace the
-        # ClusterSequence that jet belongs to. cs must stay alive while its jets are used.
-        cs = fj.ClusterSequence(std.vector[fj.PseudoJet](inputs), self.combined_jet_finder.jet_def)
-
-        # the copies and ghosts carry negligible pT, so the matching jet has the same pT
-        test_jet = None
-        for tj in cs.inclusive_jets():
-            if self._same_pt(tj, jet):
-                test_jet = tj
-                break
-        if test_jet is None:
-            return unmatched
+        # cs must stay alive while its jets are used
+        cs = fj.ClusterSequence(std.vector[fj.PseudoJet](inputs), self.recluster_jet_def)
+        test_jet = fj.sorted_by_pt(cs.inclusive_jets())[0] # the only jet, with R = max_allowable_R
 
         # find the SD splitting: the primary declustering whose branches have the pTs of A and B
         branch_a = branch_b = None
@@ -749,7 +745,7 @@ class EmbeddingAnalysis:
                 branch_a, branch_b = l.softer(), l.harder()
                 break
         if branch_a is None:
-            return unmatched
+            return [ASSIGN_UNMATCHED] * len(perp1), [ASSIGN_UNMATCHED] * len(perp2)
 
         categories = ([ASSIGN_NONE] * len(perp1), [ASSIGN_NONE] * len(perp2))
         for category, branch in ((ASSIGN_A, branch_a), (ASSIGN_B, branch_b)):
