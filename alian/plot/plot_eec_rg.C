@@ -168,20 +168,18 @@ void plot_eec_rg(std::string file_name, std::string pt_min, std::string pt_max, 
     TFile *f     = new TFile(infile.c_str(), "READ");
     TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
 
-    // Get jet pT histogram and compute njets once — shared normalization for all EEC variants
-    TH1 *h_JetPt = (TH1 *)f->Get("jet_pT");
+    // Get groomed matched combined jet pT histogram and compute njets once — shared normalization for all EEC variants
+    TH1 *h_JetPt = (TH1 *)f->Get("combined_pTg_matched");
     std::cout << "Number of jets from pT bins " << pt_lo + 1 << "-" << pt_hi << ": ";
     double njets = h_JetPt->Integral((int)h_JetPt->FindBin(pt_lo), (int)h_JetPt->FindBin(pt_hi));
     std::cout << njets << std::endl;
 
-    TH1D *h_jet_eec = LoadAndProcess(f, "eec",pt_lo, pt_hi, njets);
-    TH1D *h_sdjet_eec = LoadAndProcess(f, "sdjet_eec",pt_lo, pt_hi, njets);
-    TH1D *h_aa  = LoadAndProcess(f, "eec_aa", pt_lo, pt_hi, njets);
-    TH1D *h_bb  = LoadAndProcess(f, "eec_bb", pt_lo, pt_hi, njets);
-    TH1D *h_ab  = LoadAndProcess(f, "eec_ab", pt_lo, pt_hi, njets, 2.0);
-    TH1D *h_ab_noew  = LoadAndProcess(f, "eec_ab_noew", pt_lo, pt_hi, njets, 2.0);
-    TH1D *h_rg  = LoadAndProcess(f, "rg_log", pt_lo, pt_hi, njets);
-    TH1D *h_zg  = LoadAndProcess(f, "zg", pt_lo, pt_hi, njets);
+    TH1D *h_jet_eec = LoadAndProcess(f, "combined_matched_eec",pt_lo, pt_hi, njets);
+    TH1D *h_sdjet_eec = LoadAndProcess(f, "combined_matched_sdjet_eec",pt_lo, pt_hi, njets);
+    TH1D *h_aa  = LoadAndProcess(f, "combined_matched_eec_aa", pt_lo, pt_hi, njets);
+    TH1D *h_bb  = LoadAndProcess(f, "combined_matched_eec_bb", pt_lo, pt_hi, njets);
+    TH1D *h_ab  = LoadAndProcess(f, "combined_matched_eec_ab", pt_lo, pt_hi, njets, 2.0);
+    TH1D *h_rg  = LoadAndProcess(f, "combined_matched_rg", pt_lo, pt_hi, njets);
 
     TH1D *h_sdjet_groomed_eec;
     if (h_aa && h_bb && h_ab) {
@@ -204,7 +202,6 @@ void plot_eec_rg(std::string file_name, std::string pt_min, std::string pt_max, 
         // {"EEC,bb", kRed,      kFullTriangleUp, h_bb},
         {"Rg",     kRed,      kFullTriangleUp, h_rg},
         {"EEC,ab", kGreen+2,  kFullDiamond   , h_ab},
-        {"EEC,ab, no weight", kBlack,  kFullDiamond, h_ab_noew},
     };
 
     // Canvas
@@ -262,9 +259,7 @@ void plot_eec_rg(std::string file_name, std::string pt_min, std::string pt_max, 
     h_aa->Write();
     h_bb->Write();
     h_ab->Write();
-    h_ab_noew->Write();
     h_rg->Write(); 
-    h_zg->Write(); 
 
     f_out->Close();
     f->Close();
