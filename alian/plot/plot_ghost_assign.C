@@ -18,8 +18,6 @@
 //                              (unit-normalized shapes)
 //   perp_assign                fraction of perp-cone particles assigned to A, B, neither vs pT_g
 //   perp_assign_rg             same vs R_g (all pT_g)
-//   ghost_closure[_bkg]        fraction of the jet's own A/B tracks (all / OO-origin) that the
-//                              ghosts assign correctly, swapped or dropped vs R_g (all pT_g)
 // Compare outputs for decreasing oo.jet_finder.ghost_area to check convergence.
 // Example Usage:
 // root -l 'plot/plot_ghost_assign.C("2013681", "40", "60", "OO")'
@@ -248,12 +246,10 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
     TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
 
     // Category bins of the 'assign' axis (bin = category + 1), as in embed_perpcone.py:
-    // ASSIGN_A, ASSIGN_B, ASSIGN_NONE and CLOSURE_CORRECT, CLOSURE_SWAPPED, CLOSURE_DROPPED.
+    // ASSIGN_A, ASSIGN_B, ASSIGN_NONE.
     const int kColors[3] = {kBlue, kGreen + 2, kRed};
     const int kMarkers[3] = {kFullCircle, 33, 21};
-    const int kOpenMarkers[3] = {24, 27, 25};
     const char *assign_labels[3] = {"A", "B", "neither"};
-    const char *closure_labels[3] = {"correct", "swapped", "dropped"};
 
     // 1) dR of perp-cone particle to its closest ghost, in the pT_g range.
     {
@@ -313,37 +309,6 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
         DrawAndSave(configs, "Perp-cone particle assignment", "#it{R}_{g}",
                     "fraction of perp-cone particles", 0., 1.5, true, false, jetR_str, "all #it{p}_{T,g}^{sub}",
                     outdir + "perp_assign_rg_" + tag + ".pdf");
-    }
-
-    // 4) Ghost-assignment closure of the jet's own A/B tracks vs R_g (all pT_g):
-    //    all tracks (filled markers) and OO-origin tracks (open markers).
-    TH2 *h2_closure = GetHist2D(f, sample + "_ghost_closure");
-    TH2 *h2_closure_bkg = GetHist2D(f, sample + "_ghost_closure_bkg");
-    if (h2_closure || h2_closure_bkg)
-    {
-        std::vector<HistConfig> configs;
-        for (int i = 0; i < 3; i++)
-        {
-            if (h2_closure)
-            {
-                TH1D *h1 = CategoryFraction(h2_closure, i + 1, Form("h_%s_ghost_closure_frac_%s", sample.c_str(), closure_labels[i]));
-                h1->GetXaxis()->SetRangeUser(0.01, 0.4);
-                f_out->cd();
-                h1->Write();
-                configs.push_back({strdup(Form("%s, all tracks", closure_labels[i])), kColors[i], kMarkers[i], h1});
-            }
-            if (h2_closure_bkg)
-            {
-                TH1D *h1 = CategoryFraction(h2_closure_bkg, i + 1, Form("h_%s_ghost_closure_bkg_frac_%s", sample.c_str(), closure_labels[i]));
-                h1->GetXaxis()->SetRangeUser(0.01, 0.4);
-                f_out->cd();
-                h1->Write();
-                configs.push_back({strdup(Form("%s, OO tracks", closure_labels[i])), kColors[i], kOpenMarkers[i], h1});
-            }
-        }
-        DrawAndSave(configs, "Ghost assignment of jet A/B tracks", "#it{R}_{g}",
-                    "fraction of subjet tracks", 0., 1.5, true, false, jetR_str, "all #it{p}_{T,g}^{sub}",
-                    outdir + "ghost_closure_" + tag + ".pdf");
     }
 
     f_out->Close();
