@@ -30,9 +30,17 @@ To check that the ghost density (oo.jet_finder.ghost_area) is sufficient for the
 A/B assignment, the following are also filled (see _fill_ghost_diagnostics):
   combined_matched_perp_ghost_dR_{a,b,none}  dR of perp particle to closest ghost
   combined_matched_perp_assign[_rg]          perp particle category (A, B, neither)
+  combined_matched_area_{a,b}                area of subjet A / B
 Rerun with decreasing ghost_area: the assignment fractions and perp-cone
 EEC terms should converge. dR to the closest ghost scales as sqrt(ghost_area) by
 construction and does not converge.
+
+With analysis.perp_recluster_closure: true, the ghost assignment is also compared
+to an exact one (see _recluster_assign), filling
+  combined_matched_perp_assign_matrix        ghost category vs reclustered category
+  combined_matched_perp_assign_agree_rg      outcome vs R_g: agree, A<->B swapped,
+                                             ghost-only (A/B by ghost, neither by reclustering),
+                                             recluster-only (neither by ghost, A/B by reclustering)
 
 Example usage:
 python analysis/test/embed_perpcone.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_perpcone.root
@@ -64,6 +72,15 @@ from alian.io.data_io import DataInput
 
 # ghost assignment categories (values filled on the "assign" axis)
 ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
+# reclustering closure (perp_recluster_closure): extra category for jets whose SD
+# splitting is not found in the reclustered tree, and ghost-vs-recluster outcomes
+ASSIGN_UNMATCHED = 3
+OUTCOME_AGREE, OUTCOME_SWAPPED, OUTCOME_GHOST_ONLY, OUTCOME_RECLUSTER_ONLY = 0, 1, 2, 3
+# perp-cone particles are reclustered as scaled copies with negligible pT, tagged by
+# user_index = offset - (index in the cone's particle list)
+RECLUSTER_SCALE = 1e-50
+PERP1_INDEX_OFFSET = -10_000_000
+PERP2_INDEX_OFFSET = -20_000_000
 
 # source code locations
 # /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
@@ -573,6 +590,9 @@ class EmbeddingAnalysis:
         perp1_a, perp1_b, perp1_info = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b) # lists of PseudoJets, list of (category, dR) tuples
         perp2_a, perp2_b, perp2_info = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
         self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+        if getattr(self, 'perp_recluster_closure', False):
+            recl1, recl2 = self._recluster_assign(jet, combined, perp1, perp2, subjet_a, subjet_b)
+            self._fill_recluster_closure(perp1_info + perp2_info, recl1 + recl2, subjet_a, subjet_b, prefix, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet.constituents())
         tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
@@ -667,6 +687,7 @@ class EmbeddingAnalysis:
           {prefix}_perp_ghost_dR_{a,b,none}  dR of perp-cone particle to its closest ghost vs pT_g
           {prefix}_perp_assign               assignment category of perp-cone particles vs pT_g
           {prefix}_perp_assign_rg            assignment category of perp-cone particles vs R_g
+          {prefix}_area_{a,b}                area of subjet A / B vs pT_g
         """
         rg = delta_R(subjet_a, subjet_b)
         suffixes = {ASSIGN_A: 'a', ASSIGN_B: 'b', ASSIGN_NONE: 'none'}
@@ -674,6 +695,100 @@ class EmbeddingAnalysis:
             self.hists[f'{prefix}_perp_ghost_dR_{suffixes[category]}'].Fill(jet_pt_bin, dR, event_weight)
             self.hists[f'{prefix}_perp_assign'].Fill(jet_pt_bin, category, event_weight)
             self.hists[f'{prefix}_perp_assign_rg'].Fill(rg, category, event_weight)
+
+        self.hists[f'{prefix}_area_a'].Fill(jet_pt_bin, subjet_a.area(), event_weight)
+        self.hists[f'{prefix}_area_b'].Fill(jet_pt_bin, subjet_b.area(), event_weight)
+
+    def _recluster_assign(self, jet, combined, perp1, perp2, subjet_a, subjet_b):
+        """
+        Exact A/B assignment of perp-cone particles, as a closure test of the
+        closest-ghost assignment.
+
+        Scaled copies (momentum x RECLUSTER_SCALE) of the perp1 and perp2
+        particles are clustered with the combined event (anti-kT, no ghosts), and
+        the jet matching jet is reclustered with C/A by the LundGenerator. The
+        copies have negligible pT, so they do not change the jets, the C/A merging
+        of the real particles or the SD splitting; each copy ends up where a soft
+        particle at its position would. No ghosts are generated, so FastJet's ghost
+        random numbers (and thus the main analysis) are unaffected.
+
+        Returns (categories1, categories2), one category per particle of perp1 /
+        perp2: ASSIGN_A or ASSIGN_B if its copy is in subjet A / B, ASSIGN_NONE if
+        it is outside the jet or in a branch groomed away, and ASSIGN_UNMATCHED for
+        all particles if the jet or the SD splitting is not found.
+        """
+        unmatched = ([ASSIGN_UNMATCHED] * len(perp1), [ASSIGN_UNMATCHED] * len(perp2))
+
+        inputs = list(combined)
+        for offset, parts in ((PERP1_INDEX_OFFSET, perp1), (PERP2_INDEX_OFFSET, perp2)):
+            for i, p in enumerate(parts):
+                copy = fj.PseudoJet(p.px() * RECLUSTER_SCALE, p.py() * RECLUSTER_SCALE,
+                                    p.pz() * RECLUSTER_SCALE, p.e() * RECLUSTER_SCALE)
+                copy.set_user_index(offset - i)
+                inputs.append(copy)
+        # local ClusterSequence: combined_jet_finder.find_jets would replace the
+        # ClusterSequence that jet belongs to. cs must stay alive while its jets are used.
+        cs = fj.ClusterSequence(std.vector[fj.PseudoJet](inputs), self.combined_jet_finder.jet_def)
+
+        # the copies and ghosts carry negligible pT, so the matching jet has the same pT
+        test_jet = None
+        for tj in cs.inclusive_jets():
+            if self._same_pt(tj, jet):
+                test_jet = tj
+                break
+        if test_jet is None:
+            return unmatched
+
+        # find the SD splitting: the primary declustering whose branches have the pTs of A and B
+        branch_a = branch_b = None
+        for l in self.lund_gen.result(test_jet):
+            if self._same_pt(l.harder(), subjet_a) and self._same_pt(l.softer(), subjet_b):
+                branch_a, branch_b = l.harder(), l.softer()
+                break
+            if self._same_pt(l.harder(), subjet_b) and self._same_pt(l.softer(), subjet_a):
+                branch_a, branch_b = l.softer(), l.harder()
+                break
+        if branch_a is None:
+            return unmatched
+
+        categories = ([ASSIGN_NONE] * len(perp1), [ASSIGN_NONE] * len(perp2))
+        for category, branch in ((ASSIGN_A, branch_a), (ASSIGN_B, branch_b)):
+            for c in branch.constituents():
+                index = c.user_index()
+                if index > PERP1_INDEX_OFFSET:
+                    continue # not a perp-cone copy
+                if index > PERP2_INDEX_OFFSET:
+                    categories[0][PERP1_INDEX_OFFSET - index] = category
+                else:
+                    categories[1][PERP2_INDEX_OFFSET - index] = category
+        return categories
+
+    @staticmethod
+    def _same_pt(j1, j2, rel_tol=1e-9):
+        """Whether j1 and j2 have the same pT within relative tolerance rel_tol."""
+        return abs(j1.pt() - j2.pt()) <= rel_tol * max(j1.pt(), j2.pt())
+
+    def _fill_recluster_closure(self, ghost_info, recluster_categories, subjet_a, subjet_b, prefix, *, event_weight=1.0):
+        """
+        Compare the closest-ghost assignment (ghost_info, list of (category, dR)) to
+        the reclustered one (recluster_categories), per perp-cone particle:
+          {prefix}_perp_assign_matrix    ghost category vs reclustered category
+          {prefix}_perp_assign_agree_rg  outcome vs R_g (skipped if the splitting was not found)
+        """
+        rg = delta_R(subjet_a, subjet_b)
+        for (ghost_category, _), recluster_category in zip(ghost_info, recluster_categories):
+            self.hists[f'{prefix}_perp_assign_matrix'].Fill(ghost_category, recluster_category, event_weight)
+            if recluster_category == ASSIGN_UNMATCHED:
+                continue
+            if ghost_category == recluster_category:
+                outcome = OUTCOME_AGREE
+            elif ghost_category != ASSIGN_NONE and recluster_category != ASSIGN_NONE:
+                outcome = OUTCOME_SWAPPED
+            elif recluster_category == ASSIGN_NONE:
+                outcome = OUTCOME_GHOST_ONLY
+            else:
+                outcome = OUTCOME_RECLUSTER_ONLY
+            self.hists[f'{prefix}_perp_assign_agree_rg'].Fill(rg, outcome, event_weight)
 
     # -----------------------------------------------------------------------
     # event display

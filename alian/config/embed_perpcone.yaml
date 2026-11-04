@@ -38,6 +38,7 @@ analysis:
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
   z_cut: 0.2
+  perp_recluster_closure: false # exact (reclustering) check of the perp-cone ghost assignment; extra clustering per matched jet
 
 output:
   bins:
@@ -51,6 +52,8 @@ output:
     RL:         ['log', 1.0e-4, 1.0, 48]
     ghost_dR:   ['lin',   0, 0.2, 80]
     assign:     ['custom', [-0.5, 0.5, 1.5, 2.5]]
+    assign4:    ['custom', [-0.5, 0.5, 1.5, 2.5, 3.5]]
+    subjet_area: ['lin',  0, 0.6, 30] # 0.02 bins: areas come in multiples of the ghost area (~0.01)
 
   histograms:
     # --- Existing jet, background and matching histograms ---
@@ -377,3 +380,20 @@ output:
       "Perp-cone particle assignment (0: A, 1: B, 2: neither);R_{g};category",
       RL, assign]
 
+    combined_matched_area_a: [2, "combined_matched_area_a",
+      "Area of subjet A;#it{p}_{T,g}^{sub} (GeV);#it{A}_{A}",
+      jet_pT, subjet_area]
+
+    combined_matched_area_b: [2, "combined_matched_area_b",
+      "Area of subjet B;#it{p}_{T,g}^{sub} (GeV);#it{A}_{B}",
+      jet_pT, subjet_area]
+
+    # --- Reclustering closure of the perp-cone ghost assignment (perp_recluster_closure) ---
+
+    combined_matched_perp_assign_matrix: [2, "combined_matched_perp_assign_matrix",
+      "Perp-cone particle assignment (0: A, 1: B, 2: neither, 3: splitting not found);ghost category;reclustered category",
+      assign, assign4]
+
+    combined_matched_perp_assign_agree_rg: [2, "combined_matched_perp_assign_agree_rg",
+      "Ghost vs reclustered assignment (0: agree, 1: A<->B swapped, 2: ghost only, 3: recluster only);R_{g};outcome",
+      RL, assign4]
