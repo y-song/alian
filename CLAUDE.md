@@ -17,9 +17,11 @@ ALICE jet analysis built on heppyy (cppyy bindings to fastjet and ROOT).
 
 ## Running
 - Everything runs on the cluster (SLURM). Commands run from `alian/alian/`.
-- Environment: `module load bundle/hepbase heppyy alian` (see the top-level
-  README for the yasp install). After changing C++ in `src/`, recompile with
-  `./install_with_yasp.sh` and reload `module load alian`.
+- Environment: `cd ~ && source setup.sh`. That script activates the yasp venv
+  (`~/yasp/venvyasp`), sources `~/yasp/.venvstartup.sh`, and loads the
+  `bundle/hepbase`, `heppyy` and `alian` modules. After changing C++ in `src/`,
+  recompile with `./install_with_yasp.sh` from the repo root and reload
+  `module load alian`.
 - Smoke test before a full submission. Example for `embed_perpcone.py`, whose `-n`
   flag caps the number of event pairs:
   `python analysis/test/embed_perpcone.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_test.root -n 100`
