@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(sbatch *)",
+      "Bash(srun *)",
+      "Bash(salloc *)",
+      "Bash(scancel *)",
+      "Bash(scontrol *)",
+      "Bash(bash *submit*.sh*)",
+      "Bash(sh *submit*.sh*)",
+      "Bash(./submit*.sh*)"
+    ],
+    "allow": [
+      "Bash(scripts/check_python.sh)",
+      "Bash(scripts/check_python.sh *)"
+    ]
+  }
+}
