@@ -225,7 +225,7 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
     SetStyle();
 
     // std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed_test.root";
+    std::string infile  = "/home/youqi/alian/alian/output/" + file_name + ".root";
     std::string jetR = "04";
     std::string jetR_str = "0.4";
     const std::string sample = "combined_matched";

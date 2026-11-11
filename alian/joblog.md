@@ -102,6 +102,8 @@
 2001196: 10/14/26. Embed pp det jets and not events. Implement outlier rejection and pp det matching to pp truth.  
 2003534: 10/15/26. zcut = 0.2  
 2013681: 10/22/26. zcut = 0.2. Added EEC histograms. For resolution study, save only jets that pass grooming.  
+2013714: Added perp cone histograms.  
+2022784: Applied zcut based on rhoA subtracted subjets.
 
 # OO JE derived data
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  

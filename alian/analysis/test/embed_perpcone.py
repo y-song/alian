@@ -42,6 +42,8 @@ _recluster_assign), filling the same assignment histograms for comparison:
 
 Example usage:
 python analysis/test/embed_perpcone.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_perpcone.root
+python analysis/test/embed_perpcone.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combined1.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_test.root
+python analysis/test/embed_perpcone.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_test.root
 """
 
 import argparse
@@ -70,14 +72,10 @@ from alian.io.data_io import DataInput
 
 # ghost assignment categories (values filled on the "assign" axis)
 ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
-# reclustering assignment (perp_recluster_closure): returned for all particles if the
-# SD splitting is not found in the reclustered tree (sanity check, should not happen)
-ASSIGN_UNMATCHED = 3
 # perp-cone particles are reclustered as scaled copies with negligible pT, tagged by
-# user_index = offset - (index in the cone's particle list)
+# user_index = offset - its index
 RECLUSTER_SCALE = 1e-50
-PERP1_INDEX_OFFSET = -10_000_000
-PERP2_INDEX_OFFSET = -20_000_000
+PERP_INDEX_OFFSET = -10_000_000
 
 # source code locations
 # /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
@@ -305,7 +303,7 @@ class EmbeddingAnalysis:
             subjets = self.get_subjets(j, self.pt_min_combined_jet, rho)
             if subjets is None:
                 continue
-            gj, gj_pt_sub, subjet_a, subjet_b = subjets
+            gj, gj_pt_sub, subjet_a, subjet_b = subjets # subjet_a is harder after rhoA subtraction
             j_pt_sub = j.pt() - j.area()*rho
             # keep going if combined passes grooming
 
@@ -590,8 +588,8 @@ class EmbeddingAnalysis:
         perp2_a, perp2_b, perp2_info = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
         self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
         if getattr(self, 'perp_recluster_closure', False):
-            recl1, recl2 = self._recluster_assign(jet, perp1, perp2, subjet_a, subjet_b)
-            self._fill_recluster_assign(recl1 + recl2, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+            perp_categories = self._recluster_assign(jet, perp1+perp2, subjet_a, subjet_b)
+            self._fill_recluster_assign(perp_categories, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet.constituents())
         tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
@@ -698,60 +696,58 @@ class EmbeddingAnalysis:
         self.hists[f'{prefix}_area_a'].Fill(jet_pt_bin, subjet_a.area(), event_weight)
         self.hists[f'{prefix}_area_b'].Fill(jet_pt_bin, subjet_b.area(), event_weight)
 
-    def _recluster_assign(self, jet, perp1, perp2, subjet_a, subjet_b):
+    def _recluster_assign(self, jet, perp, subjet_a, subjet_b):
         """
         Exact A/B assignment of perp-cone particles, as a closure test of the
         closest-ghost assignment.
 
-        Scaled copies (momentum x RECLUSTER_SCALE) of the perp1 and perp2
-        particles are clustered with C/A together with the real (non-ghost)
-        constituents of jet, into a single jet, which the LundGenerator then
-        declusters. The copies have negligible pT, so they do not change the C/A
-        merging of the real particles or the SD splitting; each copy ends up where
-        a soft particle at its position would. Only the jet's constituents are
-        used, so every copy is assigned somewhere in the jet's tree: unlike the
-        ghosts, this does not test whether a perp-cone particle lies outside the
-        jet area. No ghosts are generated, so FastJet's ghost random numbers (and
-        thus the main analysis) are unaffected.
+        Scaled copies (momentum x RECLUSTER_SCALE) of the perp cone particles are
+        clustered with C/A together with the real (non-ghost) constituents of jet,
+        into a single jet, which the LundGenerator then declusters. The copies have
+        negligible pT, so they do not change the C/A merging of the real particles
+        or the SD splitting; each copy ends up where a soft particle at its position
+        would.
 
-        Returns (categories1, categories2), one category per particle of perp1 /
-        perp2: ASSIGN_A or ASSIGN_B if its copy is in subjet A / B, ASSIGN_NONE if
-        it is in a branch groomed away, and ASSIGN_UNMATCHED for all particles if
-        the SD splitting is not found (should not happen).
+        the ghost method can put a particle in ASSIGN_NONE because it’s outside the jet,
+        but the reclustering can only do that if the particle is groomed away.
+
+        Returns a list of size len(perp), one entry per perp cone particle:
+        ASSIGN_A or ASSIGN_B if its copy is in subjet A / B, ASSIGN_NONE if
+        it is groomed away.
         """
         inputs = [c for c in jet.constituents() if not c.is_pure_ghost()]
-        for offset, parts in ((PERP1_INDEX_OFFSET, perp1), (PERP2_INDEX_OFFSET, perp2)):
-            for i, p in enumerate(parts):
-                copy = fj.PseudoJet(p.px() * RECLUSTER_SCALE, p.py() * RECLUSTER_SCALE,
-                                    p.pz() * RECLUSTER_SCALE, p.e() * RECLUSTER_SCALE)
-                copy.set_user_index(offset - i)
-                inputs.append(copy)
+        for i, p in enumerate(perp):
+            copy = fj.PseudoJet(p.px() * RECLUSTER_SCALE, p.py() * RECLUSTER_SCALE,
+                                p.pz() * RECLUSTER_SCALE, p.e() * RECLUSTER_SCALE)
+            copy.set_user_index(PERP_INDEX_OFFSET - i)
+            inputs.append(copy)
         # cs must stay alive while its jets are used
         cs = fj.ClusterSequence(std.vector[fj.PseudoJet](inputs), self.recluster_jet_def)
         test_jet = fj.sorted_by_pt(cs.inclusive_jets())[0] # the only jet, with R = max_allowable_R
 
-        # find the SD splitting: the primary declustering whose branches have the pTs of A and B
-        branch_a = branch_b = None
+        # find the test subjets already chosen by get_subjets() on the original jet: the splitting
+        # whose branches have the pTs of subjet_a (harder one after rhoA subtraction) and subjet_b.
+        # test_subjet constituents are: combined jet constituents (no ghosts) + rotated perp cone
+        # particles with pT -> 0
+        # subjet constituents are: combined jet constituents (with ghosts)
+        test_subjet_a = test_subjet_b = None
         for l in self.lund_gen.result(test_jet):
             if self._same_pt(l.harder(), subjet_a) and self._same_pt(l.softer(), subjet_b):
-                branch_a, branch_b = l.harder(), l.softer()
+                test_subjet_a, test_subjet_b = l.harder(), l.softer()
                 break
-            if self._same_pt(l.harder(), subjet_b) and self._same_pt(l.softer(), subjet_a):
-                branch_a, branch_b = l.softer(), l.harder()
+            if self._same_pt(l.harder(), subjet_b) and self._same_pt(l.softer(), subjet_a): # subjet_a has lower raw pT
+                test_subjet_a, test_subjet_b = l.softer(), l.harder()
                 break
-        if branch_a is None:
-            return [ASSIGN_UNMATCHED] * len(perp1), [ASSIGN_UNMATCHED] * len(perp2)
+        if test_subjet_a is None:
+            print("unexpected")
 
-        categories = ([ASSIGN_NONE] * len(perp1), [ASSIGN_NONE] * len(perp2))
-        for category, branch in ((ASSIGN_A, branch_a), (ASSIGN_B, branch_b)):
+        categories = [ASSIGN_NONE] * len(perp)
+        for category, branch in ((ASSIGN_A, test_subjet_a), (ASSIGN_B, test_subjet_b)):
             for c in branch.constituents():
                 index = c.user_index()
-                if index > PERP1_INDEX_OFFSET:
-                    continue # not a perp-cone copy
-                if index > PERP2_INDEX_OFFSET:
-                    categories[0][PERP1_INDEX_OFFSET - index] = category
-                else:
-                    categories[1][PERP2_INDEX_OFFSET - index] = category
+                if index <= PERP_INDEX_OFFSET:
+                    categories[PERP_INDEX_OFFSET - index] = category
+
         return categories
 
     @staticmethod
@@ -765,11 +761,7 @@ class EmbeddingAnalysis:
         an ensemble-level comparison of the two methods:
           {prefix}_perp_assign_recl      assignment category of perp-cone particles vs pT_g
           {prefix}_perp_assign_rg_recl   assignment category of perp-cone particles vs R_g
-        Nothing is filled if the SD splitting was not found (ASSIGN_UNMATCHED).
         """
-        if len(categories) > 0 and categories[0] == ASSIGN_UNMATCHED:
-            self.logger.warning("SD splitting not found in the reclustered jet; perp-cone particles not filled.")
-            return
         rg = delta_R(subjet_a, subjet_b)
         for category in categories:
             self.hists[f'{prefix}_perp_assign_recl'].Fill(jet_pt_bin, category, event_weight)

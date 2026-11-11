@@ -25,7 +25,7 @@ oo:
     alg: antikt
     pT_min: 10.0
     eta_max: 0.5
-    ghost_area: 0.01 # lower to check convergence of the perp-cone A/B ghost assignment
+    ghost_area: 0.01
 
 bkg_estimator:
   max_eta: 0.9
@@ -38,21 +38,20 @@ analysis:
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
   z_cut: 0.2
-  perp_recluster_closure: false # exact (reclustering) check of the perp-cone ghost assignment; extra clustering per matched jet
+  perp_recluster_closure: true # exact (reclustering) check of the perp-cone ghost assignment; extra clustering per matched jet
 
 output:
   bins:
-    jet_pT:     ['lin',  -2, 200, 101]
+    jet_pT:     ['lin', -40, 200, 120]
     count:      ['lin',  -2, 200, 202]
     residual:   ['lin', -80,  80, 160]
     rho:        ['lin',   0, 100, 100]
-    area:       ['lin',-0.2,   2,  44]
+    area:       ['lin',   0, 1.0,  50]
     centrality: ['lin',   0, 100, 100]
     dR:         ['lin',   0, 1.0, 100]
     RL:         ['log', 1.0e-4, 1.0, 48]
     ghost_dR:   ['lin',   0, 0.2, 80]
     assign:     ['custom', [-0.5, 0.5, 1.5, 2.5]]
-    subjet_area: ['lin',  0, 0.6, 30] # 0.02 bins: areas come in multiples of the ghost area (~0.01)
 
   histograms:
     # --- Existing jet, background and matching histograms ---
@@ -381,11 +380,11 @@ output:
 
     combined_matched_area_a: [2, "combined_matched_area_a",
       "Area of subjet A;#it{p}_{T,g}^{sub} (GeV);#it{A}_{A}",
-      jet_pT, subjet_area]
+      jet_pT, area]
 
     combined_matched_area_b: [2, "combined_matched_area_b",
       "Area of subjet B;#it{p}_{T,g}^{sub} (GeV);#it{A}_{B}",
-      jet_pT, subjet_area]
+      jet_pT, area]
 
     # --- Reclustering assignment of perp-cone particles (perp_recluster_closure) ---
 
