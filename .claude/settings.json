@@ -12,7 +12,8 @@
     ],
     "allow": [
       "Bash(scripts/check_python.sh)",
-      "Bash(scripts/check_python.sh *)"
+      "Bash(scripts/check_python.sh *)",
+      "Bash(python3 ../.claude/skills/add-histogram/check_hists.py *)"
     ]
   }
 }
