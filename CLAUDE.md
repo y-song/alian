@@ -36,7 +36,14 @@ ALICE jet analysis built on heppyy (cppyy bindings to fastjet and ROOT).
 - The user runs all analysis code. Don't run analysis scripts, smoke tests or
   ROOT macros, and never submit, cancel or modify SLURM jobs (`sbatch`,
   `scancel`, ...), even when working on the cluster where they would work.
-- Code changes are therefore untested when handed over. Say so, and end every
+- Static checks are the exception: after changing Python, run
+  `scripts/check_python.sh` (from anywhere in the repo). It only byte-compiles
+  and runs pyflakes on files changed relative to `main`, and reports only
+  warnings that are new compared with `main`. Fix what it reports before handing
+  over. Don't clean up pre-existing warnings unless asked. If pyflakes is
+  missing, install it in the cloud with `python3 -m pip install pyflakes`; on the
+  cluster, don't install into the yasp venv. Tell the user instead.
+- Code changes are still untested when handed over. Say so, and end every
   change (and every PR description) with the exact smoke-test command for the
   user to run, plus what to look for in the output.
 - Keep changes small and focused, one physics change per commit. Commit
