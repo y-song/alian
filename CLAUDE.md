@@ -1,13 +1,11 @@
 # alian
 
-ALICE jet-substructure analysis built on heppyy (cppyy bindings to fastjet and
-ROOT). Most active work: embedding pp Run 3 MC jets into OO data and studying
-groomed subjet EECs with perpendicular-cone background subtraction.
+ALICE jet analysis built on heppyy (cppyy bindings to fastjet and ROOT).
 
 ## Where things live (all under `alian/`)
-- `analysis/test/embed_perpcone.py`: main analysis script under development.
-  The docstring at the top explains the histograms and closure tests; keep it
-  up to date when you change what the script fills.
+- `analysis/`: analysis scripts, grouped by study. Scripts like
+  `analysis/test/embed_perpcone.py` explain their histograms in a top-of-file
+  docstring; keep it up to date when you change what a script fills.
 - `analysis/base/`: shared jet finding, selections, event and output helpers.
 - `config/*.yaml`: analysis configs (`embed_perpcone.yaml`) and tree structures
   (`mc_tstruct.yaml`, `run3_tstruct.yaml`).
@@ -22,7 +20,8 @@ groomed subjet EECs with perpendicular-cone background subtraction.
 - Environment: `module load bundle/hepbase heppyy alian` (see the top-level
   README for the yasp install). After changing C++ in `src/`, recompile with
   `./install_with_yasp.sh` and reload `module load alian`.
-- Smoke test before a full submission (the `-n` flag caps the number of event pairs):
+- Smoke test before a full submission. Example for `embed_perpcone.py`, whose `-n`
+  flag caps the number of event pairs:
   `python analysis/test/embed_perpcone.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_test.root -n 100`
 - Full run: `sbatch submit_embed.sh`. Output goes to
   `/rstorage/youqi/<jobid>/<task>/out.root`, and the script copies the config
