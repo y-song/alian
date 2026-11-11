@@ -9,6 +9,10 @@
       "Bash(bash *submit*.sh*)",
       "Bash(sh *submit*.sh*)",
       "Bash(./submit*.sh*)"
-    ]
+    ],
+    "allow": [
+      "Bash(scripts/check_python.sh)",
+      "Bash(scripts/check_python.sh *)"
+    ],
   }
 }
