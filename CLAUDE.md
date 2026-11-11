@@ -25,7 +25,7 @@ ALICE jet analysis built on heppyy (cppyy bindings to fastjet and ROOT).
 - Smoke test before a full submission. Example for `embed_perpcone.py`, whose `-n`
   flag caps the number of event pairs:
   `python analysis/test/embed_perpcone.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_perpcone.yaml -o output/embed_test.root -n 100`
-- Full run: `sbatch submit_embed.sh`. Output goes to
+- Full run (the user submits it): `sbatch submit_embed.sh`. Output goes to
   `/rstorage/youqi/<jobid>/<task>/out.root`, and the script copies the config
   and analysis code there for provenance.
 - Merge: set `JOB_ID` and `N_TASKS` in `merge.sh`, which writes
@@ -33,12 +33,12 @@ ALICE jet analysis built on heppyy (cppyy bindings to fastjet and ROOT).
 - Plot: e.g. `root -l 'plot/plot_eec_perpcone.C("<jobid>", "40", "60", "OO")'`.
 
 ## Working conventions
-- Claude Code is used both in the cloud (no heppyy, fastjet or ROOT available,
-  so the code can't be run) and locally on the cluster (where it can).
-  - In the cloud, say clearly that the code is untested, and end every PR
-    description with the exact smoke-test command to run on the cluster.
-  - On the cluster, run the smoke test before calling a change done. Never
-    run full productions on a login node; submit them with `sbatch`.
+- The user runs all analysis code. Don't run analysis scripts, smoke tests or
+  ROOT macros, and never submit, cancel or modify SLURM jobs (`sbatch`,
+  `scancel`, ...), even when working on the cluster where they would work.
+- Code changes are therefore untested when handed over. Say so, and end every
+  change (and every PR description) with the exact smoke-test command for the
+  user to run, plus what to look for in the output.
 - Keep changes small and focused, one physics change per commit. Commit
   messages start with the file name, e.g. `embed_perpcone.py: ...`.
 - When a change affects production output, propose a `joblog.md` entry
