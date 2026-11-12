@@ -14,37 +14,47 @@ from alian.utils import pprints
 
 class CEventSubtractor():
 	_defaults = {
-		'max_eta': 4,
+		'max_eta': 4, # maximal pseudorapidity of the input particles. Particles with |eta|>max_eta are removed and not returned
 		'bge_rho_grid_size': 0.1,
 		'max_distance': 0.3,
 		'alpha': 1,
 		'ghost_area': 0.01,
 		'distance_type': fj.contrib.ConstituentSubtractor.deltaR,
-		'CBS': 1.0,
-		'CSS': 1.0,
+		'CBS': 1.0, # choose the scale for scaling the background charged particles
+		'CSS': 1.0, # choose the scale for scaling the signal charged particles
 		'max_pt_correct': 5.
 	}
-	def __init__(self, **kwargs):
-		# constants
-		# self.max_eta=4  # specify the maximal pseudorapidity for the input particles. It is used for the subtraction. Particles with eta>|max_eta| are removed and not used during the subtraction (they are not returned). The same parameter should be used for the GridMedianBackgroundEstimator as it is demonstrated in this example. If JetMedianBackgroundEstimator is used, then lower parameter should be used  (to avoid including particles outside this range).
-		# self.max_eta_jet=3  # the maximal pseudorapidity for selected jets. Not used for the subtraction - just for the final output jets in this example.
-		# self.bge_rho_grid_size = 0.2
-		# self.max_distance = 0.3
-		# self.alpha = 1
-		# self.ghost_area = 0.01
-		# self.distance_type = fj.contrib.ConstituentSubtractor.deltaR
-		# self.CBS=1.0  # choose the scale for scaling the background charged particles
-		# self.CSS=1.0  # choose the scale for scaling the signal charged particles
-		# self.max_pt_correct = 5.
-
-		self.logger = set_up_logger(__name__)
+	def __init__(self, cfg=None, logger=None, bkg_estimator=None, **kwargs):
+		"""cfg: dict of parameters (the `constituent_subtractor` config block); keyword
+		arguments override it. bkg_estimator: optional BkgEstimator whose rho is used for
+		the subtraction, so that CS and area subtraction share one estimator. If given, the
+		caller must run bkg_estimator.estimate(event) on the same particles before
+		process_event() (AnalysisBase does). If omitted, a private GridMedianBackgroundEstimator
+		(max_eta, bge_rho_grid_size) is built and set from the event in process_event()."""
+		self.logger = logger if logger is not None else set_up_logger(__name__)
+		self.bkg_estimator = bkg_estimator
+		options = {**(cfg or {}), **kwargs}
+		unknown = sorted(set(options) - set(self._defaults))
+		if unknown:
+			self.logger.warning(f"Ignoring unknown constituent subtractor parameters: {unknown}")
 		for param, default in self._defaults.items():
-			setattr(self, param, kwargs.get(param, default))
+			if param == 'max_eta' and param not in options and bkg_estimator is not None:
+				default = bkg_estimator.max_eta
+			setattr(self, param, options.get(param, default))
+		if bkg_estimator is not None and self.max_eta != bkg_estimator.max_eta:
+			raise ValueError(f"Constituent subtractor max_eta={self.max_eta} must equal background estimator max_eta={bkg_estimator.max_eta}") # For a GridMedianBackgroundEstimator the same value should be used. If JetMedianBackgroundEstimator is used, the estimator range is lower (max_eta - R), to avoid including particles outside the range.
 		self.initialize_subtractor()
-  
+
+	def _make_bge(self):
+		"""Set self.bge_rho: the shared estimator if one was given, else a private grid median."""
+		if self.bkg_estimator is not None:
+			self.bge_rho = self.bkg_estimator.bge
+		else: # default
+			self.bge_rho = fj.GridMedianBackgroundEstimator(self.max_eta, self.bge_rho_grid_size) # Maximal pseudo-rapidity cut max_eta is used inside ConstituentSubtraction, but in GridMedianBackgroundEstimator, the range is specified by maximal rapidity cut. Therefore, it is important to apply the same pseudo-rapidity cut also for particles used for background estimation (specified by function "set_particles") and also derive the rho dependence on rapidity using this max pseudo-rapidity cut to get the correct rescaling function!
+
 	def initialize_subtractor(self):
 		# background estimator
-		self.bge_rho = fj.GridMedianBackgroundEstimator(self.max_eta, self.bge_rho_grid_size)  # Maximal pseudo-rapidity cut max_eta is used inside ConstituentSubtraction, but in GridMedianBackgroundEstimator, the range is specified by maximal rapidity cut. Therefore, it is important to apply the same pseudo-rapidity cut also for particles used for background estimation (specified by function "set_particles") and also derive the rho dependence on rapidity using this max pseudo-rapidity cut to get the correct rescaling function!  
+		self._make_bge()
 
 		self.subtractor = fj.contrib.ConstituentSubtractor()  # no need to provide background estimator in this case
 		self.subtractor.set_distance_type(self.distance_type)  # free parameter for the type of distance between particle i and ghost k. There  are two options: "deltaR" or "angle" which are defined as deltaR=sqrt((y_i-y_k)^2+(phi_i-phi_k)^2) or Euclidean angle between the momenta  
@@ -69,7 +79,9 @@ class CEventSubtractor():
 		# print(self.subtractor.description())
 
 	def process_event(self, full_event):
-		self.bge_rho.set_particles(full_event)
+		if self.bkg_estimator is None:
+			self.bge_rho.set_particles(full_event)
+		# else: the shared estimator was already set from this event via bkg_estimator.estimate()
 		# the correction of the whole event with ConstituentSubtractor
 		# self.corrected_event = self.subtractor.subtract_event(full_event, self.max_eta)
 		self.corrected_event = self.subtractor.subtract_event(full_event)
@@ -78,6 +90,7 @@ class CEventSubtractor():
 		return self.corrected_event
 
 	def set_event_particles(self, full_event):
+		"""Set the event used for rho. With a shared bkg_estimator, prefer bkg_estimator.estimate()."""
 		self.bge_rho.set_particles(full_event);
 
 	def process_jet(self, jet):
@@ -108,7 +121,7 @@ class CEventSubtractor():
 class CSubtractorJetByJet(CEventSubtractor):
 	def initialize_subtractor(self):
 		# background estimator
-		self.bge_rho = fj.GridMedianBackgroundEstimator(self.max_eta, self.bge_rho_grid_size)
+		self._make_bge()
 		self.subtractor = fj.contrib.ConstituentSubtractor(self.bge_rho)
 
 	def process_jets(self, jets):
