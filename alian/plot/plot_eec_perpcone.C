@@ -185,10 +185,15 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
     }
 
     // Same jet-count normalization as plot_eec.C for combined_matched.
-    TH1 *h_JetPt = (TH1 *)f->Get("combined_pTg_matched");
+    // embed_cs.py names it sub_pTg_matched, embed_perpcone.py combined_pTg_matched
+    TH1 *h_JetPt = (TH1 *)f->Get("sub_pTg_matched");
     if (!h_JetPt)
     {
-        std::cerr << "Missing jet pT histogram combined_pTg_matched" << std::endl;
+        h_JetPt = (TH1 *)f->Get("combined_pTg_matched");
+    }
+    if (!h_JetPt)
+    {
+        std::cerr << "Missing jet pT histogram sub_pTg_matched or combined_pTg_matched" << std::endl;
         f->Close();
         delete f;
         return;

@@ -193,7 +193,12 @@ void plot_eec(std::string file_name, std::string pt_min, std::string pt_max, std
         }
         else
         {
-            h_JetPt = (TH1 *)f->Get("combined_pTg_matched");
+            // embed_cs.py names it sub_pTg_matched, embed_perpcone.py combined_pTg_matched
+            h_JetPt = (TH1 *)f->Get("sub_pTg_matched");
+            if (!h_JetPt)
+            {
+                h_JetPt = (TH1 *)f->Get("combined_pTg_matched");
+            }
         }
         if (!h_JetPt)
         {

@@ -28,6 +28,7 @@ oo:
     ghost_area: 0.01
 
 bkg_estimator:
+  type: jet
   max_eta: 0.9
   bge_R: 0.4 # jet median
 
