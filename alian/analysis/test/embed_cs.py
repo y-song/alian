@@ -16,23 +16,30 @@ Histograms with the "sub_" prefix hold subtracted quantities:
   residual_sub_pT[g]_matched          subtracted - pp pT vs subtracted pT (pTg)
   residual_pp_pTg_matched             subtracted - pp pTg vs pp pTg
 The raw (unsubtracted) combined_pT* and combined_area_* histograms of
-embed_perpcone.py are not filled. The "closest ghost" and perp-cone terms below are
-unchanged, except that the perp cones are taken from the subtracted event.
+embed_perpcone.py are not filled.
 
-EEC weights use the pre-CS pp pT for embedded signal particles (user_index >= 0, see
-_true_pt), so CS does not rescale the signal; OO particles keep their CS-subtracted
-pT. The EEC track pT cut (pt_min_eec) is applied to that same pT. Jet pT and
-jet / subjet membership still come from the subtracted event.
+CS only supplies the jet pT, the jet selection and the pp matching (as in
+pyjetty embed_cs_subtraction.py). The EEC itself uses the raw pre-CS particles
+(pp and OO, as in the combined event) within R of the axis of the CS anti-kT jet:
+their pT is used unmodified in the pair weights, the pT cut pt_min_eec acts on it,
+and the denominators are the subtracted jet pT (pT,g for subjets). The perp cones
+are also taken from the raw combined event, not from the subtracted one.
+SD and the subjet A/B assignment are done on the CS jet; the raw cone particles
+are put into A or B by the closest ghost of the CS jet, exactly like the perp-cone
+particles (particles whose closest ghost was groomed away are in neither).
 
-Matching to pp jets, the true-pT lookup and the sigsig/sigbkg/bkgbkg split below rely on user_index
-being kept by the subtractor (pp: >= 0, OO: < 0).
+Matching to pp jets and mc_fraction rely on user_index being kept by the subtractor
+(pp: >= 0, OO: < 0) in the CS jet constituents. The sigsig/sigbkg/bkgbkg split uses
+the user_index of the raw particles, so it does not depend on the subtractor.
+mc_fraction sums the raw (unsubtracted) pT of the pp jet's own tracks found among the
+CS jet constituents, over the raw pp jet pT.
 
 Plus perpendicular-cone background estimates for the
 matched combined subjet EECs (combined_matched_eec_aa/_ab/_bb) and inclusive EEC
 (combined_matched_sdjet_eec, for jets that pass SD).
 
 For each matched combined jet passing SD, two perp cones of radius perpcone_R
-are taken from the subtracted combined event at phi +/- pi/2 of the ungroomed jet axis and
+are taken from the raw combined event at phi +/- pi/2 of the ungroomed jet axis and
 rotated under the jet. Each rotated perp-cone particle is assigned to subjet A
 or B according to the closest ghost of the (ungroomed) jet; particles whose
 closest ghost was groomed away are dropped.
@@ -47,7 +54,7 @@ combined_matched_eec_xy (both orders for aa/bb, one A-B orientation for ab), so
   signal_xy ~ eec_xy - (jetperp_xy - perp1perp2_xy) - perpperp_xy
 
 For closure, combined_matched_eec_xy is also split by the truth origin of the
-two tracks (pp: user_index >= 0, OO: user_index < 0):
+two raw tracks (pp: user_index >= 0, OO: user_index < 0):
   combined_matched_eec_xy_sigsig      pp-pp pairs   (compare to signal_xy)
   combined_matched_eec_xy_sigbkg      pp-OO pairs   (compare to jetperp_xy - perp1perp2_xy)
   combined_matched_eec_xy_bkgbkg      OO-OO pairs   (compare to perpperp_xy)
@@ -92,6 +99,7 @@ from alian.analysis.base import (
     set_up_logger, delta_R,
 )
 from alian.analysis.base.bkg_estimator import BkgEstimator
+from alian.analysis.base.csubtractor import CEventSubtractor
 from alian.analysis.base.output import Output
 from alian.analysis.base.selector import TrackSelector
 from alian.analysis.base.event import Event, get_selected_tracks, get_selected_particles
@@ -257,8 +265,6 @@ class EmbeddingAnalysis:
         [self.hists['pp_pT'].Fill(j.pt(), weight) for j in pp_jets]
         [self.hists['pp_n'].Fill(len(j.constituents()), weight) for j in pp_jets]
         pp_jet_tracks = [c for j in pp_jets for c in j.constituents()]
-        # pre-CS pp pT of each embedded signal particle, keyed by user_index (unique per pp track); used by _true_pt
-        self._signal_pt = {c.user_index(): c.pt() for c in pp_jet_tracks}
         pp_subjets_list = [self.get_subjets(j, self.pt_min_pp_jet) for j in pp_jets] # one entry per jet: (gj, gj_pt, subjet_a, subjet_b), or None if that jet fails grooming
         
         for j, subjets in zip(pp_jets, pp_subjets_list):
@@ -314,12 +320,13 @@ class EmbeddingAnalysis:
             subjets = self.get_subjets(j, self.pt_min_combined_jet, rho=0.0)
             if subjets is None:
                 continue
-            gj, gj_pt, subjet_a, subjet_b = subjets # subjet_a is harder after rhoA subtraction
+            gj, gj_pt, subjet_a, subjet_b = subjets
             # keep going if combined passes grooming
 
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
             combined_constituents = [t for t in j.constituents() if not t.is_pure_ghost()]
             combined_g_constituents = [t for t in gj.constituents() if not t.is_pure_ghost()]
+            cone = self._parts_in_cone(j, combined) # raw pre-CS particles within R of the jet axis
 
             if (pp_ijet != -1): # mateched to pp
 
@@ -347,10 +354,13 @@ class EmbeddingAnalysis:
                 self.do_eec(pp_j, "pp_matched_eec", ew_denom=pp_j.pt(), jet_pt_bin=pp_j.pt(), event_weight=weight)
                 self.do_subjet_eec(pp_j, pp_subjet_a, pp_subjet_b, "pp_matched", ew_denom=pp_gj_pt, jet_pt_bin=pp_gj_pt, event_weight=weight)
 
-                self.do_eec(j, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
-                self.do_subjet_eec(j, subjet_a, subjet_b, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
-                self.do_subjet_eec_truth(j, subjet_a, subjet_b, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
-                self.do_subjet_eec_perpcone(j, subjet_a, subjet_b, sub_combined, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
+                # EEC from the raw particles in the cone, wrapped as jets (j_raw, subjet_a_raw, subjet_b_raw);
+                # jet pT, pT,g and Rg stay those of the CS jet and subjets
+                j_raw, subjet_a_raw, subjet_b_raw = self._raw_jets(j, subjet_a, subjet_b, cone)
+                self.do_eec(j_raw, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
+                self.do_subjet_eec(j_raw, subjet_a_raw, subjet_b_raw, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight, rg=delta_R(subjet_a, subjet_b))
+                self.do_subjet_eec_truth(j_raw, subjet_a_raw, subjet_b_raw, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
+                self.do_subjet_eec_perpcone(j, subjet_a, subjet_b, j_raw, subjet_a_raw, subjet_b_raw, combined, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
 
     # -----------------------------------------------------------------------
     # event building
@@ -471,12 +481,18 @@ class EmbeddingAnalysis:
 
     def mc_fraction(self, jet_pp, jet_combined):
         """
-        Return pt-fraction of tracks in jet_pp that are contained in jet_combined
+        Return the pt-fraction of the tracks in jet_pp that are contained in jet_combined.
+
+        jet_combined is a CS jet whose constituents carry subtracted pT, so tracks are
+        identified by user_index and their raw (unsubtracted) pT from jet_pp is summed;
+        the denominator is the raw jet_pp pT. A perfect match gives 1, up to pp tracks
+        removed entirely by CS. Only tracks of jet_pp count, not those of other pp jets.
         """
         pt_total = jet_pp.pt()
+        combined_pp_indices = [c.user_index() for c in jet_combined.constituents() if c.user_index() >= 0]
         pt_contained = 0.
-        for track in jet_combined.constituents():
-          if track.user_index() >= 0:
+        for track in jet_pp.constituents():
+          if track.user_index() in combined_pp_indices:
             pt_contained += track.pt()
         return pt_contained/pt_total
 
@@ -536,21 +552,23 @@ class EmbeddingAnalysis:
     # -----------------------------------------------------------------------
 
     def do_eec(self, jet, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
-        tracks = self._eec_tracks(jet.constituents())
+        tracks = self.eec_trk_selector.select_from(jet.constituents())
         self._fill_eec_pairs(itertools.permutations(tracks, 2), hist_name, ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
     def do_eec_cross(self, subjet_a, subjet_b, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
-        tracks_a = self._eec_tracks(subjet_a.constituents())
-        tracks_b = self._eec_tracks(subjet_b.constituents())
+        tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector.select_from(subjet_b.constituents())
         self._fill_eec_pairs(itertools.product(tracks_a, tracks_b), hist_name, ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
-    def do_subjet_eec(self, jet, subjet_a, subjet_b, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
-        """Fill {prefix}_sdjet_eec, _eec_aa, _eec_bb, _eec_ab and _rg, binned by groomed pT."""
+    def do_subjet_eec(self, jet, subjet_a, subjet_b, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0, rg=None):
+        """Fill {prefix}_sdjet_eec, _eec_aa, _eec_bb, _eec_ab and _rg, binned by groomed pT.
+        rg is the value filled in _rg; default delta_R(subjet_a, subjet_b). Pass it when jet and
+        subjets are raw-particle jets whose axes are not the groomed subjets'."""
         self.do_eec(jet, f"{prefix}_sdjet_eec", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight) # jet passes SD, but this includes stuff removed by SD
         self.do_eec(subjet_a, f"{prefix}_eec_aa", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
         self.do_eec(subjet_b, f"{prefix}_eec_bb", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
         self.do_eec_cross(subjet_a, subjet_b, f"{prefix}_eec_ab", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
-        self.hists[f'{prefix}_rg'].Fill(jet_pt_bin, delta_R(subjet_a, subjet_b), event_weight)
+        self.hists[f'{prefix}_rg'].Fill(jet_pt_bin, delta_R(subjet_a, subjet_b) if rg is None else rg, event_weight)
 
     def do_subjet_eec_truth(self, jet, subjet_a, subjet_b, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
         """
@@ -558,9 +576,9 @@ class EmbeddingAnalysis:
         fills {prefix}_<region>_sigsig / _sigbkg / _bkgbkg (signal = user_index >= 0).
         Same pairs and weights as do_subjet_eec, so the three sum to {prefix}_<region>.
         """
-        tracks = self._eec_tracks(jet.constituents())
-        tracks_a = self._eec_tracks(subjet_a.constituents())
-        tracks_b = self._eec_tracks(subjet_b.constituents())
+        tracks = self.eec_trk_selector.select_from(jet.constituents())
+        tracks_a = self.eec_trk_selector.select_from(subjet_a.constituents())
+        tracks_b = self.eec_trk_selector.select_from(subjet_b.constituents())
         pair_types = ('bkgbkg', 'sigbkg', 'sigsig') # indexed by number of signal tracks in the pair
         for region, pairs in (
             ('sdjet_eec', itertools.permutations(tracks, 2)),
@@ -570,16 +588,18 @@ class EmbeddingAnalysis:
         ):
             for p1, p2 in pairs:
                 pair_type = pair_types[(p1.user_index() >= 0) + (p2.user_index() >= 0)] # adding 2 booleans, index will be 0, 1 or 2
-                ew = self._true_pt(p1) * self._true_pt(p2) / ew_denom / ew_denom
+                ew = p1.pt() * p2.pt() / ew_denom / ew_denom
                 self.hists[f'{prefix}_{region}_{pair_type}'].Fill(jet_pt_bin, delta_R(p1, p2), ew*event_weight)
 
-    def do_subjet_eec_perpcone(self, jet, subjet_a, subjet_b, combined, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
+    def do_subjet_eec_perpcone(self, jet, subjet_a, subjet_b, jet_raw, subjet_a_raw, subjet_b_raw, combined, prefix, *, ew_denom, jet_pt_bin, event_weight=1.0):
         """
         Fill perp-cone EEC terms for the SD jet and for subjets A and B of jet.
 
-        Perp cones are placed at phi +/- pi/2 of the ungroomed jet axis, rotated
-        under the jet, and their particles are assigned to A or B via the
-        closest ghost. See the module docstring for the histograms filled.
+        jet, subjet_a, subjet_b are the CS jet and subjets (axis, ghosts, A/B assignment);
+        jet_raw, subjet_a_raw, subjet_b_raw wrap the raw in-cone particles (all, in A, in B; see
+        _raw_jets) and give the jet-side tracks. Perp cones are taken from the raw combined
+        event at phi +/- pi/2 of the ungroomed jet axis, rotated under the jet, and their
+        particles are assigned to A or B via the closest ghost. See the module docstring for the histograms filled.
         Also fills the ghost-assignment diagnostics (_fill_ghost_diagnostics).
         """
         perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2)) # a list of PseudoJets
@@ -592,9 +612,9 @@ class EmbeddingAnalysis:
             perp_categories = self._recluster_assign(jet, perp1+perp2, subjet_a, subjet_b)
             self._fill_recluster_assign(perp_categories, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
-        tracks = self._eec_tracks(jet.constituents())
-        tracks_a = self._eec_tracks(subjet_a.constituents())
-        tracks_b = self._eec_tracks(subjet_b.constituents())
+        tracks = self.eec_trk_selector.select_from(jet_raw.constituents())
+        tracks_a = self.eec_trk_selector.select_from(subjet_a_raw.constituents())
+        tracks_b = self.eec_trk_selector.select_from(subjet_b_raw.constituents())
 
         terms = [] # (region, jet-P1 pairs, P1-P1 pairs, P1-P2 pairs)
         # inclusive, eec_aa and eec_bb
@@ -622,21 +642,24 @@ class EmbeddingAnalysis:
             self._fill_eec_pairs(perpperp, f"{prefix}_{region}_perpperp", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
             self._fill_eec_pairs(perp1perp2, f"{prefix}_{region}_perp1perp2", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
-    def _true_pt(self, part):
-        """pT used for the EEC weight: the pre-CS pp pT for an embedded signal particle
-        (user_index >= 0, as set before the subtractor), the particle's own pT otherwise.
-        Relies on the subtractor keeping user_index; self._signal_pt is set per event."""
-        if part.user_index() >= 0:
-            return self._signal_pt.get(part.user_index(), part.pt())
-        return part.pt()
+    def _parts_in_cone(self, jet, parts):
+        """Particles of parts within R of the jet axis."""
+        return [p for p in parts if delta_R(jet, p) <= self.R]
 
-    def _eec_tracks(self, parts):
-        """Particles passing the EEC track selection, with the pT cut applied to _true_pt."""
-        return [t for t in parts if self._true_pt(t) >= self.pt_min_eec]
+    def _raw_jets(self, jet, subjet_a, subjet_b, cone):
+        """
+        Wrap the raw particles of cone (within R of jet) as three composite PseudoJets
+        (all, in subjet A, in subjet B), so that the do_*eec helpers, which read
+        .constituents(), run on them. A / B membership is by the closest ghost of the
+        CS jet, as for the perp-cone particles; particles whose closest ghost was groomed
+        away are only in the first. Their axes are not those of the CS jet / subjets.
+        """
+        cone_a, cone_b, _ = self._assign_to_subjets(cone, self._jet_ghosts(jet), subjet_a, subjet_b)
+        return tuple(fj.join(std.vector[fj.PseudoJet](parts)) for parts in (cone, cone_a, cone_b))
 
     def _fill_eec_pairs(self, pairs, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
         for p1, p2 in pairs:
-            ew = self._true_pt(p1) * self._true_pt(p2) / ew_denom / ew_denom
+            ew = p1.pt() * p2.pt() / ew_denom / ew_denom
             rl = delta_R(p1, p2)
             self.hists[hist_name].Fill(jet_pt_bin, rl, ew*event_weight)
 
@@ -649,7 +672,7 @@ class EmbeddingAnalysis:
             if delta_R(perpcone, part) > self.perpcone_R:
                 continue
             p = fj.PseudoJet()
-            p.reset_PtYPhiM(self._true_pt(part), part.rapidity(), part.phi() - dphi, part.m())
+            p.reset_PtYPhiM(part.pt(), part.rapidity(), part.phi() - dphi, part.m())
             p.set_user_index(part.user_index())
             rotated.append(p)
         return rotated

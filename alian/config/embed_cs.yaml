@@ -35,7 +35,7 @@ bkg_estimator:
 
 constituent_subtractor:
   max_eta: 0.9
-  max_distance: -1 # default
+  max_distance: 0.3 # default is -1
   alpha: 0 # default
   ghost_area: 0.01 # default
   max_pt_correct: 100

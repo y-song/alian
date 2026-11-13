@@ -1,18 +1,18 @@
 #!/bin/bash
 
 #SBATCH --job-name=embed
-#SBATCH --partition=std
+#SBATCH --partition=quick
 #SBATCH --output=/home/youqi/temp/%A_%a.out
 #SBATCH --error=/home/youqi/temp/%A_%a.err
 #SBATCH --array=0-32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=5G
-#SBATCH --time=08:00:00
+#SBATCH --time=04:00:00
 
 FILE_LIST_PP=list/MC_pp_anchored_OO_hadd50.txt
 FILE_LIST_OO=list/OO_mb.txt
-CONFIG=config/embed_perpcone.yaml
-ANALYSIS_CODE=analysis/test/embed_perpcone.py
+CONFIG=config/embed_cs.yaml
+ANALYSIS_CODE=analysis/test/embed_cs.py
 OUTPUT_DIR=/rstorage/youqi/$SLURM_ARRAY_JOB_ID
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
     mkdir -p "$OUTPUT_DIR"

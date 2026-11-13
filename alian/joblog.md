@@ -104,6 +104,7 @@
 2013681: 10/22/26. zcut = 0.2. Added EEC histograms. For resolution study, save only jets that pass grooming.  
 2013714: Added perp cone histograms.  
 2022784: Applied zcut based on rhoA subtracted subjets.
+2031225: 2026-11-13. embed_cs.py: EEC from raw pre-CS particles within R of the CS jet axis (CS only gives jet pT, selection, matching); perp cones from raw event; mc_fraction uses raw pp pT. embed_cs.yaml: CS max_distance -1 -> 0.3.
 
 # OO JE derived data
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  
