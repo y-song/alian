@@ -5,6 +5,8 @@ Used by:
   - plots_closure_tests_part1_refolding_statistical.ipynb
   - plots_closure_tests_part2_shape_prior.ipynb
 
+The pT-bin EEC plot helpers include both multi-panel and single-bin variants.
+
 Typical notebook setup:
     import sys
     sys.path.insert(0, '/global/cfs/cdirs/alice/blianggi/mypyjetty/pyjetty/pyjetty/'
@@ -424,7 +426,8 @@ def plot_closure_test_fullEEC_ptbins(lab, h3_raw_lab, h3_refolded_lab, h1_raw, h
                                      ratio_ylim=(0.8, 1.2), eec_ylim=None, logy=False,
                                      unfolding=False, label_ref="Raw data", label_test="Refolded",
                                      extralabel="", high_pt=None,
-                                     iters_shown=None, closure_label=None):
+                                     iters_shown=None, closure_label=None, pair_label=None,
+                                     top_y_padding=0.0):
     """
     Closure test on the full EEC: one panel (distribution + ratio) per jet pT bin,
     all panels connected with shared x and y axes. Legend goes in the first empty grid slot.
@@ -446,7 +449,12 @@ def plot_closure_test_fullEEC_ptbins(lab, h3_raw_lab, h3_refolded_lab, h1_raw, h
         Only the listed iterations are drawn; legend labels keep the true
         iteration number (it+1).
     closure_label : str or None -- closure-test name drawn on each top panel.
+    pair_label : str or None -- optional label drawn inside the first top panel.
+    top_y_padding : float -- fraction of the top-panel y range added above its maximum.
     """
+    if top_y_padding < 0:
+        raise ValueError("top_y_padding must be non-negative")
+
     n_iter = len(h1_refolded)
     iters = list(range(n_iter)) if iters_shown is None else list(iters_shown)
 
@@ -547,6 +555,10 @@ def plot_closure_test_fullEEC_ptbins(lab, h3_raw_lab, h3_refolded_lab, h1_raw, h
         if closure_label and k == 0:   # only the first panel
             ax_top.text(0.05, 0.86, closure_label, transform=ax_top.transAxes, fontsize=11,
                         verticalalignment="top", horizontalalignment="left", fontweight='bold')
+        if pair_label and k == 0:
+            ax_top.text(0.95, 0.95, pair_label, transform=ax_top.transAxes, fontsize=10,
+                        verticalalignment="top", horizontalalignment="right",
+                        fontweight='bold', zorder=5)
 
         # ---------------- BOTTOM: ratio test / ref ----------------
         ax_bot.axhline(1.05, color='gray', linestyle='--', lw=1.2, zorder=1, label=r"$\pm 5\%$")
@@ -601,24 +613,65 @@ def plot_closure_test_fullEEC_ptbins(lab, h3_raw_lab, h3_refolded_lab, h1_raw, h
         ax_top_ref.yaxis.set_major_locator(MaxNLocator(nbins=5, prune='lower'))
     if eec_ylim is not None:
         ax_top_ref.set_ylim(*eec_ylim)
+    if top_y_padding:
+        y_min, y_max = ax_top_ref.get_ylim()
+        if ax_top_ref.get_yscale() == "log":
+            y_max *= (y_max / y_min) ** top_y_padding
+        else:
+            y_max += (y_max - y_min) * top_y_padding
+        ax_top_ref.set_ylim(y_min, y_max)
 
     ax_bot_ref.set_ylim(*ratio_ylim)
     ax_bot_ref.yaxis.set_major_locator(MaxNLocator(nbins=4, prune='both'))
 
     # ---------------- shared legend in the first empty slot ----------------
     title = f"{lab} pairs" + (f"\n{extralabel}" if extralabel else "")
+    legend_title = title if pair_label is None else (extralabel or None)
     if n_used < nrows * ncols:
         row, col = divmod(n_used, ncols)
         ax_leg = fig.add_subplot(gs[2 * row:2 * row + 2, col])
         ax_leg.axis('off')
         ax_leg.legend(legend_handles, legend_labels, loc='center', frameon=False,
-                      fontsize=11, title=title, title_fontsize=12)
+                      fontsize=11, title=legend_title, title_fontsize=12)
     else:
         fig.legend(legend_handles, legend_labels, loc='upper center',
-                   ncol=len(legend_labels), frameon=False, fontsize=10, title=title)
+                   ncol=len(legend_labels), frameon=False, fontsize=10, title=legend_title)
 
     plt.show()
     return fig
+
+
+def plot_closure_test_fullEEC_ptbin(lab, h3_raw_lab, h3_refolded_lab, h1_raw, h1_refolded,
+                                   bincenters, binning, binwidths,
+                                   L_colors, L_markers,
+                                   pt_bin_index=1, **kwargs):
+    """
+    Plot one differential-pT EEC panel (distribution + ratio) with the same
+    styling as plot_closure_test_fullEEC_ptbins. The legend occupies the
+    adjacent panel-sized area.
+
+    pt_bin_index is a zero-based index into binning[0], e.g. 1 selects the
+    20-40 GeV bin. Other plotting options, including closure_label and high_pt,
+    are forwarded to plot_closure_test_fullEEC_ptbins. The pair type is shown
+    inside the top panel, with 20% y-axis headroom by default.
+    """
+    if not isinstance(pt_bin_index, (int, np.integer)) or isinstance(pt_bin_index, (bool, np.bool_)):
+        raise TypeError("pt_bin_index must be an integer pT-bin index")
+    if not 0 <= pt_bin_index < len(binning[0]) - 1:
+        raise ValueError(f"pt_bin_index must be between 0 and {len(binning[0]) - 2}")
+    if "pt_bin_indices" in kwargs:
+        raise TypeError("pt_bin_indices is set by plot_closure_test_fullEEC_ptbin")
+
+    if "nrows" in kwargs or "ncols" in kwargs:
+        raise TypeError("nrows and ncols are fixed by plot_closure_test_fullEEC_ptbin")
+    kwargs["nrows"] = 1
+    kwargs["ncols"] = 2
+    kwargs.setdefault("pair_label", f"{lab} pairs")
+    kwargs.setdefault("top_y_padding", 0.20)
+    return plot_closure_test_fullEEC_ptbins(
+        lab, h3_raw_lab, h3_refolded_lab, h1_raw, h1_refolded,
+        bincenters, binning, binwidths, L_colors, L_markers,
+        pt_bin_indices=[int(pt_bin_index)], **kwargs)
 
 
 def plot_closure_test_fullEEC_ptbins_singleiter(lab, h3_raw_lab, h3_refolded_lab, h1_raw, h1_refolded,
@@ -762,7 +815,7 @@ def plot_refolding_iteration_deltas(lab, h3_refolded_lab, h1_refolded,
 
 
 def plot_closure_section(lab, tag, h3_ref, h3_unf, ref_label, inp,
-                         point_label="Unfolded MC Det", extralabel="", var=None, it_shown=3):
+                         point_label="Unfolded MC Det", extralabel="", var=None, it_shown=3, pt_bin_index=1):
     """Full closure plot set (marginals + differential-pT EEC) for one section/variation.
     The 3D histograms are passed in the h1 slots of the EEC plots so that N_jets
     always comes from the same population as the plotted values.
@@ -806,7 +859,11 @@ def plot_closure_section(lab, tag, h3_ref, h3_unf, ref_label, inp,
                                                   unfolding=True, label_ref=ref_label, label_test=point_label,
                                                   extralabel=extralabel, high_pt=inp.high_pt(lab, tag, var),
                                                   closure_label=closure_label)
-
+    fig_ptbin = plot_closure_test_fullEEC_ptbin(lab, h3_ref, h3_unf, h1_ref, h1_unf,
+                                                bincenters, binning, binwidths, L_colors, L_markers, pt_bin_index=pt_bin_index,
+                                                unfolding=True, label_ref=ref_label, label_test=point_label,
+                                                extralabel=extralabel, high_pt=inp.high_pt(lab, tag, var),
+                                                closure_label=closure_label)
     # same differential-pT plot, but only the chosen iteration
     fig_single = plot_closure_test_fullEEC_ptbins_singleiter(lab, h3_ref, h3_unf, h1_ref, h1_unf,
                                                              bincenters, binning, binwidths, L_colors, L_markers,
@@ -819,7 +876,7 @@ def plot_closure_section(lab, tag, h3_ref, h3_unf, ref_label, inp,
     # fig_delta = plot_refolding_iteration_deltas(lab, h3_unf, h3_unf,
     #                                             bincenters, binning, binwidths, L_colors, L_markers,
     #                                             extralabel=extralabel, closure_label=closure_label)
-    return fig_ptbins, fig_single #fig, fig_delta
+    return fig_ptbins, fig_ptbin,fig_single #fig, fig_delta
 
 
 class ClosureInputs:
