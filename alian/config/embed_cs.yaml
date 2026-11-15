@@ -40,6 +40,7 @@ constituent_subtractor:
   ghost_area: 0.01 # default
   max_pt_correct: 100
   bge_rho_grid_size: 0.1 # not used if using jet median bkg_estimator
+  remove_zero_pt_particles: false # keep fully subtracted particles with pT = 1e-50 (and their user_index), so embed_cs.py can assign every raw cone particle to subjet A/B by index
 
 analysis:
   pt_min_pp_jet: 5.0

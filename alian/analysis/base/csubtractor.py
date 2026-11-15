@@ -22,7 +22,8 @@ class CEventSubtractor():
 		'distance_type': fj.contrib.ConstituentSubtractor.deltaR,
 		'CBS': 1.0, # choose the scale for scaling the background charged particles
 		'CSS': 1.0, # choose the scale for scaling the signal charged particles
-		'max_pt_correct': 5.
+		'max_pt_correct': 5.,
+		'remove_zero_pt_particles': True, # False: keep fully subtracted particles with pT = 1e-50 at their original (y, phi), with user_index kept
 	}
 	def __init__(self, cfg=None, logger=None, bkg_estimator=None, **kwargs):
 		"""cfg: dict of parameters (the `constituent_subtractor` config block); keyword
@@ -62,7 +63,7 @@ class CEventSubtractor():
 		self.subtractor.set_alpha(self.alpha)  # free parameter for the distance measure (the exponent of particle pt). The larger the parameter alpha, the more are favoured the lower pt particles in the subtraction process
 		self.subtractor.set_ghost_area(self.ghost_area)  # free parameter for the density of ghosts. The smaller, the better - but also the computation is slower.
 		# self.subtractor.set_do_mass_subtraction()  # use this line if also the mass term sqrt(pT^2+m^2)-pT should be corrected or not. It is necessary to specify it like this because the function set_common_bge_for_rho_and_rhom cannot be used in this case.
-		self.subtractor.set_remove_particles_with_zero_pt_and_mass(True)  # set to false if you want to have also the zero pt and mtMinuspt particles in the output. Set to true, if not. The choice has no effect on the performance. By deafult, these particles are removed - this is the recommended way since then the output contains much less particles, and therefore the next step (e.g. clustering) is faster. In this example, it is set to false to make sure that this test is successful on all systems (mac, linux).
+		self.subtractor.set_remove_particles_with_zero_pt_and_mass(self.remove_zero_pt_particles)  # set to false if you want to have also the zero pt and mtMinuspt particles in the output. Set to true, if not. The choice has no effect on the performance. By deafult, these particles are removed - this is the recommended way since then the output contains much less particles, and therefore the next step (e.g. clustering) is faster. In this example, it is set to false to make sure that this test is successful on all systems (mac, linux).
 		# self.subtractor.set_grid_size_background_estimator(self.bge_rho_grid_size)  # set the grid size (not area) for the background estimation with GridMedianBackgroundEstimation which is used within CS correction using charged info 
 
 		self.subtractor.set_max_eta(self.max_eta)  # parameter for the maximal eta cut
