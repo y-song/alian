@@ -20,19 +20,24 @@ embed_perpcone.py are not filled.
 
 CS only supplies the jet pT, the jet selection and the pp matching (as in
 pyjetty embed_cs_subtraction.py). The EEC itself uses the raw pre-CS particles
-(pp and OO, as in the combined event) within R of the axis of the CS anti-kT jet:
-their pT is used unmodified in the pair weights, the pT cut pt_min_eec acts on it,
-and the denominators are the subtracted jet pT (pT,g for subjets). The perp cones
-are also taken from the raw combined event, not from the subtracted one.
-SD and the subjet A/B assignment are done on the CS jet; the raw cone particles
-are put into A or B by the closest ghost of the CS jet, exactly like the perp-cone
-particles (particles whose closest ghost was groomed away are in neither).
+(pp and OO, as in the combined event) of the CS anti-kT jet: their pT is used
+unmodified in the pair weights, the pT cut pt_min_eec acts on it, and the
+denominators are the subtracted jet pT (pT,g for subjets). The perp cones are also
+taken from the raw combined event, not from the subtracted one.
+SD and the subjet A/B assignment are done on the CS jet. With constituent_subtractor
+remove_zero_pt_particles: false, particles fully removed by CS stay in the CS event
+with pT = 1e-50 at their original (y, phi), so every raw particle has a CS counterpart
+with the same user_index. A raw particle is in the jet (subjet A, B) if its
+counterpart is a constituent of the CS jet (subjet A, B); particles groomed away are
+in the jet but in neither subjet. The perp-cone particles are instead assigned by the
+closest ghost of the CS jet (see below).
 
 Matching to pp jets and mc_fraction rely on user_index being kept by the subtractor
 (pp: >= 0, OO: < 0) in the CS jet constituents. The sigsig/sigbkg/bkgbkg split uses
 the user_index of the raw particles, so it does not depend on the subtractor.
 mc_fraction sums the raw (unsubtracted) pT of the pp jet's own tracks found among the
-CS jet constituents, over the raw pp jet pT.
+CS jet constituents, over the raw pp jet pT. The pT = 1e-50 particles are skipped in
+mc_fraction and in the constituent counts (sub_n_pp_n_matched, sub_ng_pp_ng_matched).
 
 Plus perpendicular-cone background estimates for the
 matched combined subjet EECs (combined_matched_eec_aa/_ab/_bb) and inclusive EEC
@@ -112,6 +117,10 @@ ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
 # user_index = offset - its index
 RECLUSTER_SCALE = 1e-50
 PERP_INDEX_OFFSET = -10_000_000
+# particles fully removed by CS are kept with pT = 1e-50 (constituent_subtractor
+# remove_zero_pt_particles: false); constituents below this pT (these and explicit ghosts,
+# pT ~ 1e-100) are not counted as real (real_trk_selector)
+CS_ZERO_PT = 1e-40
 
 # source code locations
 # /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
@@ -184,6 +193,9 @@ class EmbeddingAnalysis:
         # --- constituent subtractor ---
         self.constituent_subtractor = CEventSubtractor(self.cfg.get('constituent_subtractor') or {}, self.logger, bkg_estimator=self.bkg_estimator)
         print("constituent_subtractor:\n", self.constituent_subtractor.subtractor.description())
+        if self.constituent_subtractor.remove_zero_pt_particles:
+            self.logger.warning("constituent_subtractor.remove_zero_pt_particles is true: raw particles fully removed by CS "
+                                "have no counterpart in the CS jet and are put in neither subjet A nor B.")
 
         # --- jet finders ---
         self.pp_particle_jet_finder = JetFinder.load(pp_cfg)
@@ -194,6 +206,8 @@ class EmbeddingAnalysis:
 
         # --- substructure tools ---
         self.eec_trk_selector = TrackSelector(pt_min=self.pt_min_eec)
+        # drops particles fully removed by CS (pT = 1e-50) and explicit ghosts (pT ~ 1e-100)
+        self.real_trk_selector = TrackSelector(pt_min=CS_ZERO_PT)
         self.lund_gen = fj.contrib.LundGenerator()
         # C/A with R large enough to merge all inputs into one jet (perp_recluster_closure)
         self.recluster_jet_def = fj.JetDefinition(fj.cambridge_algorithm, fj.JetDefinition.max_allowable_R)
@@ -324,9 +338,8 @@ class EmbeddingAnalysis:
             # keep going if combined passes grooming
 
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
-            combined_constituents = [t for t in j.constituents() if not t.is_pure_ghost()]
-            combined_g_constituents = [t for t in gj.constituents() if not t.is_pure_ghost()]
-            cone = self._parts_in_cone(j, combined) # raw pre-CS particles within R of the jet axis
+            combined_constituents = self.real_trk_selector.select_from(j.constituents())
+            combined_g_constituents = self.real_trk_selector.select_from(gj.constituents())
 
             if (pp_ijet != -1): # mateched to pp
 
@@ -354,9 +367,9 @@ class EmbeddingAnalysis:
                 self.do_eec(pp_j, "pp_matched_eec", ew_denom=pp_j.pt(), jet_pt_bin=pp_j.pt(), event_weight=weight)
                 self.do_subjet_eec(pp_j, pp_subjet_a, pp_subjet_b, "pp_matched", ew_denom=pp_gj_pt, jet_pt_bin=pp_gj_pt, event_weight=weight)
 
-                # EEC from the raw particles in the cone, wrapped as jets (j_raw, subjet_a_raw, subjet_b_raw);
+                # Raw particles of the CS jet and subjets, wrapped as (j_raw, subjet_a_raw, subjet_b_raw);
                 # jet pT, pT,g and Rg stay those of the CS jet and subjets
-                j_raw, subjet_a_raw, subjet_b_raw = self._raw_jets(j, subjet_a, subjet_b, cone)
+                j_raw, subjet_a_raw, subjet_b_raw = self._raw_jets(j, subjet_a, subjet_b, combined)
                 self.do_eec(j_raw, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
                 self.do_subjet_eec(j_raw, subjet_a_raw, subjet_b_raw, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight, rg=delta_R(subjet_a, subjet_b))
                 self.do_subjet_eec_truth(j_raw, subjet_a_raw, subjet_b_raw, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
@@ -487,9 +500,10 @@ class EmbeddingAnalysis:
         identified by user_index and their raw (unsubtracted) pT from jet_pp is summed;
         the denominator is the raw jet_pp pT. A perfect match gives 1, up to pp tracks
         removed entirely by CS. Only tracks of jet_pp count, not those of other pp jets.
+        Tracks removed entirely by CS (kept with pT = 1e-50) do not count as contained.
         """
         pt_total = jet_pp.pt()
-        combined_pp_indices = [c.user_index() for c in jet_combined.constituents() if c.user_index() >= 0]
+        combined_pp_indices = {c.user_index() for c in self.real_trk_selector.select_from(jet_combined.constituents()) if c.user_index() >= 0}
         pt_contained = 0.
         for track in jet_pp.constituents():
           if track.user_index() in combined_pp_indices:
@@ -596,8 +610,8 @@ class EmbeddingAnalysis:
         Fill perp-cone EEC terms for the SD jet and for subjets A and B of jet.
 
         jet, subjet_a, subjet_b are the CS jet and subjets (axis, ghosts, A/B assignment);
-        jet_raw, subjet_a_raw, subjet_b_raw wrap the raw in-cone particles (all, in A, in B; see
-        _raw_jets) and give the jet-side tracks. Perp cones are taken from the raw combined
+        jet_raw, subjet_a_raw, subjet_b_raw wrap the raw particles of the CS jet (all, in A, in B,
+        by user_index; see _raw_jets) and give the jet-side tracks. Perp cones are taken from the raw combined
         event at phi +/- pi/2 of the ungroomed jet axis, rotated under the jet, and their
         particles are assigned to A or B via the closest ghost. See the module docstring for the histograms filled.
         Also fills the ghost-assignment diagnostics (_fill_ghost_diagnostics).
@@ -642,20 +656,20 @@ class EmbeddingAnalysis:
             self._fill_eec_pairs(perpperp, f"{prefix}_{region}_perpperp", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
             self._fill_eec_pairs(perp1perp2, f"{prefix}_{region}_perp1perp2", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
-    def _parts_in_cone(self, jet, parts):
-        """Particles of parts within R of the jet axis."""
-        return [p for p in parts if delta_R(jet, p) <= self.R]
-
-    def _raw_jets(self, jet, subjet_a, subjet_b, cone):
+    def _raw_jets(self, jet, subjet_a, subjet_b, parts):
         """
-        Wrap the raw particles of cone (within R of jet) as three composite PseudoJets
-        (all, in subjet A, in subjet B), so that the do_*eec helpers, which read
-        .constituents(), run on them. A / B membership is by the closest ghost of the
-        CS jet, as for the perp-cone particles; particles whose closest ghost was groomed
-        away are only in the first. Their axes are not those of the CS jet / subjets.
+        Wrap the raw (pre-CS) particles of the CS jet, subjet A and subjet B as three composite
+        PseudoJets, so that the do_*eec helpers, which read .constituents(), run on them.
+        Membership is exact: a particle of parts (the raw combined event) is in the jet (A, B)
+        if the CS constituent with its user_index is in the CS jet (subjet A, subjet B). This
+        includes particles fully removed by CS, which are kept with pT = 1e-50
+        (remove_zero_pt_particles: false).
         """
-        cone_a, cone_b, _ = self._assign_to_subjets(cone, self._jet_ghosts(jet), subjet_a, subjet_b)
-        return tuple(fj.join(std.vector[fj.PseudoJet](parts)) for parts in (cone, cone_a, cone_b))
+        raw = []
+        for cs_jet in (jet, subjet_a, subjet_b):
+            indices = {c.user_index() for c in cs_jet.constituents() if not c.is_pure_ghost()}
+            raw.append(fj.join(std.vector[fj.PseudoJet]([p for p in parts if p.user_index() in indices])))
+        return tuple(raw)
 
     def _fill_eec_pairs(self, pairs, hist_name, *, ew_denom, jet_pt_bin, event_weight=1.0):
         for p1, p2 in pairs:
