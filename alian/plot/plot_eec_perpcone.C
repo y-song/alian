@@ -166,7 +166,7 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
     SetStyle();
 
     std::string infile = "/rstorage/youqi/" + file_name + "/AnalysisResultsFinal.root";
-    // std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed.root";
+    // std::string infile  = "/home/youqi/alian/alian/output/" + file_name + "embed_111226.root";
     std::string jetR    = "04";
     std::string jetR_str = "0.4";
     const std::string sample = "combined_matched";

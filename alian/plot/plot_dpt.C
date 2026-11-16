@@ -128,9 +128,9 @@ void plot_dpt(string jobID)
     const string jetRPoint = "0.4";
 
     TFile *f = new TFile(("/rstorage/youqi/" + jobID + "/AnalysisResultsFinal.root").c_str(), "READ");
-    // new TFile("/home/youqi/alian/alian/output/embed_092426.root", "READ");
-    TH2D *h_residual_pp_pT_matched = (TH2D *)f->Get("residual_pp_pTg_matched");
-    TH2D *h_residual_sub_pT_matched = (TH2D *)f->Get("residual_sub_pTg_matched");
+    // TFile *f = new TFile("/home/youqi/alian/alian/output/embed_111226.root", "READ");
+    TH2D *h_residual_pp_pT_matched = (TH2D *)f->Get("residual_pp_pT_matched");
+    TH2D *h_residual_sub_pT_matched = (TH2D *)f->Get("residual_sub_pT_matched");
 
     TH2D *h1 = (TH2D *)h_residual_pp_pT_matched->Clone("h1");
     TH2D *h2 = (TH2D *)h_residual_pp_pT_matched->Clone("h2");
