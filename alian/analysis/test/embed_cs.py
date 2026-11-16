@@ -1,60 +1,38 @@
 #!/usr/bin/env python3
 """
-Modified based on embed_perpcone.py: the background is removed from the combined
-event with constituent subtraction (CS) instead of area subtraction. The pp
-detector-level jet tracks are embedded in an OO event; rho is estimated on the
-combined event (bkg_estimator config block), the combined event is subtracted
-with the ConstituentSubtractor (constituent_subtractor block, sharing that rho
-estimator) and the subtracted event is clustered with explicit ghosts. Combined
-jets are therefore already subtracted: j.pt() is the subtracted pT, there is no
-rho * area term (get_subjets is called with rho = 0), and
-analysis jet_finder pT_min / eta_max of the oo block act on the subtracted jets.
-Histograms with the "sub_" prefix hold subtracted quantities:
-  sub_pT                              subtracted combined jet pT
-  sub_pTg_matched                     subtracted groomed pT of matched combined jets
-  sub_pT_pp_pT_matched, sub_pTg_pp_pTg_matched   subtracted vs pp pT (pTg)
-  residual_sub_pT[g]_matched          subtracted - pp pT vs subtracted pT (pTg)
-  residual_pp_pTg_matched             subtracted - pp pTg vs pp pTg
-  sub_area_sub_pT[_matched]           area of the subtracted jet vs subtracted pT
-sub_pT and sub_area_sub_pT are filled for all CS jets, before SD. All "_matched"
-histograms are filled only for combined jets that pass SD with pT,g >= pt_min_combined_jet,
-are uniquely matched to a pp det jet, and whose pp jet also passes SD.
-The raw (unsubtracted) combined_pT* and combined_pTg* histograms of
-embed_perpcone.py are not filled.
+Embeds pp detector-level jet tracks in an OO MB event, like embed_perpcone.py, but
+removes the background with constituent subtraction (CS) instead of rho*A. The
+combined event is subtracted with the ConstituentSubtractor (constituent_subtractor
+block, rho from the bkg_estimator block) and clustered with explicit ghosts, so the
+combined jets are already subtracted: j.pt() is the subtracted pT and get_subjets is
+called with rho = 0. The oo jet_finder pT_min / eta_max act on the subtracted jets.
 
-CS only supplies the jet pT, the jet selection and the pp matching (as in
-pyjetty embed_cs_subtraction.py). The EEC itself uses the raw pre-CS particles
-(pp and OO, as in the combined event) of the CS anti-kT jet: their pT is used
-unmodified in the pair weights, the pT cut pt_min_eec acts on it, and the
-denominators are the subtracted jet pT (pT,g for subjets). The perp cones are also
-taken from the raw combined event, not from the subtracted one.
-SD and the subjet A/B assignment are done on the CS jet. With constituent_subtractor
-remove_zero_pt_particles: false, particles fully removed by CS stay in the CS event
-with pT = 1e-50 at their original (y, phi), so every raw particle has a CS counterpart
-with the same user_index. A raw particle is in the jet (subjet A, B) if its
-counterpart is a constituent of the CS jet (subjet A, B); particles groomed away are
-in the jet but in neither subjet. The perp-cone particles are instead assigned by
-reclustering them with the CS jet (see below).
+CS supplies the jet pT, the jet selection, SD (subjets A and B) and the pp matching.
+The EECs use the raw (pre-CS) particles of the CS jet, mapped to its constituents by
+user_index (see _raw_jets): their unmodified pT enters the pair weights and the
+pt_min_eec cut, and the denominators are the subtracted pT (pT,g for subjets). Raw
+particles groomed away are in the jet but in neither subjet.
 
-Matching to pp jets and mc_fraction rely on user_index being kept by the subtractor
-(pp: >= 0, OO: < 0) in the CS jet constituents. The sigsig/sigbkg/bkgbkg split uses
-the user_index of the raw particles, so it does not depend on the subtractor.
-mc_fraction sums the raw (unsubtracted) pT of the pp jet's own tracks found among the
-CS jet constituents, over the raw pp jet pT. The pT = 1e-50 particles are skipped in
-mc_fraction and in the constituent counts (sub_n_pp_n_matched, sub_ng_pp_ng_matched).
+Jet histograms ("sub_" = subtracted):
+  sub_pT, sub_area_sub_pT             all CS jets, before SD
+  sub_pTg_matched                     subtracted pT,g
+  sub_pT_pp_pT_matched, sub_pTg_pp_pTg_matched   subtracted vs pp pT (pT,g)
+  residual_sub_pT[g]_matched          subtracted - pp pT vs subtracted pT (pT,g)
+  residual_pp_pTg_matched             subtracted - pp pT,g vs pp pT,g
+  sub_area_sub_pT_matched             area of the subtracted jet vs subtracted pT
+  sub_n[g]_pp_n[g]_matched            CS vs pp constituent count, without the particles
+                                      fully removed by CS (kept with pT = 1e-50)
+"_matched" histograms are filled for combined jets that pass SD with
+pT,g >= pt_min_combined_jet, are uniquely matched to a pp det jet, and whose pp jet
+also passes SD. The EEC histograms below use the same selection.
 
-Plus perpendicular-cone background estimates for the
-matched combined subjet EECs (combined_matched_eec_aa/_ab/_bb) and inclusive EEC
-(combined_matched_sdjet_eec, for jets that pass SD).
-
-For each matched combined jet passing SD, two perp cones of radius perpcone_R
-are taken from the raw combined event at phi +/- pi/2 of the ungroomed jet axis and
-rotated under the jet. Each rotated perp-cone particle is assigned to subjet A
-or B by reclustering (see _assign_to_subjets): scaled copies (pT -> 0) of one
-cone's particles are clustered with C/A together with the CS jet constituents, and
-a particle is in A (B) if its copy ends up in the branch that matches subjet A (B).
-Particles whose copy is groomed away are dropped. Jet membership is not checked, so
-particles just outside the anti-kT jet boundary can still be assigned to A or B.
+Perp-cone background for the subjet EECs (combined_matched_eec_aa/_ab/_bb) and the
+inclusive EEC (combined_matched_sdjet_eec): two cones of radius perpcone_R at
+phi +/- pi/2 of the ungroomed jet axis, from the raw combined event, rotated under
+the jet. Their particles are assigned to A or B by reclustering each cone separately
+with the CS jet (see _assign_to_subjets); those groomed away are dropped. Jet
+membership is not checked, so particles just outside the jet boundary can still be
+assigned to A or B.
 
 Filled per subjet pair type xy in (aa, ab, bb), with P1 (P2) the perp cone at
 phi + pi/2 (phi - pi/2):
@@ -73,17 +51,11 @@ two raw tracks (pp: user_index >= 0, OO: user_index < 0):
 with sigsig + sigbkg + bkgbkg = combined_matched_eec_xy.
 
 Assignment diagnostics (see _fill_assign_diagnostics):
-  combined_matched_perp_assign[_rg]          perp particle category from the reclustering
-                                             (A, B, neither) vs pT_g [vs R_g]
-  combined_matched_area_{a,b}                area of subjet A / B
-(Before this change the perp-cone particles were assigned by the closest ghost,
-and perp_assign[_rg] held that assignment, with the reclustering one in
-perp_assign[_rg]_recl. Those and perp_ghost_dR_{a,b,none} are no longer filled.)
+  combined_matched_perp_assign[_rg]   perp particle category (A, B, neither) vs pT,g [R_g]
+  combined_matched_area_{a,b}         area of subjet A / B
 
-Example usage:
-python analysis/test/embed_cs.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_cs.yaml -o output/embed_cs.root
-python analysis/test/embed_cs.py -i1 /rstorage/youqi/MC_pp_anchored_OO_hadd50/combined1.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_cs.yaml -o output/embed_test.root
-python analysis/test/embed_cs.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_cs.yaml -o output/embed_test.root
+Example usage (-n caps the number of event pairs):
+python analysis/test/embed_cs.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_cs.yaml -o output/embed_test.root -n 100
 """
 
 import argparse
@@ -371,7 +343,7 @@ class EmbeddingAnalysis:
                 self.do_eec(pp_j, "pp_matched_eec", ew_denom=pp_j.pt(), jet_pt_bin=pp_j.pt(), event_weight=weight)
                 self.do_subjet_eec(pp_j, pp_subjet_a, pp_subjet_b, "pp_matched", ew_denom=pp_gj_pt, jet_pt_bin=pp_gj_pt, event_weight=weight)
 
-                # Raw particles of the CS jet and subjets, wrapped as (j_raw, subjet_a_raw, subjet_b_raw);
+                # Raw counterparts of the CS jet and subjets, wrapped as (j_raw, subjet_a_raw, subjet_b_raw);
                 # jet pT, pT,g and Rg stay those of the CS jet and subjets
                 j_raw, subjet_a_raw, subjet_b_raw = self._raw_jets(j, subjet_a, subjet_b, combined)
                 self.do_eec(j_raw, "combined_matched_eec", ew_denom=j.pt(), jet_pt_bin=j.pt(), event_weight=weight)
@@ -502,9 +474,9 @@ class EmbeddingAnalysis:
 
         jet_combined is a CS jet whose constituents carry subtracted pT, so tracks are
         identified by user_index and their raw (unsubtracted) pT from jet_pp is summed;
-        the denominator is the raw jet_pp pT. A perfect match gives 1, up to pp tracks
-        removed entirely by CS. Only tracks of jet_pp count, not those of other pp jets.
-        Tracks removed entirely by CS (kept with pT = 1e-50) do not count as contained.
+        the denominator is the raw jet_pp pT. Only tracks of jet_pp count, not those of
+        other pp jets. Tracks removed entirely by CS (kept with pT = 1e-50) do not count
+        as contained, so a perfect match gives 1 only if CS removed none of them.
         """
         pt_total = jet_pp.pt()
         combined_pp_indices = {c.user_index() for c in self.real_trk_selector.select_from(jet_combined.constituents()) if c.user_index() >= 0}
@@ -613,13 +585,10 @@ class EmbeddingAnalysis:
         """
         Fill perp-cone EEC terms for the SD jet and for subjets A and B of jet.
 
-        jet, subjet_a, subjet_b are the CS jet and subjets (axis, ghosts, A/B assignment);
-        jet_raw, subjet_a_raw, subjet_b_raw wrap the raw particles of the CS jet (all, in A, in B,
-        by user_index; see _raw_jets) and give the jet-side tracks. Perp cones are taken from the raw combined
-        event at phi +/- pi/2 of the ungroomed jet axis, rotated under the jet, and their
-        particles are assigned to A or B by reclustering each cone separately with the CS jet
-        (_assign_to_subjets). See the module docstring for the histograms filled.
-        Also fills the assignment diagnostics (_fill_assign_diagnostics).
+        jet, subjet_a, subjet_b: the CS jet and subjets.
+        jet_raw, subjet_a_raw, subjet_b_raw: the raw counterparts of the CS jet 
+        and subjets (see _raw_jets), which give the jet-side tracks.
+        combined: the raw combined event, from which the perp cones are taken.
         """
         perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2)) # a list of PseudoJets
         perp2 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, -np.pi/2))
@@ -659,7 +628,7 @@ class EmbeddingAnalysis:
 
     def _raw_jets(self, jet, subjet_a, subjet_b, parts):
         """
-        Wrap the raw (pre-CS) particles of the CS jet, subjet A and subjet B as three composite
+        Wrap the raw (pre-CS) particles of the CS jet, subjet A and subjet B as three 
         PseudoJets, so that the do_*eec helpers, which read .constituents(), run on them.
         Membership is exact: a particle of parts (the raw combined event) is in the jet (A, B)
         if the CS constituent with its user_index is in the CS jet (subjet A, subjet B). This

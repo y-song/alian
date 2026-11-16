@@ -82,16 +82,8 @@ output:
       "Subtracted combined jet #it{p}_{T} before selection;#it{p}_{T}^{sub} (GeV);jet count",
       jet_pT]
 
-    combined_pT: [1, "combined_pT",
-      "Combined jet #it{p}_{T};#it{p}_{T}^{combined} (GeV);jet count",
-      jet_pT]
-
     sub_pT: [1, "sub_pT",
       "Subtracted combined jet #it{p}_{T};#it{p}_{T}^{sub} (GeV);jet count",
-      jet_pT]
-
-    combined_pTg: [1, "combined_pTg",
-      "Groomed combined jet #it{p}_{T};#it{p}_{T,g}^{combined} (GeV);jet count",
       jet_pT]
 
     combined_njet_pp_njet: [2, "combined_njet_pp_njet",
@@ -106,17 +98,9 @@ output:
       "Jet-median #rho vs centrality;#rho (GeV);centrality (%)",
       rho, centrality]
 
-    combined_pT_sub_pT: [2, "combined_pT_sub_pT",
-      "Combined jet #it{p}_{T} vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
-      jet_pT, jet_pT]
-
     sub_area_sub_pT: [2, "sub_area_sub_pT",
       "Subtracted jet area vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{A}^{sub}",
       jet_pT, area]
-
-    combined_pTg_sub_pTg: [2, "combined_pTg_sub_pTg",
-      "Groomed combined jet #it{p}_{T} vs subtracted groomed #it{p}_{T};#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{combined} (GeV)",
-      jet_pT, jet_pT]
 
     combined_sub_cutflow: [1, "combined_sub_cutflow",
       "Combined jet cutflow;selections;jet count",
@@ -130,17 +114,9 @@ output:
       "Groomed pp jet #it{p}_{T} vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T,g}^{pp} (GeV)",
       jet_pT, jet_pT]
 
-    combined_pT_sub_pT_matched: [2, "combined_pT_sub_pT_matched",
-      "Combined jet #it{p}_{T} vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
-      jet_pT, jet_pT]
-
     sub_area_sub_pT_matched: [2, "sub_area_sub_pT_matched",
       "Subtracted jet area vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{A}^{sub}",
       jet_pT, area]
-
-    combined_pTg_sub_pTg_matched: [2, "combined_pTg_sub_pTg_matched",
-      "Groomed combined jet #it{p}_{T} vs subtracted groomed #it{p}_{T} (matched);#it{p}_{T,g}^{sub} (GeV);#it{p}_{T,g}^{combined} (GeV)",
-      jet_pT, jet_pT]
 
     sub_pT_pp_pT_matched: [2, "sub_pT_pp_pT_matched",
       "Subtracted combined jet #it{p}_{T} vs pp jet #it{p}_{T} (matched);#it{p}_{T}^{pp} (GeV);#it{p}_{T}^{sub} (GeV)",
