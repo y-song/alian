@@ -49,7 +49,6 @@ analysis:
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
   z_cut: 0.2
-  perp_recluster_closure: false # exact (reclustering) check of the perp-cone ghost assignment; extra clustering per matched jet
 
 output:
   bins:
@@ -111,8 +110,8 @@ output:
       "Combined jet #it{p}_{T} vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
       jet_pT, jet_pT]
 
-    combined_area_sub_pT: [2, "combined_area_sub_pT",
-      "Combined jet area vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);jet area",
+    sub_area_sub_pT: [2, "sub_area_sub_pT",
+      "Subtracted jet area vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{A}^{sub}",
       jet_pT, area]
 
     combined_pTg_sub_pTg: [2, "combined_pTg_sub_pTg",
@@ -135,8 +134,8 @@ output:
       "Combined jet #it{p}_{T} vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{p}_{T}^{combined} (GeV)",
       jet_pT, jet_pT]
 
-    combined_area_sub_pT_matched: [2, "combined_area_sub_pT_matched",
-      "Combined jet area vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);jet area",
+    sub_area_sub_pT_matched: [2, "sub_area_sub_pT_matched",
+      "Subtracted jet area vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{A}^{sub}",
       jet_pT, area]
 
     combined_pTg_sub_pTg_matched: [2, "combined_pTg_sub_pTg_matched",
@@ -367,26 +366,14 @@ output:
       "Matched combined EEC for SD-tagged jets (original constituents), truth bkg-bkg;#it{p}_{T,g}^{sub} (GeV);R_{L}",
       jet_pT, RL]
 
-    # --- Ghost-based A/B assignment diagnostics (perp cones) ---
-
-    combined_matched_perp_ghost_dR_a: [2, "combined_matched_perp_ghost_dR_a",
-      "Perp-cone particles assigned to A;#it{p}_{T,g}^{sub} (GeV);#Delta#it{R}(particle, closest ghost)",
-      jet_pT, ghost_dR]
-
-    combined_matched_perp_ghost_dR_b: [2, "combined_matched_perp_ghost_dR_b",
-      "Perp-cone particles assigned to B;#it{p}_{T,g}^{sub} (GeV);#Delta#it{R}(particle, closest ghost)",
-      jet_pT, ghost_dR]
-
-    combined_matched_perp_ghost_dR_none: [2, "combined_matched_perp_ghost_dR_none",
-      "Perp-cone particles assigned to neither;#it{p}_{T,g}^{sub} (GeV);#Delta#it{R}(particle, closest ghost)",
-      jet_pT, ghost_dR]
+    # --- Reclustering A/B assignment diagnostics (perp cones) ---
 
     combined_matched_perp_assign: [2, "combined_matched_perp_assign",
-      "Perp-cone particle assignment (0: A, 1: B, 2: neither);#it{p}_{T,g}^{sub} (GeV);category",
+      "Perp-cone particle assignment by reclustering (0: A, 1: B, 2: neither);#it{p}_{T,g}^{sub} (GeV);category",
       jet_pT, assign]
 
     combined_matched_perp_assign_rg: [2, "combined_matched_perp_assign_rg",
-      "Perp-cone particle assignment (0: A, 1: B, 2: neither);R_{g};category",
+      "Perp-cone particle assignment by reclustering (0: A, 1: B, 2: neither);R_{g};category",
       RL, assign]
 
     combined_matched_area_a: [2, "combined_matched_area_a",
@@ -396,13 +383,3 @@ output:
     combined_matched_area_b: [2, "combined_matched_area_b",
       "Area of subjet B;#it{p}_{T,g}^{sub} (GeV);#it{A}_{B}",
       jet_pT, area]
-
-    # --- Reclustering assignment of perp-cone particles (perp_recluster_closure) ---
-
-    combined_matched_perp_assign_recl: [2, "combined_matched_perp_assign_recl",
-      "Perp-cone particle assignment by reclustering (0: A, 1: B, 2: neither);#it{p}_{T,g}^{sub} (GeV);category",
-      jet_pT, assign]
-
-    combined_matched_perp_assign_rg_recl: [2, "combined_matched_perp_assign_rg_recl",
-      "Perp-cone particle assignment by reclustering (0: A, 1: B, 2: neither);R_{g};category",
-      RL, assign]

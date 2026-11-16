@@ -15,7 +15,11 @@ Histograms with the "sub_" prefix hold subtracted quantities:
   sub_pT_pp_pT_matched, sub_pTg_pp_pTg_matched   subtracted vs pp pT (pTg)
   residual_sub_pT[g]_matched          subtracted - pp pT vs subtracted pT (pTg)
   residual_pp_pTg_matched             subtracted - pp pTg vs pp pTg
-The raw (unsubtracted) combined_pT* and combined_area_* histograms of
+  sub_area_sub_pT[_matched]           area of the subtracted jet vs subtracted pT
+sub_pT and sub_area_sub_pT are filled for all CS jets, before SD. All "_matched"
+histograms are filled only for combined jets that pass SD with pT,g >= pt_min_combined_jet,
+are uniquely matched to a pp det jet, and whose pp jet also passes SD.
+The raw (unsubtracted) combined_pT* and combined_pTg* histograms of
 embed_perpcone.py are not filled.
 
 CS only supplies the jet pT, the jet selection and the pp matching (as in
@@ -29,8 +33,8 @@ remove_zero_pt_particles: false, particles fully removed by CS stay in the CS ev
 with pT = 1e-50 at their original (y, phi), so every raw particle has a CS counterpart
 with the same user_index. A raw particle is in the jet (subjet A, B) if its
 counterpart is a constituent of the CS jet (subjet A, B); particles groomed away are
-in the jet but in neither subjet. The perp-cone particles are instead assigned by the
-closest ghost of the CS jet (see below).
+in the jet but in neither subjet. The perp-cone particles are instead assigned by
+reclustering them with the CS jet (see below).
 
 Matching to pp jets and mc_fraction rely on user_index being kept by the subtractor
 (pp: >= 0, OO: < 0) in the CS jet constituents. The sigsig/sigbkg/bkgbkg split uses
@@ -46,8 +50,11 @@ matched combined subjet EECs (combined_matched_eec_aa/_ab/_bb) and inclusive EEC
 For each matched combined jet passing SD, two perp cones of radius perpcone_R
 are taken from the raw combined event at phi +/- pi/2 of the ungroomed jet axis and
 rotated under the jet. Each rotated perp-cone particle is assigned to subjet A
-or B according to the closest ghost of the (ungroomed) jet; particles whose
-closest ghost was groomed away are dropped.
+or B by reclustering (see _assign_to_subjets): scaled copies (pT -> 0) of one
+cone's particles are clustered with C/A together with the CS jet constituents, and
+a particle is in A (B) if its copy ends up in the branch that matches subjet A (B).
+Particles whose copy is groomed away are dropped. Jet membership is not checked, so
+particles just outside the anti-kT jet boundary can still be assigned to A or B.
 
 Filled per subjet pair type xy in (aa, ab, bb), with P1 (P2) the perp cone at
 phi + pi/2 (phi - pi/2):
@@ -65,19 +72,13 @@ two raw tracks (pp: user_index >= 0, OO: user_index < 0):
   combined_matched_eec_xy_bkgbkg      OO-OO pairs   (compare to perpperp_xy)
 with sigsig + sigbkg + bkgbkg = combined_matched_eec_xy.
 
-To check that the ghost density (oo.jet_finder.ghost_area) is sufficient for the
-A/B assignment, the following are also filled (see _fill_ghost_diagnostics):
-  combined_matched_perp_ghost_dR_{a,b,none}  dR of perp particle to closest ghost
-  combined_matched_perp_assign[_rg]          perp particle category (A, B, neither)
+Assignment diagnostics (see _fill_assign_diagnostics):
+  combined_matched_perp_assign[_rg]          perp particle category from the reclustering
+                                             (A, B, neither) vs pT_g [vs R_g]
   combined_matched_area_{a,b}                area of subjet A / B
-Rerun with decreasing ghost_area: the assignment fractions and perp-cone
-EEC terms should converge. dR to the closest ghost scales as sqrt(ghost_area) by
-construction and does not converge.
-
-With analysis.perp_recluster_closure: true, the perp-cone particles are also
-assigned by reclustering the jet's constituents with scaled copies of them (see
-_recluster_assign), filling the same assignment histograms for comparison:
-  combined_matched_perp_assign[_rg]_recl     perp particle category (A, B, neither)
+(Before this change the perp-cone particles were assigned by the closest ghost,
+and perp_assign[_rg] held that assignment, with the reclustering one in
+perp_assign[_rg]_recl. Those and perp_ghost_dR_{a,b,none} are no longer filled.)
 
 Example usage:
 python analysis/test/embed_cs.py -i1 /rstorage/alice/run3/mc_central/LHC26b6/BerkeleyTree_564356_0.root -i2 /rstorage/alice/run3/data/LHC25ae_mb_100/BerkeleyTrees/1/BerkeleyTree.root -c config/embed_cs.yaml -o output/embed_cs.root
@@ -111,7 +112,7 @@ from alian.analysis.base.event import Event, get_selected_tracks, get_selected_p
 from alian.analysis.base.utils import read_yaml, is_slurm
 from alian.io.data_io import DataInput
 
-# ghost assignment categories (values filled on the "assign" axis)
+# perp-cone assignment categories (values filled on the "assign" axis)
 ASSIGN_A, ASSIGN_B, ASSIGN_NONE = 0, 1, 2
 # perp-cone particles are reclustered as scaled copies with negligible pT, tagged by
 # user_index = offset - its index
@@ -209,7 +210,7 @@ class EmbeddingAnalysis:
         # drops particles fully removed by CS (pT = 1e-50) and explicit ghosts (pT ~ 1e-100)
         self.real_trk_selector = TrackSelector(pt_min=CS_ZERO_PT)
         self.lund_gen = fj.contrib.LundGenerator()
-        # C/A with R large enough to merge all inputs into one jet (perp_recluster_closure)
+        # C/A with R large enough to merge all inputs into one jet (perp-cone A/B assignment, _assign_to_subjets)
         self.recluster_jet_def = fj.JetDefinition(fj.cambridge_algorithm, fj.JetDefinition.max_allowable_R)
         # self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
@@ -300,7 +301,9 @@ class EmbeddingAnalysis:
         
         # --- combined jets: cluster combined event ---
         combined_jets = self.combined_jet_finder.find_jets(sub_combined, use_area=True)
-        [self.hists['sub_pT'].Fill(j.pt(), weight) for j in combined_jets]
+        for j in combined_jets:
+            self.hists['sub_pT'].Fill(j.pt(), weight)
+            self.hists['sub_area_sub_pT'].Fill(j.pt(), j.area(), weight)
         self.hists['combined_njet_pp_njet'].Fill(len(pp_jets), len(combined_jets), weight)
 
         # Match the retained pp det jets to combined jets.
@@ -355,6 +358,7 @@ class EmbeddingAnalysis:
                 self.hists['pp_pTg_pp_pT_matched'].Fill(pp_j.pt(), pp_gj.pt(), weight)
 
                 self.hists['sub_pTg_matched'].Fill(gj.pt(), weight)
+                self.hists['sub_area_sub_pT_matched'].Fill(j.pt(), j.area(), weight)
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt(), weight)
                 self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt(), weight)
                 self.hists['sub_n_pp_n_matched'].Fill(len(pp_j.constituents()), len(combined_constituents), weight)
@@ -613,18 +617,15 @@ class EmbeddingAnalysis:
         jet_raw, subjet_a_raw, subjet_b_raw wrap the raw particles of the CS jet (all, in A, in B,
         by user_index; see _raw_jets) and give the jet-side tracks. Perp cones are taken from the raw combined
         event at phi +/- pi/2 of the ungroomed jet axis, rotated under the jet, and their
-        particles are assigned to A or B via the closest ghost. See the module docstring for the histograms filled.
-        Also fills the ghost-assignment diagnostics (_fill_ghost_diagnostics).
+        particles are assigned to A or B by reclustering each cone separately with the CS jet
+        (_assign_to_subjets). See the module docstring for the histograms filled.
+        Also fills the assignment diagnostics (_fill_assign_diagnostics).
         """
         perp1 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, +np.pi/2)) # a list of PseudoJets
         perp2 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, -np.pi/2))
-        ghosts = self._jet_ghosts(jet) # a list of PseudoJets
-        perp1_a, perp1_b, perp1_info = self._assign_to_subjets(perp1, ghosts, subjet_a, subjet_b) # lists of PseudoJets, list of (category, dR) tuples
-        perp2_a, perp2_b, perp2_info = self._assign_to_subjets(perp2, ghosts, subjet_a, subjet_b)
-        self._fill_ghost_diagnostics(perp1_info + perp2_info, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
-        if getattr(self, 'perp_recluster_closure', False):
-            perp_categories = self._recluster_assign(jet, perp1+perp2, subjet_a, subjet_b)
-            self._fill_recluster_assign(perp_categories, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+        perp1_a, perp1_b, perp1_categories = self._assign_to_subjets(jet, perp1) # lists of PseudoJets, list of ASSIGN_*
+        perp2_a, perp2_b, perp2_categories = self._assign_to_subjets(jet, perp2)
+        self._fill_assign_diagnostics(perp1_categories + perp2_categories, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet_raw.constituents())
         tracks_a = self.eec_trk_selector.select_from(subjet_a_raw.constituents())
@@ -691,80 +692,45 @@ class EmbeddingAnalysis:
             rotated.append(p)
         return rotated
 
-    def _jet_ghosts(self, jet):
-        """Return the explicit ghosts in jet."""
-        return [c for c in jet.constituents() if c.is_pure_ghost()]
-
-    def _assign_to_subjets(self, parts, ghosts, subjet_a, subjet_b):
+    def _fill_assign_diagnostics(self, categories, subjet_a, subjet_b, prefix, *, jet_pt_bin, event_weight=1.0):
         """
-        Assign each part to subjet A or B by which subjet holds its closest ghost.
-
-        Returns (parts_a, parts_b, info):
-          parts_a, parts_b  lists of PseudoJets, the subsets of parts assigned to A / B
-          info              list of (category, dR) tuples, one per part, with category
-                            ASSIGN_A/ASSIGN_B/ASSIGN_NONE and dR to the closest ghost
-                            (-1.0 if there are no ghosts)
-
-        Ghosts are matched by (eta, phi), since the reclustered Lund subjets do not
-        keep cluster_hist_index.
-        """
-        if len(ghosts) == 0:
-            return [], [], [(ASSIGN_NONE, -1.0) for _ in parts]
-        ghosts_a = {(c.eta(), c.phi()) for c in subjet_a.constituents() if c.is_pure_ghost()} # a set of tuples
-        ghosts_b = {(c.eta(), c.phi()) for c in subjet_b.constituents() if c.is_pure_ghost()}
-        parts_a, parts_b, info = [], [], []
-        for p in parts:
-            # for each p, find the ghost g that gives the min of delta_R(g, p). assign this ghost to "closest"
-            dR, closest = min(((delta_R(g, p), g) for g in ghosts), key=lambda x: x[0]) # x is a tuple, x[0] is delta_R(g, p) and x[1] is g
-            ghost = (closest.eta(), closest.phi())
-            if ghost in ghosts_a:
-                parts_a.append(p)
-                info.append((ASSIGN_A, dR))
-            elif ghost in ghosts_b:
-                parts_b.append(p)
-                info.append((ASSIGN_B, dR))
-            else:
-                info.append((ASSIGN_NONE, dR))
-        return parts_a, parts_b, info
-
-    def _fill_ghost_diagnostics(self, perp_info, subjet_a, subjet_b, prefix, *, jet_pt_bin, event_weight=1.0):
-        """
-        Diagnostics for the ghost-based A/B assignment, to check convergence in
-        ghost_area:
-          {prefix}_perp_ghost_dR_{a,b,none}  dR of perp-cone particle to its closest ghost vs pT_g
+        Diagnostics for the reclustering A/B assignment of the perp-cone particles:
           {prefix}_perp_assign               assignment category of perp-cone particles vs pT_g
           {prefix}_perp_assign_rg            assignment category of perp-cone particles vs R_g
           {prefix}_area_{a,b}                area of subjet A / B vs pT_g
         """
         rg = delta_R(subjet_a, subjet_b)
-        suffixes = {ASSIGN_A: 'a', ASSIGN_B: 'b', ASSIGN_NONE: 'none'}
-        for category, dR in perp_info:
-            self.hists[f'{prefix}_perp_ghost_dR_{suffixes[category]}'].Fill(jet_pt_bin, dR, event_weight)
+        for category in categories:
             self.hists[f'{prefix}_perp_assign'].Fill(jet_pt_bin, category, event_weight)
             self.hists[f'{prefix}_perp_assign_rg'].Fill(rg, category, event_weight)
 
         self.hists[f'{prefix}_area_a'].Fill(jet_pt_bin, subjet_a.area(), event_weight)
         self.hists[f'{prefix}_area_b'].Fill(jet_pt_bin, subjet_b.area(), event_weight)
 
-    def _recluster_assign(self, jet, perp, subjet_a, subjet_b):
+    def _assign_to_subjets(self, jet, perp):
         """
-        Exact A/B assignment of perp-cone particles, as a closure test of the
-        closest-ghost assignment.
+        A/B assignment of perp-cone particles by reclustering.
 
         Scaled copies (momentum x RECLUSTER_SCALE) of the perp cone particles are
         clustered with C/A together with the real (non-ghost) constituents of jet,
         into a single jet, which the LundGenerator then declusters. The copies have
         negligible pT, so they do not change the C/A merging of the real particles
         or the SD splitting; each copy ends up where a soft particle at its position
-        would.
+        would. SD is redone on the reclustered jet with select_soft_drop, as in
+        get_subjets (rho = 0); its branches hold subjets A and B plus their copies.
+        Jet membership is not checked: a copy far from the jet joins the C/A tree
+        after A and B have merged and is groomed away, but a copy just outside the
+        anti-kT jet boundary can merge early with an edge particle of the jet and be
+        assigned to A or B, although a real particle there would not be in the jet.
 
-        the ghost method can put a particle in ASSIGN_NONE because it’s outside the jet,
-        but the reclustering can only do that if the particle is groomed away.
-
-        Returns a list of size len(perp), one entry per perp cone particle:
-        ASSIGN_A or ASSIGN_B if its copy is in subjet A / B, ASSIGN_NONE if
-        it is groomed away.
+        Returns (perp_a, perp_b, categories):
+          perp_a, perp_b  lists of PseudoJets, the perp-cone particles assigned to A / B
+          categories      list of size len(perp), one entry per perp cone particle:
+                          ASSIGN_A or ASSIGN_B if its copy is in subjet A / B, ASSIGN_NONE
+                          if it is groomed away
         """
+        if len(perp) == 0:
+            return [], [], []
         inputs = [c for c in jet.constituents() if not c.is_pure_ghost()]
         for i, p in enumerate(perp):
             copy = fj.PseudoJet(p.px() * RECLUSTER_SCALE, p.py() * RECLUSTER_SCALE,
@@ -775,47 +741,23 @@ class EmbeddingAnalysis:
         cs = fj.ClusterSequence(std.vector[fj.PseudoJet](inputs), self.recluster_jet_def)
         test_jet = fj.sorted_by_pt(cs.inclusive_jets())[0] # the only jet, with R = max_allowable_R
 
-        # find the test subjets already chosen by get_subjets() on the original jet: the splitting
-        # whose branches have the pTs of subjet_a (harder one after rhoA subtraction) and subjet_b.
-        # test_subjet constituents are: combined jet constituents (no ghosts) + rotated perp cone
-        # particles with pT -> 0
-        # subjet constituents are: combined jet constituents (with ghosts)
-        test_subjet_a = test_subjet_b = None
-        for l in self.lund_gen.result(test_jet):
-            if self._same_pt(l.harder(), subjet_a) and self._same_pt(l.softer(), subjet_b):
-                test_subjet_a, test_subjet_b = l.harder(), l.softer()
-                break
-            if self._same_pt(l.harder(), subjet_b) and self._same_pt(l.softer(), subjet_a): # subjet_a has lower raw pT
-                test_subjet_a, test_subjet_b = l.softer(), l.harder()
-                break
-        if test_subjet_a is None:
-            print("unexpected")
-
+        # Redo SD on test_jet, as get_subjets() did on the CS jet (rho = 0: CS jets are already
+        # subtracted, so SD needs no areas). The copies have pT -> 0, so the C/A tree of the real
+        # particles and the first splitting passing z_cut are unchanged; the branches are subjets
+        # A and B plus the copies that cluster into them.
         categories = [ASSIGN_NONE] * len(perp)
+        l, swapped = self.select_soft_drop(self.lund_gen.result(test_jet), z_cut=self.z_cut)
+        test_subjet_a, test_subjet_b = (l.softer(), l.harder()) if swapped else (l.harder(), l.softer())
+
         for category, branch in ((ASSIGN_A, test_subjet_a), (ASSIGN_B, test_subjet_b)):
             for c in branch.constituents():
                 index = c.user_index()
                 if index <= PERP_INDEX_OFFSET:
                     categories[PERP_INDEX_OFFSET - index] = category
 
-        return categories
-
-    @staticmethod
-    def _same_pt(j1, j2, rel_tol=1e-9):
-        """Whether j1 and j2 have the same pT within relative tolerance rel_tol."""
-        return abs(j1.pt() - j2.pt()) <= rel_tol * max(j1.pt(), j2.pt())
-
-    def _fill_recluster_assign(self, categories, subjet_a, subjet_b, prefix, *, jet_pt_bin, event_weight=1.0):
-        """
-        Fill the reclustering counterparts of the ghost assignment histograms, for
-        an ensemble-level comparison of the two methods:
-          {prefix}_perp_assign_recl      assignment category of perp-cone particles vs pT_g
-          {prefix}_perp_assign_rg_recl   assignment category of perp-cone particles vs R_g
-        """
-        rg = delta_R(subjet_a, subjet_b)
-        for category in categories:
-            self.hists[f'{prefix}_perp_assign_recl'].Fill(jet_pt_bin, category, event_weight)
-            self.hists[f'{prefix}_perp_assign_rg_recl'].Fill(rg, category, event_weight)
+        perp_a = [p for p, category in zip(perp, categories) if category == ASSIGN_A]
+        perp_b = [p for p, category in zip(perp, categories) if category == ASSIGN_B]
+        return perp_a, perp_b, categories
 
     # -----------------------------------------------------------------------
     # output / timing
