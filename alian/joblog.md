@@ -108,6 +108,7 @@
 2031258: 11/14/26. Matched subtracted jet constituents with unsubtracted ones through user_index  
 2031291: 11/15/26. embed_cs.py: perp-cone A/B assignment by reclustering instead of closest ghost  
 2031425: 11/19/26. Implemented pp-OO vertex matching and added prong purity plots  
+2031461: 11/20/26. embed_cs.py: added full-pT perp A/B assignment (Vassu's method)    
 
 # OO JE derived data
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  

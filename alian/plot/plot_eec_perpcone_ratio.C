@@ -18,8 +18,12 @@
 //   red:   perp-perp / bkg-bkg
 // Errors come from TH1::Divide and treat numerator and denominator as
 // uncorrelated, although both are filled from the same events.
+// perp_suffix must match the one given to plot_eec_perpcone.C (e.g. "_fullpt" for
+// the full-pT perp A/B assignment of embed_cs.py); it selects that macro's output
+// file and is appended to the output file names. sdjet is skipped when it is set.
 // Example Usage:
 // root -l 'plot/plot_eec_perpcone_ratio.C("2013681", "40", "60", "OO")'
+// root -l 'plot/plot_eec_perpcone_ratio.C("2013681", "40", "60", "OO", "_fullpt")'
 
 using namespace std;
 
@@ -143,7 +147,7 @@ TH1D *LoadEstimate(TFile *f, const std::string &set, const std::string &name)
     return h;
 }
 
-void plot_eec_perpcone_ratio(std::string file_name, std::string pt_min, std::string pt_max, std::string plot_text = "")
+void plot_eec_perpcone_ratio(std::string file_name, std::string pt_min, std::string pt_max, std::string plot_text = "", std::string perp_suffix = "")
 {
     gStyle->SetOptStat(0);
     SetStyle();
@@ -155,7 +159,7 @@ void plot_eec_perpcone_ratio(std::string file_name, std::string pt_min, std::str
     const double x_hi = 0.4;
 
     // Output of plot_eec_perpcone.C with the same arguments.
-    std::string infile = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
+    std::string infile = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + perp_suffix + ".root";
     TFile *f = new TFile(infile.c_str(), "READ");
     if (f->IsZombie())
     {
@@ -164,9 +168,13 @@ void plot_eec_perpcone_ratio(std::string file_name, std::string pt_min, std::str
         return;
     }
 
-    const std::vector<std::string> sets = {"aa", "bb", "ab", "sum", "sdjet"};
+    std::vector<std::string> sets = {"aa", "bb", "ab", "sum"};
+    if (perp_suffix.empty())
+    {
+        sets.push_back("sdjet");
+    }
 
-    std::string outfile = "/home/youqi/alian/alian/output/eec_perpcone_ratio_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
+    std::string outfile = "/home/youqi/alian/alian/output/eec_perpcone_ratio_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + perp_suffix + ".root";
     TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
 
     for (const std::string &set : sets)
@@ -225,7 +233,7 @@ void plot_eec_perpcone_ratio(std::string file_name, std::string pt_min, std::str
             h1->GetYaxis()->SetRangeUser(0, 2);
             h1->GetXaxis()->SetTitle("#it{R}_{L}");
             h1->GetYaxis()->SetTitle("Estimate / truth");
-            h1->SetTitle(("EEC " + set).c_str());
+            h1->SetTitle(("EEC " + set + (perp_suffix.empty() ? "" : ", perp terms " + perp_suffix)).c_str());
             if (first)
             {
                 h1->Draw("PE");
@@ -240,7 +248,7 @@ void plot_eec_perpcone_ratio(std::string file_name, std::string pt_min, std::str
         line->Draw("same");
         l->Draw("same");
 
-        std::string fname = "/home/youqi/alian/alian/output/eec_perpcone_ratio_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + "_" + set + ".pdf";
+        std::string fname = "/home/youqi/alian/alian/output/eec_perpcone_ratio_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + perp_suffix + "_" + set + ".pdf";
         c->SaveAs(fname.c_str());
         delete c;
         delete l;

@@ -20,8 +20,13 @@
 //   estimate:  jet-perp - perp1-perp2      (compare to sig-bkg)
 //              perp-perp                   (compare to bkg-bkg)
 //              all - (jet-perp - perp1-perp2) - perp-perp   (compare to sig-sig)
+// perp_suffix selects a variant of the subjet perp terms, e.g. "_fullpt" for
+// combined_matched_eec_xy_<term>_fullpt from embed_cs.py (perp A/B assignment by
+// reclustering with the raw perp pT). The suffix is appended to the output file
+// names, and sdjet is skipped (it has no such variant).
 // Example Usage:
 // root -l 'plot/plot_eec_perpcone.C("2013681", "40", "60", "OO")'
+// root -l 'plot/plot_eec_perpcone.C("2013681", "40", "60", "OO", "_fullpt")'
 
 using namespace std;
 
@@ -160,7 +165,7 @@ TH1D *LoadAndProcess(TFile *f, const char *histName, double pt_lo, double pt_hi,
     return hdivw;
 }
 
-void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt_max, std::string plot_text = "")
+void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt_max, std::string plot_text = "", std::string perp_suffix = "")
 {
     gStyle->SetOptStat(0);
     SetStyle();
@@ -209,15 +214,26 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
 
     // "all" is the combined EEC itself; the others are suffixes of it.
     const std::vector<std::string> terms = {"all", "sigsig", "sigbkg", "bkgbkg", "jetperp", "perpperp", "perp1perp2"};
-    const std::vector<std::string> sets = {"aa", "bb", "ab", "sum", "sdjet"};
+    std::vector<std::string> sets = {"aa", "bb", "ab", "sum"};
+    if (perp_suffix.empty())
+    {
+        sets.push_back("sdjet");
+    }
     std::map<std::string, std::map<std::string, TH1D *>> h; // h[set][term]
+
+    // perp_suffix applies to the perp-cone terms only, not to the truth terms
+    auto suffix_for = [&](const std::string &term)
+    {
+        bool is_perp = (term == "jetperp" || term == "perpperp" || term == "perp1perp2");
+        return is_perp ? perp_suffix : std::string();
+    };
 
     for (const std::string &xy : {std::string("aa"), std::string("bb"), std::string("ab")})
     {
         double scale = (xy == "ab") ? 2.0 : 1.0; // eec_ab is filled in one orientation
         for (const std::string &term : terms)
         {
-            std::string hname = sample + "_eec_" + xy + (term == "all" ? "" : "_" + term);
+            std::string hname = sample + "_eec_" + xy + (term == "all" ? "" : "_" + term) + suffix_for(term);
             h[xy][term] = LoadAndProcess(f, hname.c_str(), pt_lo, pt_hi, njets, scale);
         }
     }
@@ -229,18 +245,21 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
             h["sum"][term] = nullptr;
             continue;
         }
-        h["sum"][term] = (TH1D *)h["aa"][term]->Clone(("h_" + sample + "_eec_sum" + (term == "all" ? "" : "_" + term)).c_str());
+        h["sum"][term] = (TH1D *)h["aa"][term]->Clone(("h_" + sample + "_eec_sum" + (term == "all" ? "" : "_" + term) + suffix_for(term)).c_str());
         h["sum"][term]->Add(h["bb"][term]);
         h["sum"][term]->Add(h["ab"][term]);
     }
-    // Inclusive EEC for jets that passed SD
-    for (const std::string &term : terms)
+    // Inclusive EEC for jets that passed SD (no perp_suffix variant)
+    if (perp_suffix.empty())
     {
-        std::string hname = sample + "_sdjet_eec" + (term == "all" ? "" : "_" + term);
-        h["sdjet"][term] = LoadAndProcess(f, hname.c_str(), pt_lo, pt_hi, njets);
+        for (const std::string &term : terms)
+        {
+            std::string hname = sample + "_sdjet_eec" + (term == "all" ? "" : "_" + term);
+            h["sdjet"][term] = LoadAndProcess(f, hname.c_str(), pt_lo, pt_hi, njets);
+        }
     }
 
-    std::string outfile = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + ".root";
+    std::string outfile = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + perp_suffix + ".root";
     TFile *f_out = new TFile(outfile.c_str(), "RECREATE");
 
     for (const std::string &set : sets)
@@ -301,7 +320,7 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
             h1->GetYaxis()->SetRangeUser(0, 6);
             h1->GetXaxis()->SetTitle("#it{R}_{L}");
             h1->GetYaxis()->SetTitle("#Sigma_{EEC}(#it{R}_{L})");
-            h1->SetTitle(("EEC " + set).c_str());
+            h1->SetTitle(("EEC " + set + (perp_suffix.empty() ? "" : ", perp terms " + perp_suffix)).c_str());
             if (first)
             {
                 h1->Draw("L");
@@ -314,7 +333,7 @@ void plot_eec_perpcone(std::string file_name, std::string pt_min, std::string pt
         }
         l->Draw("same");
 
-        std::string fname = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + "_" + set + ".pdf";
+        std::string fname = "/home/youqi/alian/alian/output/eec_perpcone_R" + jetR + "_" + pt_min + "_" + pt_max + "_" + file_name + perp_suffix + "_" + set + ".pdf";
         c->SaveAs(fname.c_str());
         delete c;
         delete l;
