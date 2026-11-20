@@ -3,6 +3,7 @@ eventTree:
   - run_number
   - multiplicity
   - centrality
+  - vtx_z
   - occupancy
   - event_sel
   - trig_sel

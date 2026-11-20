@@ -107,6 +107,7 @@
 2031225: 11/13/26. embed_cs.py. embed_cs.yaml: CS max_distance -1 -> 0.3. Subjobs 1, 3, 5, 7, 8, 9 didn't finish.  
 2031258: 11/14/26. Matched subtracted jet constituents with unsubtracted ones through user_index  
 2031291: 11/15/26. embed_cs.py: perp-cone A/B assignment by reclustering instead of closest ghost  
+2031425: 11/19/26. Implemented pp-OO vertex matching and added prong purity plots  
 
 # OO JE derived data
 1940255: track QA, 0-100%, jet finder and analysis pT > 10 GeV  

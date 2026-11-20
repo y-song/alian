@@ -40,7 +40,7 @@ constituent_subtractor:
   ghost_area: 0.01 # default
   max_pt_correct: 100
   bge_rho_grid_size: 0.1 # not used if using jet median bkg_estimator
-  remove_zero_pt_particles: false # keep fully subtracted particles with pT = 1e-50 (and their user_index), so embed_cs.py can assign every raw cone particle to subjet A/B by index
+  remove_zero_pt_particles: false # keep fully subtracted particles with pT = 1e-50 (and their user_index), for matching between subtracted and presubtracted particles
 
 analysis:
   pt_min_pp_jet: 5.0
@@ -48,6 +48,10 @@ analysis:
   pt_min_eec: 1.0
   perpcone_R: 0.4
   mc_fraction_threshold: 0.5
+  prong_match_threshold: 0.5 # pp subjet is matched to a CS subjet if > this fraction of its pT is found there
+  # vertex matching: each pp event is paired with an OO event with |vz_OO - vz_pp| <= vz_max_diff (cm);
+  vz_max_diff: 1.0
+  vz_buffer_max: 10000 # max OO events waiting for a pp event in their window (all vz); when full, the oldest is dropped
   z_cut: 0.2
 
 output:
@@ -58,10 +62,12 @@ output:
     rho:        ['lin',   0, 100, 100]
     area:       ['lin',   0, 1.0,  50]
     centrality: ['lin',   0, 100, 100]
+    dvz:        ['lin',  -5,   5, 100]
     dR:         ['lin',   0, 1.0, 100]
     RL:         ['log', 1.0e-4, 1.0, 48]
     ghost_dR:   ['lin',   0, 0.2, 80]
     assign:     ['custom', [-0.5, 0.5, 1.5, 2.5]]
+    prong_match: ['custom', [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5]]
 
   histograms:
     # --- Existing jet, background and matching histograms ---
@@ -86,8 +92,8 @@ output:
       "Subtracted combined jet #it{p}_{T};#it{p}_{T}^{sub} (GeV);jet count",
       jet_pT]
 
-    combined_njet_pp_njet: [2, "combined_njet_pp_njet",
-      "Combined jet count vs pp jet count;pp jet count;combined jet count",
+    sub_njet_pp_njet: [2, "sub_njet_pp_njet",
+      "Subtracted jet count vs pp jet count;pp jet count;subtracted jet count",
       count, count]
 
     pp_pT_matched: [1, "pp_pT_matched",
@@ -97,6 +103,10 @@ output:
     cent_rho: [2, "cent_rho",
       "Jet-median #rho vs centrality;#rho (GeV);centrality (%)",
       rho, centrality]
+
+    delta_vz: [1, "delta_vz",
+      "vz difference of the paired events;#it{v}_{z}^{OO} - #it{v}_{z}^{pp} (cm);event pairs",
+      dvz]
 
     sub_area_sub_pT: [2, "sub_area_sub_pT",
       "Subtracted jet area vs subtracted #it{p}_{T};#it{p}_{T}^{sub} (GeV);#it{A}^{sub}",
@@ -116,6 +126,14 @@ output:
 
     sub_area_sub_pT_matched: [2, "sub_area_sub_pT_matched",
       "Subtracted jet area vs subtracted #it{p}_{T} (matched);#it{p}_{T}^{sub} (GeV);#it{A}^{sub}",
+      jet_pT, area]
+
+    sub_area_a_sub_pTg_matched: [2, "sub_area_a_sub_pTg_matched",
+      "Area of CS subjet A vs subtracted #it{p}_{T,g} (matched);#it{p}_{T,g}^{sub} (GeV);#it{A}_{A}",
+      jet_pT, area]
+
+    sub_area_b_sub_pTg_matched: [2, "sub_area_b_sub_pTg_matched",
+      "Area of CS subjet B vs subtracted #it{p}_{T,g} (matched);#it{p}_{T,g}^{sub} (GeV);#it{A}_{B}",
       jet_pT, area]
 
     sub_pT_pp_pT_matched: [2, "sub_pT_pp_pT_matched",
@@ -352,10 +370,9 @@ output:
       "Perp-cone particle assignment by reclustering (0: A, 1: B, 2: neither);R_{g};category",
       RL, assign]
 
-    combined_matched_area_a: [2, "combined_matched_area_a",
-      "Area of subjet A;#it{p}_{T,g}^{sub} (GeV);#it{A}_{A}",
-      jet_pT, area]
+    # --- Subjet prong matching (pp det subjets vs CS subjets) ---
 
-    combined_matched_area_b: [2, "combined_matched_area_b",
-      "Area of subjet B;#it{p}_{T,g}^{sub} (GeV);#it{A}_{B}",
-      jet_pT, area]
+    combined_matched_prong_match: [3, "combined_matched_prong_match",
+      "Prong matching category (see embed_cs.py docstring);#it{p}_{T,g}^{pp} (GeV);#it{p}_{T,g}^{sub} (GeV);category",
+      jet_pT, jet_pT, prong_match]
+

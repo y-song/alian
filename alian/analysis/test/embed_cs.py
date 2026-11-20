@@ -20,6 +20,7 @@ Jet histograms ("sub_" = subtracted):
   residual_sub_pT[g]_matched          subtracted - pp pT vs subtracted pT (pT,g)
   residual_pp_pTg_matched             subtracted - pp pT,g vs pp pT,g
   sub_area_sub_pT_matched             area of the subtracted jet vs subtracted pT
+  sub_area_{a,b}_sub_pTg_matched      area of CS subjet A / B vs subtracted pT,g
   sub_n[g]_pp_n[g]_matched            CS vs pp constituent count, without the particles
                                       fully removed by CS (kept with pT = 1e-50)
 "_matched" histograms are filled for combined jets that pass SD with
@@ -29,10 +30,8 @@ also passes SD. The EEC histograms below use the same selection.
 Perp-cone background for the subjet EECs (combined_matched_eec_aa/_ab/_bb) and the
 inclusive EEC (combined_matched_sdjet_eec): two cones of radius perpcone_R at
 phi +/- pi/2 of the ungroomed jet axis, from the raw combined event, rotated under
-the jet. Their particles are assigned to A or B by reclustering each cone separately
-with the CS jet (see _assign_to_subjets); those groomed away are dropped. Jet
-membership is not checked, so particles just outside the jet boundary can still be
-assigned to A or B.
+the jet. Their particles are assigned to A, B or neither (groomed away) by
+reclustering each cone with the CS jet (see _assign_to_subjets).
 
 Filled per subjet pair type xy in (aa, ab, bb), with P1 (P2) the perp cone at
 phi + pi/2 (phi - pi/2):
@@ -52,7 +51,16 @@ with sigsig + sigbkg + bkgbkg = combined_matched_eec_xy.
 
 Assignment diagnostics (see _fill_assign_diagnostics):
   combined_matched_perp_assign[_rg]   perp particle category (A, B, neither) vs pT,g [R_g]
-  combined_matched_area_{a,b}         area of subjet A / B
+
+Subjet prong matching of pp det subjets to CS subjets, same "_matched" selection
+(definition in _fill_prong_matching, categories in PRONG_CATEGORY):
+  combined_matched_prong_match        category vs pp pT,g and CS pT,g (subjet EEC binning)
+Leading purity = categories {0, 1, 3} / all; subleading purity = {0, 2, 4} / all.
+Each matched jet fills it once, so the category axis sums to sub_pTg_matched.
+
+Event pairing: |vz_OO - vz_pp| <= analysis.vz_max_diff (see _vz_matched_pairs), else 1:1.
+  delta_vz                            vz_OO - vz_pp of every analysed pair (unweighted);
+                                      empty outside +/- vz_max_diff
 
 Example usage (-n caps the number of event pairs):
 python analysis/test/embed_cs.py -i1 /home/youqi/temp/combined1.root -i2 /home/youqi/temp/BerkeleyTree.root -c config/embed_cs.yaml -o output/embed_test.root -n 100
@@ -60,6 +68,9 @@ python analysis/test/embed_cs.py -i1 /home/youqi/temp/combined1.root -i2 /home/y
 
 import argparse
 import itertools
+import math
+from collections import Counter, defaultdict, deque
+from types import SimpleNamespace
 from time import perf_counter
 import numpy as np
 
@@ -94,6 +105,24 @@ PERP_INDEX_OFFSET = -10_000_000
 # remove_zero_pt_particles: false); constituents below this pT (these and explicit ghosts,
 # pT ~ 1e-100) are not counted as real (real_trk_selector)
 CS_ZERO_PT = 1e-40
+# vertex matching (_vz_matched_pairs): waiting OO events are stored in vz slices of this width (cm)
+VZ_SLICE_WIDTH = 0.1
+# prong matching (_fill_prong_matching): status of a pp subjet, i.e. which CS subjet holds
+# more than prong_match_threshold of its pT
+PRONG_SAME, PRONG_OTHER, PRONG_NONE = 0, 1, 2
+# category (values filled on the "prong_match" axis), keyed by (status of A, status of B);
+# for B, PRONG_OTHER means "in the CS leading subjet"
+PRONG_CATEGORY = {
+    (PRONG_SAME, PRONG_SAME): 0,   # pure match
+    (PRONG_SAME, PRONG_NONE): 1,   # leading matched, subleading unmatched
+    (PRONG_NONE, PRONG_SAME): 2,   # leading unmatched, subleading matched
+    (PRONG_SAME, PRONG_OTHER): 3,  # leading matched, subleading in leading
+    (PRONG_OTHER, PRONG_SAME): 4,  # leading in subleading, subleading matched
+    (PRONG_NONE, PRONG_OTHER): 5,  # leading unmatched, subleading in leading
+    (PRONG_OTHER, PRONG_NONE): 6,  # leading in subleading, subleading unmatched
+    (PRONG_OTHER, PRONG_OTHER): 7, # swap
+    (PRONG_NONE, PRONG_NONE): 8,   # both unmatched
+}
 
 # source code locations
 # /home/youqi/yasp/.workdir/bundle/hepbase/fastjet/3.4.2/fastjet-3.5.1/include/fastjet
@@ -137,6 +166,9 @@ class EmbeddingAnalysis:
 
         for k, v in self.cfg.get('analysis', {}).items():
             setattr(self, k, v)
+        self.vz_max_diff = getattr(self, 'vz_max_diff', None) or 0
+        self.vz_buffer_max = getattr(self, 'vz_buffer_max', 10000)
+        self.vz_counts = Counter()
 
         # --- signal source (file 1) ---
         pp_cfg = self.cfg.get('pp', {})
@@ -161,11 +193,11 @@ class EmbeddingAnalysis:
 
         # --- background estimator ---
         self.bkg_estimator = BkgEstimator(self.cfg.get('bkg_estimator') or {}, self.logger)
-        print("bkg_estimator:\n", self.bkg_estimator.bge.description())
+        self.logger.info(f"Background estimator configuration details:\n\n{self.bkg_estimator.bge.description()}\n")
 
         # --- constituent subtractor ---
         self.constituent_subtractor = CEventSubtractor(self.cfg.get('constituent_subtractor') or {}, self.logger, bkg_estimator=self.bkg_estimator)
-        print("constituent_subtractor:\n", self.constituent_subtractor.subtractor.description())
+        self.logger.info(f"Constituent subtractor configuration:\n{self.constituent_subtractor.subtractor.description()}")
         if self.constituent_subtractor.remove_zero_pt_particles:
             self.logger.warning("constituent_subtractor.remove_zero_pt_particles is true: raw particles fully removed by CS "
                                 "have no counterpart in the CS jet and are put in neither subjet A nor B.")
@@ -182,14 +214,10 @@ class EmbeddingAnalysis:
         # drops particles fully removed by CS (pT = 1e-50) and explicit ghosts (pT ~ 1e-100)
         self.real_trk_selector = TrackSelector(pt_min=CS_ZERO_PT)
         self.lund_gen = fj.contrib.LundGenerator()
-        # C/A with R large enough to merge all inputs into one jet (perp-cone A/B assignment, _assign_to_subjets)
+        # C/A with R large enough to merge all inputs into one jet (_assign_to_subjets)
         self.recluster_jet_def = fj.JetDefinition(fj.cambridge_algorithm, fj.JetDefinition.max_allowable_R)
         # self.sd = fj.contrib.SoftDrop(0, self.z_cut)
 
-        # --- event displays ---
-        self.n_event_displays = 30
-        self.event_display_index = 0
-        self.event_displays = []
         self.output = Output.load(self.cfg)
         self.hists = self.output.hists
         self.logger.info("Embedding analysis initialized.")
@@ -212,16 +240,92 @@ class EmbeddingAnalysis:
         self.logger.info("Analyzing embedded events...")
         slurm_check = is_slurm()
         n_pairs = 0
-        for pp_ev, oo_ev in zip(
-            self._selected_events(self.pp_source, self.pp_selector, slurm_check),
-            self._selected_events(self.oo_source, self.oo_selector, slurm_check),
-        ):
+        pp_events = self._selected_events(self.pp_source, self.pp_selector, slurm_check)
+        oo_events = self._selected_events(self.oo_source, self.oo_selector, slurm_check)
+        if self.vz_max_diff > 0:
+            self.logger.info(f"Vertex matching: |vz_OO - vz_pp| <= {self.vz_max_diff} cm (buffer {self.vz_buffer_max} OO events).")
+            pairs = self._vz_matched_pairs(pp_events, oo_events)
+        else:
+            self.logger.info("No vertex matching.")
+            pairs = zip(pp_events, oo_events)
+        for pp_ev, oo_ev in pairs:
+            self.hists['delta_vz'].Fill(oo_ev.data['vtx_z'] - pp_ev.data['vtx_z'])
             self.analyze_event_pair(pp_ev, oo_ev)
             n_pairs += 1
             if self.nev > 0 and n_pairs >= self.nev:
                 break
         self.logger.info(f"Processed {n_pairs} event pairs.")
+        if self.vz_max_diff > 0:
+            self.logger.info(f"Vertex matching counts: {self.vz_counts}")
         self.note_time("Events analyzed")
+
+    def _vz_matched_pairs(self, pp_events, oo_events):
+        """
+        Yield (pp event, OO event) pairs with |vz_OO - vz_pp| <= vz_max_diff, each OO event used
+        once: the oldest waiting OO event in the window, else the next one in the window read from
+        file. OO events read on the way wait in FIFOs per VZ_SLICE_WIDTH slice (at most
+        vz_buffer_max in total; the oldest is dropped when full). pp events with no OO event in
+        their window are skipped. Counts go to self.vz_counts.
+        """
+        dvz = self.vz_max_diff
+        slices = defaultdict(deque)  # slice index -> deque of (serial, vz, event); no empty deques
+        n_waiting = 0
+        serial = 0
+        oo_iter = iter(oo_events)
+        oo_done = False
+        for pp_ev in pp_events:
+            vz = float(pp_ev.data['vtx_z'])
+
+            # oldest waiting OO event in the window: the first in-window entry of each slice
+            best = None
+            for k in range(math.floor((vz - dvz) / VZ_SLICE_WIDTH), math.floor((vz + dvz) / VZ_SLICE_WIDTH) + 1):
+                for i, (s, oo_vz, _) in enumerate(slices.get(k, ())):
+                    if abs(oo_vz - vz) <= dvz:
+                        if best is None or s < best[0]:
+                            best = (s, k, i)
+                        break
+            if best is not None:
+                _, k, i = best
+                oo_ev = slices[k][i][2]
+                del slices[k][i]
+                if not slices[k]:
+                    del slices[k]
+                n_waiting -= 1
+                self.vz_counts['pairs_waiting'] += 1
+                yield pp_ev, oo_ev
+                continue
+
+            # none waiting: read OO events until one is in the window
+            match = None
+            while not oo_done:
+                oo_ev = next(oo_iter, None)
+                if oo_ev is None:
+                    oo_done = True
+                    break
+                oo_vz = float(oo_ev.data['vtx_z'])
+                if abs(oo_vz - vz) <= dvz:
+                    match = oo_ev
+                    break
+                if n_waiting >= self.vz_buffer_max:
+                    k_oldest = min(slices, key=lambda k: slices[k][0][0])
+                    slices[k_oldest].popleft()
+                    if not slices[k_oldest]:
+                        del slices[k_oldest]
+                    n_waiting -= 1
+                    self.vz_counts['oo_dropped_buffer_full'] += 1
+                # the reader reuses one event object, so keep a copy of the data
+                data = {key: v.copy() if isinstance(v, np.ndarray) else v for key, v in oo_ev.data.items()}
+                slices[math.floor(oo_vz / VZ_SLICE_WIDTH)].append((serial, oo_vz, SimpleNamespace(data=data)))
+                serial += 1
+                n_waiting += 1
+            if match is not None:
+                self.vz_counts['pairs_read'] += 1
+                yield pp_ev, match
+                continue
+            if n_waiting == 0:
+                self.vz_counts['stopped_oo_exhausted'] += 1
+                return
+            self.vz_counts['pp_no_oo_in_window'] += 1
 
     # -----------------------------------------------------------------------
     # per-event-pair analysis
@@ -271,18 +375,18 @@ class EmbeddingAnalysis:
         self.hists['cent_rho'].Fill(rho, oo_ev.data['centrality'])
         sub_combined = self.constituent_subtractor.process_event(combined)
         
-        # --- combined jets: cluster combined event ---
+        # --- combined jets: cluster CS combined event ---
         combined_jets = self.combined_jet_finder.find_jets(sub_combined, use_area=True)
         for j in combined_jets:
             self.hists['sub_pT'].Fill(j.pt(), weight)
             self.hists['sub_area_sub_pT'].Fill(j.pt(), j.area(), weight)
-        self.hists['combined_njet_pp_njet'].Fill(len(pp_jets), len(combined_jets), weight)
+        self.hists['sub_njet_pp_njet'].Fill(len(pp_jets), len(combined_jets), weight)
 
         # Match the retained pp det jets to combined jets.
         # This starts a fresh matching pass, clearing the truth-match JetInfo.
         combined_jet_matched_indices = self.match_pp_det_to_combined(pp_jets, combined_jets)
 
-        # --- fill cut flow histogram ---
+        # --- fill cut flow histogram per combined jet ---
         for combined_jet in combined_jets:
             self.hists['combined_sub_cutflow'].Fill(0.5, weight) # all combined jets
             combined_jet_info = combined_jet.user_info[alian.JetInfo]()
@@ -303,9 +407,8 @@ class EmbeddingAnalysis:
                 self.hists['combined_sub_cutflow'].Fill(3.5, weight) # mutually unique matches
 
         # --- fill histograms per combined jet ---
-        for combined_ijet in range(0, len(combined_jets)):
+        for combined_ijet, j in enumerate(combined_jets):
 
-            j = combined_jets[combined_ijet]
             subjets = self.get_subjets(j, self.pt_min_combined_jet, rho=0.0)
             if subjets is None:
                 continue
@@ -313,7 +416,7 @@ class EmbeddingAnalysis:
             # keep going if combined passes grooming
 
             pp_ijet = combined_jet_matched_indices[combined_ijet] # -1 if unmatched to pp
-            combined_constituents = self.real_trk_selector.select_from(j.constituents())
+            combined_constituents = self.real_trk_selector.select_from(j.constituents()) # drop ghosts
             combined_g_constituents = self.real_trk_selector.select_from(gj.constituents())
 
             if (pp_ijet != -1): # mateched to pp
@@ -331,6 +434,8 @@ class EmbeddingAnalysis:
 
                 self.hists['sub_pTg_matched'].Fill(gj.pt(), weight)
                 self.hists['sub_area_sub_pT_matched'].Fill(j.pt(), j.area(), weight)
+                self.hists['sub_area_a_sub_pTg_matched'].Fill(gj.pt(), subjet_a.area(), weight)
+                self.hists['sub_area_b_sub_pTg_matched'].Fill(gj.pt(), subjet_b.area(), weight)
                 self.hists['sub_pT_pp_pT_matched'].Fill(pp_j.pt(), j.pt(), weight)
                 self.hists['sub_pTg_pp_pTg_matched'].Fill(pp_gj.pt(), gj.pt(), weight)
                 self.hists['sub_n_pp_n_matched'].Fill(len(pp_j.constituents()), len(combined_constituents), weight)
@@ -350,6 +455,7 @@ class EmbeddingAnalysis:
                 self.do_subjet_eec(j_raw, subjet_a_raw, subjet_b_raw, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight, rg=delta_R(subjet_a, subjet_b))
                 self.do_subjet_eec_truth(j_raw, subjet_a_raw, subjet_b_raw, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
                 self.do_subjet_eec_perpcone(j, subjet_a, subjet_b, j_raw, subjet_a_raw, subjet_b_raw, combined, "combined_matched", ew_denom=gj.pt(), jet_pt_bin=gj.pt(), event_weight=weight)
+                self._fill_prong_matching(pp_subjet_a, pp_subjet_b, subjet_a, subjet_b, "combined_matched", pp_jet_pt_bin=pp_gj_pt, jet_pt_bin=gj.pt(), event_weight=weight)
 
     # -----------------------------------------------------------------------
     # event building
@@ -486,6 +592,26 @@ class EmbeddingAnalysis:
             pt_contained += track.pt()
         return pt_contained/pt_total
 
+    def _fill_prong_matching(self, pp_subjet_a, pp_subjet_b, subjet_a, subjet_b, prefix, *, pp_jet_pt_bin, jet_pt_bin, event_weight=1.0):
+        """
+        Subjet prong matching between the SD splitting of the pp det jet and that of the
+        matched CS jet (rho = 0), seen from the pp side:
+          {prefix}_prong_match category (PRONG_CATEGORY) vs pp pT,g (pp_jet_pt_bin) and CS pT,g (jet_pt_bin)
+        A pp subjet is matched to a CS subjet if mc_fraction(pp subjet, CS subjet)
+        exceeds prong_match_threshold. Tracks fully removed by CS (pT = 1e-50) do not count as found.
+        """
+        statuses = []
+        for pp_subjet, same, other in ((pp_subjet_a, subjet_a, subjet_b), (pp_subjet_b, subjet_b, subjet_a)):
+            if self.mc_fraction(pp_subjet, same) > self.prong_match_threshold:
+                statuses.append(PRONG_SAME)
+            elif self.mc_fraction(pp_subjet, other) > self.prong_match_threshold:
+                statuses.append(PRONG_OTHER)
+            else:
+                statuses.append(PRONG_NONE)
+        category = PRONG_CATEGORY[tuple(statuses)]
+
+        self.hists[f'{prefix}_prong_match'].Fill(pp_jet_pt_bin, jet_pt_bin, category, event_weight)
+
     # -----------------------------------------------------------------------
     # grooming
     # -----------------------------------------------------------------------
@@ -594,7 +720,7 @@ class EmbeddingAnalysis:
         perp2 = self.eec_trk_selector.select_from(self._perpcone_parts(jet, combined, -np.pi/2))
         perp1_a, perp1_b, perp1_categories = self._assign_to_subjets(jet, perp1) # lists of PseudoJets, list of ASSIGN_*
         perp2_a, perp2_b, perp2_categories = self._assign_to_subjets(jet, perp2)
-        self._fill_assign_diagnostics(perp1_categories + perp2_categories, subjet_a, subjet_b, prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+        self._fill_assign_diagnostics(perp1_categories + perp2_categories, delta_R(subjet_a, subjet_b), prefix, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
         tracks = self.eec_trk_selector.select_from(jet_raw.constituents())
         tracks_a = self.eec_trk_selector.select_from(subjet_a_raw.constituents())
@@ -628,16 +754,16 @@ class EmbeddingAnalysis:
 
     def _raw_jets(self, jet, subjet_a, subjet_b, parts):
         """
-        Wrap the raw (pre-CS) particles of the CS jet, subjet A and subjet B as three 
-        PseudoJets, so that the do_*eec helpers, which read .constituents(), run on them.
-        Membership is exact: a particle of parts (the raw combined event) is in the jet (A, B)
-        if the CS constituent with its user_index is in the CS jet (subjet A, subjet B). This
-        includes particles fully removed by CS, which are kept with pT = 1e-50
+        Match subtracted jet constituents with the pre-subtracted ones through user_index
+        This includes particles fully removed by CS, which are kept with pT = 1e-50
         (remove_zero_pt_particles: false).
+
+        Returns (jet_raw, subjet_a_raw, subjet_b_raw):
+          PseudoJets joined from the raw particles of the CS jet, subjet A and subjet B.
         """
         raw = []
         for cs_jet in (jet, subjet_a, subjet_b):
-            indices = {c.user_index() for c in cs_jet.constituents() if not c.is_pure_ghost()}
+            indices = {c.user_index() for c in cs_jet.constituents() if not c.is_pure_ghost()} # {}: set
             raw.append(fj.join(std.vector[fj.PseudoJet]([p for p in parts if p.user_index() in indices])))
         return tuple(raw)
 
@@ -661,36 +787,15 @@ class EmbeddingAnalysis:
             rotated.append(p)
         return rotated
 
-    def _fill_assign_diagnostics(self, categories, subjet_a, subjet_b, prefix, *, jet_pt_bin, event_weight=1.0):
-        """
-        Diagnostics for the reclustering A/B assignment of the perp-cone particles:
-          {prefix}_perp_assign               assignment category of perp-cone particles vs pT_g
-          {prefix}_perp_assign_rg            assignment category of perp-cone particles vs R_g
-          {prefix}_area_{a,b}                area of subjet A / B vs pT_g
-        """
-        rg = delta_R(subjet_a, subjet_b)
-        for category in categories:
-            self.hists[f'{prefix}_perp_assign'].Fill(jet_pt_bin, category, event_weight)
-            self.hists[f'{prefix}_perp_assign_rg'].Fill(rg, category, event_weight)
-
-        self.hists[f'{prefix}_area_a'].Fill(jet_pt_bin, subjet_a.area(), event_weight)
-        self.hists[f'{prefix}_area_b'].Fill(jet_pt_bin, subjet_b.area(), event_weight)
-
     def _assign_to_subjets(self, jet, perp):
         """
         A/B assignment of perp-cone particles by reclustering.
 
-        Scaled copies (momentum x RECLUSTER_SCALE) of the perp cone particles are
-        clustered with C/A together with the real (non-ghost) constituents of jet,
-        into a single jet, which the LundGenerator then declusters. The copies have
-        negligible pT, so they do not change the C/A merging of the real particles
-        or the SD splitting; each copy ends up where a soft particle at its position
-        would. SD is redone on the reclustered jet with select_soft_drop, as in
-        get_subjets (rho = 0); its branches hold subjets A and B plus their copies.
-        Jet membership is not checked: a copy far from the jet joins the C/A tree
-        after A and B have merged and is groomed away, but a copy just outside the
-        anti-kT jet boundary can merge early with an edge particle of the jet and be
-        assigned to A or B, although a real particle there would not be in the jet.
+        Copies of the perp-cone particles scaled by RECLUSTER_SCALE are reclustered with
+        C/A together with the non-ghost constituents of jet, and SD is redone with
+        select_soft_drop (rho = 0); each copy lands where a soft particle there would.
+        Jet membership is not checked: a copy just outside the anti-kT boundary can merge
+        early with an edge particle and be assigned to A or B.
 
         Returns (perp_a, perp_b, categories):
           perp_a, perp_b  lists of PseudoJets, the perp-cone particles assigned to A / B
@@ -711,9 +816,8 @@ class EmbeddingAnalysis:
         test_jet = fj.sorted_by_pt(cs.inclusive_jets())[0] # the only jet, with R = max_allowable_R
 
         # Redo SD on test_jet, as get_subjets() did on the CS jet (rho = 0: CS jets are already
-        # subtracted, so SD needs no areas). The copies have pT -> 0, so the C/A tree of the real
-        # particles and the first splitting passing z_cut are unchanged; the branches are subjets
-        # A and B plus the copies that cluster into them.
+        # subtracted). The copies have pT -> 0, so the C/A tree of the real particles and the 
+        # first splitting passing z_cut are unchanged.
         categories = [ASSIGN_NONE] * len(perp)
         l, swapped = self.select_soft_drop(self.lund_gen.result(test_jet), z_cut=self.z_cut)
         test_subjet_a, test_subjet_b = (l.softer(), l.harder()) if swapped else (l.harder(), l.softer())
@@ -728,6 +832,16 @@ class EmbeddingAnalysis:
         perp_b = [p for p, category in zip(perp, categories) if category == ASSIGN_B]
         return perp_a, perp_b, categories
 
+    def _fill_assign_diagnostics(self, categories, rg, prefix, *, jet_pt_bin, event_weight=1.0):
+        """
+        Diagnostics for the reclustering A/B assignment of the perp-cone particles:
+          {prefix}_perp_assign               assignment category of perp-cone particles vs pT_g
+          {prefix}_perp_assign_rg            assignment category of perp-cone particles vs R_g
+        """
+        for category in categories:
+            self.hists[f'{prefix}_perp_assign'].Fill(jet_pt_bin, category, event_weight)
+            self.hists[f'{prefix}_perp_assign_rg'].Fill(rg, category, event_weight)
+
     # -----------------------------------------------------------------------
     # output / timing
     # -----------------------------------------------------------------------
@@ -740,12 +854,6 @@ class EmbeddingAnalysis:
 
         with TFile(self.output_file, "RECREATE") as f:
             self.output.save(f)
-
-            f.mkdir("event_displays")
-            f.cd("event_displays")
-
-            for display in self.event_displays:
-                display['canvas'].Write()
 
         self.logger.info("Output saved.")
 
