@@ -49,14 +49,6 @@ two raw tracks (pp: user_index >= 0, OO: user_index < 0):
   combined_matched_eec_xy_bkgbkg      OO-OO pairs   (compare to perpperp_xy)
 with sigsig + sigbkg + bkgbkg = combined_matched_eec_xy.
 
-Full-pT variant of the subjet perp terms (xy in aa, ab, bb):
-  combined_matched_eec_xy_{jetperp,perpperp,perp1perp2}_fullpt
-Same pairs as above, but each perp cone is reclustered with the CS jet using the raw
-pT of its particles (_assign_to_subjets with scale = 1), so the perp particles can
-change the SD splitting of the reclustered jet, and they are assigned to that jet's
-A / B. The jet-side tracks are still those of the measured A / B. Compare to the same
-truth terms (sigbkg, bkgbkg). No sdjet version (no A/B assignment there).
-
 Assignment diagnostics (see _fill_assign_diagnostics):
   combined_matched_perp_assign[_rg]   perp particle category (A, B, neither) vs pT,g [R_g]
 
@@ -734,47 +726,31 @@ class EmbeddingAnalysis:
         tracks_a = self.eec_trk_selector.select_from(subjet_a_raw.constituents())
         tracks_b = self.eec_trk_selector.select_from(subjet_b_raw.constituents())
 
-        fill_args = dict(ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
-        terms = [self._perp_term('sdjet_eec', tracks, perp1, perp2)]
-        terms += self._subjet_perp_terms(tracks_a, tracks_b, perp1_a, perp1_b, perp2_a, perp2_b)
-        self._fill_perp_terms(terms, prefix, '', **fill_args)
+        terms = [] # (region, jet-P1 pairs, P1-P1 pairs, P1-P2 pairs)
+        # inclusive, eec_aa and eec_bb
+        for region, jet_tracks, p1, p2 in (
+            ('sdjet_eec', tracks, perp1, perp2),
+            ('eec_aa', tracks_a, perp1_a, perp2_a),
+            ('eec_bb', tracks_b, perp1_b, perp2_b),
+        ):
+            terms.append((
+                region,
+                itertools.chain(itertools.product(jet_tracks, p1), itertools.product(p1, jet_tracks)),
+                itertools.permutations(p1, 2),
+                itertools.chain(itertools.product(p1, p2), itertools.product(p2, p1)),
+            ))
+        # eec_ab
+        terms.append((
+            'eec_ab',
+            itertools.chain(itertools.product(tracks_a, perp1_b), itertools.product(perp1_a, tracks_b)),
+            itertools.product(perp1_a, perp1_b),
+            itertools.chain(itertools.product(perp1_a, perp2_b), itertools.product(perp2_a, perp1_b)),
+        ))
 
-        # Full-pT variant: the perp particles are reclustered with their raw pT, so they can
-        # change the C/A tree and the SD splitting of the reclustered jet; they are assigned to
-        # that jet's A / B. The jet-side tracks stay those of the measured subjets A / B.
-        perp1_a_full, perp1_b_full, _ = self._assign_to_subjets(jet, perp1, scale=1.0)
-        perp2_a_full, perp2_b_full, _ = self._assign_to_subjets(jet, perp2, scale=1.0)
-        terms_full = self._subjet_perp_terms(tracks_a, tracks_b, perp1_a_full, perp1_b_full, perp2_a_full, perp2_b_full)
-        self._fill_perp_terms(terms_full, prefix, '_fullpt', **fill_args)
-
-    @staticmethod
-    def _perp_term(region, jet_tracks, p1, p2):
-        """(region, jet-P1 pairs, P1-P1 pairs, P1-P2 pairs) for pairs within one region."""
-        return (
-            region,
-            itertools.chain(itertools.product(jet_tracks, p1), itertools.product(p1, jet_tracks)),
-            itertools.permutations(p1, 2),
-            itertools.chain(itertools.product(p1, p2), itertools.product(p2, p1)),
-        )
-
-    def _subjet_perp_terms(self, tracks_a, tracks_b, perp1_a, perp1_b, perp2_a, perp2_b):
-        """Perp terms (see _perp_term) for eec_aa, eec_bb and eec_ab."""
-        return [
-            self._perp_term('eec_aa', tracks_a, perp1_a, perp2_a),
-            self._perp_term('eec_bb', tracks_b, perp1_b, perp2_b),
-            (
-                'eec_ab',
-                itertools.chain(itertools.product(tracks_a, perp1_b), itertools.product(perp1_a, tracks_b)),
-                itertools.product(perp1_a, perp1_b),
-                itertools.chain(itertools.product(perp1_a, perp2_b), itertools.product(perp2_a, perp1_b)),
-            ),
-        ]
-
-    def _fill_perp_terms(self, terms, prefix, suffix, *, ew_denom, jet_pt_bin, event_weight=1.0):
-        """Fill {prefix}_{region}_{jetperp,perpperp,perp1perp2}{suffix} from (region, ...) terms."""
         for region, jetperp, perpperp, perp1perp2 in terms:
-            for name, pairs in (('jetperp', jetperp), ('perpperp', perpperp), ('perp1perp2', perp1perp2)):
-                self._fill_eec_pairs(pairs, f"{prefix}_{region}_{name}{suffix}", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+            self._fill_eec_pairs(jetperp, f"{prefix}_{region}_jetperp", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+            self._fill_eec_pairs(perpperp, f"{prefix}_{region}_perpperp", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
+            self._fill_eec_pairs(perp1perp2, f"{prefix}_{region}_perp1perp2", ew_denom=ew_denom, jet_pt_bin=jet_pt_bin, event_weight=event_weight)
 
     def _raw_jets(self, jet, subjet_a, subjet_b, parts):
         """
@@ -811,18 +787,13 @@ class EmbeddingAnalysis:
             rotated.append(p)
         return rotated
 
-    def _assign_to_subjets(self, jet, perp, scale=RECLUSTER_SCALE):
+    def _assign_to_subjets(self, jet, perp):
         """
         A/B assignment of perp-cone particles by reclustering.
 
-        Copies of the perp-cone particles scaled by scale are reclustered with
+        Copies of the perp-cone particles scaled by RECLUSTER_SCALE are reclustered with
         C/A together with the non-ghost constituents of jet, and SD is redone with
-        select_soft_drop (rho = 0). With the default RECLUSTER_SCALE each copy lands
-        where a soft particle there would, and the tree and SD splitting of the real
-        particles are unchanged. With scale = 1 the copies carry their raw pT and can
-        change both; they are then assigned to the A / B of the reclustered jet, which
-        can differ from the A / B of jet. If no splitting of the reclustered jet passes
-        SD, every particle is ASSIGN_NONE.
+        select_soft_drop (rho = 0); each copy lands where a soft particle there would.
         Jet membership is not checked: a copy just outside the anti-kT boundary can merge
         early with an edge particle and be assigned to A or B.
 
@@ -836,7 +807,8 @@ class EmbeddingAnalysis:
             return [], [], []
         inputs = [c for c in jet.constituents() if not c.is_pure_ghost()]
         for i, p in enumerate(perp):
-            copy = fj.PseudoJet(p.px() * scale, p.py() * scale, p.pz() * scale, p.e() * scale)
+            copy = fj.PseudoJet(p.px() * RECLUSTER_SCALE, p.py() * RECLUSTER_SCALE,
+                                p.pz() * RECLUSTER_SCALE, p.e() * RECLUSTER_SCALE)
             copy.set_user_index(PERP_INDEX_OFFSET - i)
             inputs.append(copy)
         # cs must stay alive while its jets are used
@@ -844,13 +816,10 @@ class EmbeddingAnalysis:
         test_jet = fj.sorted_by_pt(cs.inclusive_jets())[0] # the only jet, with R = max_allowable_R
 
         # Redo SD on test_jet, as get_subjets() did on the CS jet (rho = 0: CS jets are already
-        # subtracted). With the default scale the copies have pT -> 0, so the C/A tree of the
-        # real particles and the first splitting passing z_cut are unchanged.
+        # subtracted). The copies have pT -> 0, so the C/A tree of the real particles and the 
+        # first splitting passing z_cut are unchanged.
         categories = [ASSIGN_NONE] * len(perp)
-        sd = self.select_soft_drop(self.lund_gen.result(test_jet), z_cut=self.z_cut)
-        if sd is None:
-            return [], [], categories
-        l, swapped = sd
+        l, swapped = self.select_soft_drop(self.lund_gen.result(test_jet), z_cut=self.z_cut)
         test_subjet_a, test_subjet_b = (l.softer(), l.harder()) if swapped else (l.harder(), l.softer())
 
         for category, branch in ((ASSIGN_A, test_subjet_a), (ASSIGN_B, test_subjet_b)):

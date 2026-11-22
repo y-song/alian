@@ -296,44 +296,6 @@ output:
       "Matched combined EEC BB, perp1-perp2;#it{p}_{T,g}^{sub} (GeV);R_{L}",
       jet_pT, RL]
 
-    # --- Same, perp A/B assignment by reclustering with the raw perp pT ---
-
-    combined_matched_eec_aa_jetperp_fullpt: [2, "combined_matched_eec_aa_jetperp_fullpt",
-      "Matched combined EEC AA, jet-perp (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_aa_perpperp_fullpt: [2, "combined_matched_eec_aa_perpperp_fullpt",
-      "Matched combined EEC AA, perp-perp (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_aa_perp1perp2_fullpt: [2, "combined_matched_eec_aa_perp1perp2_fullpt",
-      "Matched combined EEC AA, perp1-perp2 (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_ab_jetperp_fullpt: [2, "combined_matched_eec_ab_jetperp_fullpt",
-      "Matched combined EEC AB (one orientation), jet-perp (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_ab_perpperp_fullpt: [2, "combined_matched_eec_ab_perpperp_fullpt",
-      "Matched combined EEC AB (one orientation), perp-perp (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_ab_perp1perp2_fullpt: [2, "combined_matched_eec_ab_perp1perp2_fullpt",
-      "Matched combined EEC AB (one orientation), perp1-perp2 (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_bb_jetperp_fullpt: [2, "combined_matched_eec_bb_jetperp_fullpt",
-      "Matched combined EEC BB, jet-perp (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_bb_perpperp_fullpt: [2, "combined_matched_eec_bb_perpperp_fullpt",
-      "Matched combined EEC BB, perp-perp (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
-    combined_matched_eec_bb_perp1perp2_fullpt: [2, "combined_matched_eec_bb_perp1perp2_fullpt",
-      "Matched combined EEC BB, perp1-perp2 (full-pT assignment);#it{p}_{T,g}^{sub} (GeV);R_{L}",
-      jet_pT, RL]
-
     # --- Matched combined subjet EEC split by truth pair origin ---
 
     combined_matched_eec_aa_sigsig: [2, "combined_matched_eec_aa_sigsig",
