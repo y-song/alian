@@ -1,0 +1,214 @@
+#--------------------------------------------------------------------------
+#                         FastJet release 3.3.4
+#                 M. Cacciari, G.P. Salam and G. Soyez                  
+#     A software package for jet finding and analysis at colliders      
+#                           http://fastjet.fr                           
+#	                                                                      
+# Please cite EPJC72(2012)1896 [arXiv:1111.6097] if you use this package
+# for scientific work and optionally PLB641(2006)57 [hep-ph/0512210].   
+#                                                                       
+# FastJet is provided without warranty under the GNU GPL v2 or higher.  
+# It uses T. Chan's closest pair algorithm, S. Fortune's Voronoi code
+# and 3rd party plugin jet algorithms. See COPYING file for details.
+#--------------------------------------------------------------------------
+
+ *------------------------------------------------------------------------------------* 
+ |                                                                                    | 
+ |  *------------------------------------------------------------------------------*  | 
+ |  |                                                                              |  | 
+ |  |                                                                              |  | 
+ |  |   PPP   Y   Y  TTTTT  H   H  III    A      Welcome to the Lund Monte Carlo!  |  | 
+ |  |   P  P   Y Y     T    H   H   I    A A     This is PYTHIA version 8.244      |  | 
+ |  |   PPP     Y      T    HHHHH   I   AAAAA    Last date of change: 20 Dec 2019  |  | 
+ |  |   P       Y      T    H   H   I   A   A                                      |  | 
+ |  |   P       Y      T    H   H  III  A   A    Now is 19 May 2026 at 13:21:10    |  | 
+ |  |                                                                              |  | 
+ |  |   Christian Bierlich;  Department of Astronomy and Theoretical Physics,      |  | 
+ |  |      Lund University, Solvegatan 14A, SE-223 62 Lund, Sweden;                |  | 
+ |  |      e-mail: christian.bierlich@thep.lu.se                                   |  | 
+ |  |   Nishita Desai;  Department of Theoretical Physics, Tata Institute,         |  | 
+ |  |      Homi Bhabha Road, Mumbai 400005, India;                                 |  | 
+ |  |      e-mail: desai@theory.tifr.res.in                                        |  | 
+ |  |   Ilkka Helenius;  Department of Physics, University of Jyvaskyla,           |  | 
+ |  |      P.O. Box 35, FI-40014 University of Jyvaskyla, Finland;                 |  | 
+ |  |      e-mail: ilkka.m.helenius@jyu.fi                                         |  | 
+ |  |   Philip Ilten;  School of Physics and Astronomy,                            |  | 
+ |  |      University of Birmingham, Birmingham, B152 2TT, UK;                     |  | 
+ |  |      e-mail: philten@cern.ch                                                 |  | 
+ |  |   Leif Lonnblad;  Department of Astronomy and Theoretical Physics,           |  | 
+ |  |      Lund University, Solvegatan 14A, SE-223 62 Lund, Sweden;                |  | 
+ |  |      e-mail: leif.lonnblad@thep.lu.se                                        |  | 
+ |  |   Stephen Mrenna;  Computing Division, Simulations Group,                    |  | 
+ |  |      Fermi National Accelerator Laboratory, MS 234, Batavia, IL 60510, USA;  |  | 
+ |  |      e-mail: mrenna@fnal.gov                                                 |  | 
+ |  |   Stefan Prestel;  Department of Astronomy and Theoretical Physics,          |  | 
+ |  |      Lund University, Solvegatan 14A, SE-223 62 Lund, Sweden;                |  | 
+ |  |      e-mail: stefan.prestel@thep.lu.se                                       |  | 
+ |  |   Christine O. Rasmussen;  Department of Astronomy and Theoretical Physics,  |  | 
+ |  |      Lund University, Solvegatan 14A, SE-223 62 Lund, Sweden;                |  | 
+ |  |      e-mail: christine.rasmussen@thep.lu.se                                  |  | 
+ |  |   Torbjorn Sjostrand;  Department of Astronomy and Theoretical Physics,      |  | 
+ |  |      Lund University, Solvegatan 14A, SE-223 62 Lund, Sweden;                |  | 
+ |  |      e-mail: torbjorn@thep.lu.se                                             |  | 
+ |  |   Peter Skands;  School of Physics,                                          |  | 
+ |  |      Monash University, PO Box 27, 3800 Melbourne, Australia;                |  | 
+ |  |      e-mail: peter.skands@monash.edu                                         |  | 
+ |  |                                                                              |  | 
+ |  |   The main program reference is 'An Introduction to PYTHIA 8.2',             |  | 
+ |  |   T. Sjostrand et al, Comput. Phys. Commun. 191 (2015) 159                   |  | 
+ |  |   [arXiv:1410.3012 [hep-ph]]                                                 |  | 
+ |  |                                                                              |  | 
+ |  |   The main physics reference is the 'PYTHIA 6.4 Physics and Manual',         |  | 
+ |  |   T. Sjostrand, S. Mrenna and P. Skands, JHEP05 (2006) 026 [hep-ph/0603175]  |  | 
+ |  |                                                                              |  | 
+ |  |   An archive of program versions and documentation is found on the web:      |  | 
+ |  |   http://www.thep.lu.se/Pythia                                               |  | 
+ |  |                                                                              |  | 
+ |  |   This program is released under the GNU General Public Licence version 2.   |  | 
+ |  |   Please respect the MCnet Guidelines for Event Generator Authors and Users. |  | 
+ |  |                                                                              |  | 
+ |  |   Disclaimer: this program comes without any guarantees.                     |  | 
+ |  |   Beware of errors and use common sense when interpreting results.           |  | 
+ |  |                                                                              |  | 
+ |  |   Copyright (C) 2019 Torbjorn Sjostrand                                      |  | 
+ |  |                                                                              |  | 
+ |  |                                                                              |  | 
+ |  *------------------------------------------------------------------------------*  | 
+ |                                                                                    | 
+ *------------------------------------------------------------------------------------* 
+
+
+ *-------  PYTHIA Process Initialization  --------------------------*
+ |                                                                  |
+ | We collide p+ with p+ at a CM energy of 5.020e+03 GeV            |
+ |                                                                  |
+ |------------------------------------------------------------------|
+ |                                                    |             |
+ | Subprocess                                    Code |   Estimated |
+ |                                                    |    max (mb) |
+ |                                                    |             |
+ |------------------------------------------------------------------|
+ |                                                    |             |
+ | g g -> g g                                     111 |   2.084e-02 |
+ | g g -> q qbar (uds)                            112 |   2.865e-04 |
+ | q g -> q g                                     113 |   2.295e-02 |
+ | q q(bar)' -> q q(bar)'                         114 |   3.436e-03 |
+ | q qbar -> g g                                  115 |   2.861e-05 |
+ | q qbar -> q' qbar' (uds)                       116 |   1.449e-05 |
+ | g g -> c cbar                                  121 |   9.526e-05 |
+ | q qbar -> c cbar                               122 |   4.825e-06 |
+ | g g -> b bbar                                  123 |   9.321e-05 |
+ | q qbar -> b bbar                               124 |   4.768e-06 |
+ |                                                                  |
+ *-------  End PYTHIA Process Initialization -----------------------*
+ PYTHIA Warning in TimeShower::init: pTmin too low , raised to 0.357
+
+ *-------  PYTHIA Multiparton Interactions Initialization  ---------* 
+ |                                                                  | 
+ |                   sigmaNonDiffractive =    47.72 mb              | 
+ |                                                                  | 
+ |    pT0 =  2.12 gives sigmaInteraction =   210.70 mb: accepted    | 
+ |                                                                  | 
+ *-------  End PYTHIA Multiparton Interactions Initialization  -----* 
+
+ *-------  PYTHIA Flag + Mode + Parm + Word + FVec + MVec + PVec + WVec Settings (changes only)  ------------------* 
+ |                                                                                                                 | 
+ | Name                                          |                      Now |      Default         Min         Max | 
+ |                                               |                          |                                      | 
+ | Beams:eCM                                     |                 5020.000 |    14000.000    10.00000             | 
+ | HadronLevel:all                               |                      off |           on                         | 
+ | HardQCD:all                                   |                       on |          off                         | 
+ | Next:numberCount                              |                        0 |         1000           0             | 
+ | Next:numberShowEvent                          |                        0 |            1           0             | 
+ | Next:numberShowInfo                           |                        0 |            1           0             | 
+ | Next:numberShowProcess                        |                        0 |            1           0             | 
+ | PhaseSpace:pTHatMin                           |                 45.00000 |          0.0         0.0             | 
+ | Random:seed                                   |                        1 |           -1               900000000 | 
+ | Random:setSeed                                |                       on |          off                         | 
+ | TimeShower:pTmin                              |                  0.20000 |      0.50000     0.10000     2.00000 | 
+ |                                                                                                                 | 
+ *-------  End PYTHIA Flag + Mode + Parm + Word + FVec + MVec + PVec + WVec Settings  -----------------------------* 
+
+ --------  PYTHIA Particle Data Table (changed only)  ------------------------------------------------------------------------------
+ 
+      id   name            antiName         spn chg col      m0        mWidth      mMin       mMax       tau0    res dec ext vis wid
+             no onMode   bRatio   meMode     products 
+
+ no particle data has been changed from its default value 
+
+ --------  End PYTHIA Particle Data Table  -----------------------------------------------------------------------------------------
+
+ PYTHIA Error in ColourTracing::traceFromCol: colour tracing failed  
+ PYTHIA Error in Pythia::forceHadronLevel: hadronLevel failed; try again  
+ PYTHIA Abort from Pythia::forceHadronLevel: hadronLevel failed; giving up  
+ PYTHIA Error in ProcessLevel::findJunctions: N(unmatched (anti)colour tags) != 3  
+ PYTHIA Error in StringFragmentation::fragment: stuck in joining  
+ PYTHIA Warning in StringFragmentation::fragmentToJunction: bad convergence junction rest frame  
+ PYTHIA Error in ColourTracing::traceFromAcol: colour tracing failed  
+ PYTHIA Error in SimpleSpaceShower::pT2nearThreshold: stuck in loop  
+ PYTHIA Error in StringFragmentation::fragmentToJunction: caught in junction flavour loop  
+ PYTHIA Warning in SimpleSpaceShower::pT2nextQCD: small daughter PDF  
+
+ *-------  PYTHIA Event and Cross Section Statistics  -------------------------------------------------------------*
+ |                                                                                                                 |
+ | Subprocess                                    Code |            Number of events       |      sigma +- delta    |
+ |                                                    |       Tried   Selected   Accepted |     (estimated) (mb)   |
+ |                                                    |                                   |                        |
+ |-----------------------------------------------------------------------------------------------------------------|
+ |                                                    |                                   |                        |
+ | g g -> g g                                     111 |       69440       9847       9847 |   2.951e-03  1.483e-05 |
+ | g g -> q qbar (uds)                            112 |         922        209        209 |   6.539e-05  2.269e-06 |
+ | q g -> q g                                     113 |       76575       9448       9448 |   2.803e-03  1.593e-05 |
+ | q q(bar)' -> q q(bar)'                         114 |       11496       1503       1503 |   4.499e-04  6.241e-06 |
+ | q qbar -> g g                                  115 |          98         20         20 |   6.588e-06  6.720e-07 |
+ | q qbar -> q' qbar' (uds)                       116 |          49         23         23 |   5.005e-06  6.334e-07 |
+ | g g -> c cbar                                  121 |         287         74         74 |   2.550e-05  1.486e-06 |
+ | q qbar -> c cbar                               122 |          14          5          5 |   1.768e-06  3.911e-07 |
+ | g g -> b bbar                                  123 |         293         70         70 |   2.069e-05  1.326e-06 |
+ | q qbar -> b bbar                               124 |          14          5          5 |   1.548e-06  3.773e-07 |
+ |                                                    |                                   |                        |
+ | sum                                                |      159188      21204      21204 |   6.331e-03  2.287e-05 |
+ |                                                                                                                 |
+ *-------  End PYTHIA Event and Cross Section Statistics ----------------------------------------------------------*
+
+ *-------  PYTHIA Error and Warning Messages Statistics  ----------------------------------------------------------* 
+ |                                                                                                                 | 
+ |  times   message                                                                                                | 
+ |                                                                                                                 | 
+ |   1204   Abort from Pythia::forceHadronLevel: hadronLevel failed; giving up                                     | 
+ |     30   Error in ColourTracing::traceFromAcol: colour tracing failed                                           | 
+ |  11990   Error in ColourTracing::traceFromCol: colour tracing failed                                            | 
+ |   1188   Error in ProcessLevel::findJunctions: N(unmatched (anti)colour tags) != 3                              | 
+ |  12095   Error in Pythia::forceHadronLevel: hadronLevel failed; try again                                       | 
+ |     11   Error in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                            | 
+ |     84   Error in StringFragmentation::fragment: stuck in joining                                               | 
+ |     11   Error in StringFragmentation::fragmentToJunction: caught in junction flavour loop                      | 
+ |      1   Warning in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                           | 
+ |     74   Warning in StringFragmentation::fragmentToJunction: bad convergence junction rest frame                | 
+ |      2   Warning in TimeShower::init: pTmin too low                                                             | 
+ |                                                                                                                 | 
+ *-------  End PYTHIA Error and Warning Messages Statistics  ------------------------------------------------------* 
+[92m[i] The arguments to run are:  Namespace(py_ecms='low', py_ecm=5020.0, py_pthatmin=45.0, py_bias=False, py_biaspow=4, py_biasref=10, py_noue=False, py_noISR=False, py_noMPI=False, py_hardQCD=False, py_hardQCDcharm=False, py_hardQCDbeauty=False, py_promptPhoton=False, py_hardQCDlf=False, py_hardQCDgluons=False, py_hardQCDquarks=False, py_hardQCDuds=False, py_n=1, py_time_seed=False, py_seed=-1, py_eic=False, py_eic_dis=False, py_eic_lowQ2=False, py_eic_cgamma=False, py_eic_bgamma=False, py_eic_qgamma=False, py_eic_test=False, py_hadronization_off=False, py_noHadron=False, pythiaopts='HardQCD:all=on,TimeShower:pTmin=0.2', py_minbias=False, py_nsd=False, py_inel=False, py_inel_d=False, py_diff=False, py_inel_nsd=False, py_el=False, py_nd=False, py_PbPb=False, py_cmnd=None, py_cmnd_out='pythia8.cmnd', nev=20000, user_seed=1, output_dir='./testing', tree_output_fname='AnalysisResults.root', MPIon=1, ISRon=1, config_file='/global/cfs/cdirs/alice/blianggi/mypyjetty/pyjetty/pyjetty/alice_analysis/config/jse/pp/configcuts_ptbin.yaml', weightON=1, ev_num_base=0)[00m
+Constituent subtractor is disabled.
+[92m[i] user seed for pythia 1[00m
+
+Will run no MPI: False
+Will run no ISR: False
+['HardQCD:all=on', 'TimeShower:pTmin=0.2', 'PhaseSpace:pTHatMin = 45.0', 'Beams:eCM = 5020.0']
+[i] strings read to PYTHIA  [['HardQCD:all=on', 'TimeShower:pTmin=0.2', 'PhaseSpace:pTHatMin = 45.0', 'Beams:eCM = 5020.0', 'Random:setSeed=on', 'Random:seed=1', 'HadronLevel:all=off', 'Next:numberCount = 0', 'Next:numberShowEvent = 0', 'Next:numberShowInfo = 0', 'Next:numberShowProcess = 0', 'Stat:showProcessLevel = on']]
+[i] pythia initialized with ['HardQCD:all=on', 'TimeShower:pTmin=0.2', 'PhaseSpace:pTHatMin = 45.0', 'Beams:eCM = 5020.0', 'Random:setSeed=on', 'Random:seed=1', 'HadronLevel:all=off', 'Next:numberCount = 0', 'Next:numberShowEvent = 0', 'Next:numberShowInfo = 0', 'Next:numberShowProcess = 0', 'Stat:showProcessLevel = on']
+Event 0
+Event 0
+Event 5000
+Event 10000
+Event 10000
+Event 15000
+
+what are we writing hDeltaR
+what are we writing hNevents
+what are we writing hjetpT_chjet
+what are we writing hjetpT_chjet_matchedtoparton
+what are we writing hjetpT_h
+what are we writing hjetpT_h_matchedtoparton
+what are we writing hjetpT_ha
+tryinmg to write file
