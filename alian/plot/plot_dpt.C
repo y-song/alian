@@ -75,6 +75,12 @@ void FormatHist(TLegend *l, TH1 *hist, TString text, int color)
     return;
 }
 
+// second legend row under a histogram entry with its mean and standard deviation
+void addStatsEntry(TLegend *l, double mean, double sigma)
+{
+    l->AddEntry("NULL", TString::Format("#LT#deltap_{T}#GT = %.2f GeV, #sigma(#deltap_{T}) = %.2f", mean, sigma), "h");
+}
+
 void addLegendInfo(TLegend *l, string pt_min, string pt_max, string jetR)
 {
     l->SetTextSize(0.032);
@@ -138,6 +144,8 @@ void plot_dpt(string jobID)
     TH2D *h4 = (TH2D *)h_residual_sub_pT_matched->Clone("h4");
     TH2D *h5 = (TH2D *)h_residual_sub_pT_matched->Clone("h5");
     TH2D *h6 = (TH2D *)h_residual_sub_pT_matched->Clone("h6");
+    TH2D *h7 = (TH2D *)h_residual_pp_pT_matched->Clone("h7");
+    TH2D *h8 = (TH2D *)h_residual_sub_pT_matched->Clone("h8");
 
     h1->GetXaxis()->SetRangeUser(20.0, 40.0);
     h2->GetXaxis()->SetRangeUser(40.0, 60.0);
@@ -145,6 +153,8 @@ void plot_dpt(string jobID)
     h4->GetXaxis()->SetRangeUser(20.0, 40.0);
     h5->GetXaxis()->SetRangeUser(40.0, 60.0);
     h6->GetXaxis()->SetRangeUser(60.0, 80.0);
+    h7->GetXaxis()->SetRangeUser(80.0, 100.0);
+    h8->GetXaxis()->SetRangeUser(80.0, 100.0);
 
     TH1D *h1_proj = h1->ProjectionY();
     TH1D *h2_proj = h2->ProjectionY();
@@ -152,12 +162,24 @@ void plot_dpt(string jobID)
     TH1D *h4_proj = h4->ProjectionY();
     TH1D *h5_proj = h5->ProjectionY();
     TH1D *h6_proj = h6->ProjectionY();
+    TH1D *h7_proj = h7->ProjectionY();
+    TH1D *h8_proj = h8->ProjectionY();
 
-    cout << "mean: " << h1_proj->GetMean() << ", " << h2_proj->GetMean() << ", " << h3_proj->GetMean() << endl;
-    cout << "sigma: " << h1_proj->GetStdDev() << ", " << h2_proj->GetStdDev() << ", " << h3_proj->GetStdDev() << endl;
+    cout << "mean: " << h1_proj->GetMean() << ", " << h2_proj->GetMean() << ", " << h3_proj->GetMean() << ", " << h7_proj->GetMean() << endl;
+    cout << "sigma: " << h1_proj->GetStdDev() << ", " << h2_proj->GetStdDev() << ", " << h3_proj->GetStdDev() << ", " << h7_proj->GetStdDev() << endl;
 
-    cout << "mean: " << h4_proj->GetMean() << ", " << h5_proj->GetMean() << ", " << h6_proj->GetMean() << endl;
-    cout << "sigma: " << h4_proj->GetStdDev() << ", " << h5_proj->GetStdDev() << ", " << h6_proj->GetStdDev() << endl;
+    cout << "mean: " << h4_proj->GetMean() << ", " << h5_proj->GetMean() << ", " << h6_proj->GetMean() << ", " << h8_proj->GetMean() << endl;
+    cout << "sigma: " << h4_proj->GetStdDev() << ", " << h5_proj->GetStdDev() << ", " << h6_proj->GetStdDev() << ", " << h8_proj->GetStdDev() << endl;
+
+    // store the full-range values printed above; SetRangeUser(-40, 40) below would change GetMean/GetStdDev
+    vector<TH1D *> projs = {h1_proj, h2_proj, h3_proj, h4_proj, h5_proj, h6_proj, h7_proj, h8_proj};
+    vector<double> means;
+    vector<double> sigmas;
+    for (TH1D *h : projs)
+    {
+        means.push_back(h->GetMean());
+        sigmas.push_back(h->GetStdDev());
+    }
 
     h1_proj->Scale(1.0 / h1_proj->Integral());
     h2_proj->Scale(1.0 / h2_proj->Integral());
@@ -165,6 +187,8 @@ void plot_dpt(string jobID)
     h4_proj->Scale(1.0 / h4_proj->Integral());
     h5_proj->Scale(1.0 / h5_proj->Integral());
     h6_proj->Scale(1.0 / h6_proj->Integral());
+    h7_proj->Scale(1.0 / h7_proj->Integral());
+    h8_proj->Scale(1.0 / h8_proj->Integral());
 
     // First canvas
     TCanvas *c1 = new TCanvas();
@@ -172,20 +196,26 @@ void plot_dpt(string jobID)
     c1->cd();
     gPad->SetLogy();
 
-    TLegend *leg1 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
+    TLegend *leg1 = new TLegend(0.16, 0.40, 0.4662155, 0.88, "");
     addLegendInfo(leg1, "", "", jetRPoint);
     h1_proj->GetXaxis()->SetTitle("#deltap_{T} = p_{T}^{combined sub} #minus p_{T}^{pp} [GeV]");
     h1_proj->GetXaxis()->SetRangeUser(-40, 40);
     h1_proj->GetYaxis()->SetRangeUser(0.0001, 1.0);
     FormatHist(leg1, h1_proj, "20 < #it{p}_{T}^{pp} < 40 GeV", kGreen+2);
+    addStatsEntry(leg1, means[0], sigmas[0]);
     FormatHist(leg1, h2_proj, "40 < #it{p}_{T}^{pp} < 60 GeV", kRed+2);
+    addStatsEntry(leg1, means[1], sigmas[1]);
     FormatHist(leg1, h3_proj, "60 < #it{p}_{T}^{pp} < 80 GeV", kBlue+2);
+    addStatsEntry(leg1, means[2], sigmas[2]);
+    FormatHist(leg1, h7_proj, "80 < #it{p}_{T}^{pp} < 100 GeV", kMagenta+2);
+    addStatsEntry(leg1, means[6], sigmas[6]);
 
     h1_proj->Draw();
     h2_proj->Draw("same");
-    h3_proj->Draw("same");  
+    h3_proj->Draw("same");
+    h7_proj->Draw("same");
     leg1->Draw("same");
-    check_bump_fraction({h1_proj, h2_proj, h3_proj}, {"pp 20-40", "pp 40-60", "pp 60-80"});
+    check_bump_fraction({h1_proj, h2_proj, h3_proj, h7_proj}, {"pp 20-40", "pp 40-60", "pp 60-80", "pp 80-100"});
 
     c1->SaveAs(("output/dpT_vs_pp_pT_R" + jetR + "_" + jobID + "_matched.pdf").c_str());
 
@@ -195,20 +225,26 @@ void plot_dpt(string jobID)
     c2->cd();
     gPad->SetLogy();
     
-    TLegend *leg2 = new TLegend(0.16, 0.56, 0.4662155, 0.88, "");
+    TLegend *leg2 = new TLegend(0.16, 0.40, 0.4662155, 0.88, "");
     addLegendInfo(leg2, "", "", jetRPoint);
     h4_proj->GetXaxis()->SetTitle("#deltap_{T} = p_{T}^{combined sub} #minus p_{T}^{pp} [GeV]");
     h4_proj->GetXaxis()->SetRangeUser(-40, 40);
     h4_proj->GetYaxis()->SetRangeUser(0.0001, 1.0);
     FormatHist(leg2, h4_proj, "20 < #it{p}_{T}^{combined sub} < 40 GeV", kGreen+2);
+    addStatsEntry(leg2, means[3], sigmas[3]);
     FormatHist(leg2, h5_proj, "40 < #it{p}_{T}^{combined sub} < 60 GeV", kRed+2);
+    addStatsEntry(leg2, means[4], sigmas[4]);
     FormatHist(leg2, h6_proj, "60 < #it{p}_{T}^{combined sub} < 80 GeV", kBlue+2);
+    addStatsEntry(leg2, means[5], sigmas[5]);
+    FormatHist(leg2, h8_proj, "80 < #it{p}_{T}^{combined sub} < 100 GeV", kMagenta+2);
+    addStatsEntry(leg2, means[7], sigmas[7]);
 
     h4_proj->Draw();
     h5_proj->Draw("same");
-    h6_proj->Draw("same");  
+    h6_proj->Draw("same");
+    h8_proj->Draw("same");
     leg2->Draw("same");
-    check_bump_fraction({h4_proj, h5_proj, h6_proj}, {"sub 20-40", "sub 40-60", "sub 60-80"});
+    check_bump_fraction({h4_proj, h5_proj, h6_proj, h8_proj}, {"sub 20-40", "sub 40-60", "sub 60-80", "sub 80-100"});
 
     // c2->SaveAs(("output/dpT_vs_sub_pT_R" + jetR + "_matched.pdf").c_str());
     c2->SaveAs(("output/dpT_vs_sub_pT_R" + jetR + "_" + jobID + "_matched.pdf").c_str());

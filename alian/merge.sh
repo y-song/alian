@@ -1,6 +1,6 @@
 #! /bin/bash
 
-JOB_ID=2022784
+JOB_ID=2031461
 N_TASKS=33   # array 0-32 in submit_embed.sh
 
 FILE_DIR=/rstorage/youqi/$JOB_ID

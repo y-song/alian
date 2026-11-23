@@ -18,7 +18,9 @@
 //                              (unit-normalized shapes)
 //   perp_assign                fraction of perp-cone particles assigned to A, B, neither vs pT_g
 //   perp_assign_rg             same vs R_g (all pT_g)
-//   area_{a,b}                 area of subjets A and B, in the pT_g range (unit-normalized shapes)
+//   area_{a,b}                 area of subjets A and B, in the pT_g range (unit-normalized shapes);
+//                              read as sub_area_{a,b}_sub_pTg_matched (embed_cs.py) if present,
+//                              else combined_matched_area_{a,b}
 //   perp_assign[_rg]_recl      perp_assign[_rg] with the perp-cone particles assigned by reclustering,
 //                              overlaid on the ghost assignment (open vs filled markers); filled only
 //                              with analysis.perp_recluster_closure: true
@@ -322,7 +324,11 @@ void plot_ghost_assign(std::string file_name, std::string pt_min, std::string pt
         std::vector<HistConfig> configs;
         for (int i = 0; i < 2; i++)
         {
-            TH2 *h2 = GetHist2D(f, sample + "_area_" + suffixes[i]);
+            // embed_cs.py: sub_area_{a,b}_sub_pTg_matched; embed_perpcone.py and older outputs: combined_matched_area_{a,b}
+            std::string cs_name = std::string("sub_area_") + suffixes[i] + "_sub_pTg_matched";
+            TH2 *h2 = (TH2 *)f->Get(cs_name.c_str());
+            if (!h2)
+                h2 = GetHist2D(f, sample + "_area_" + suffixes[i]);
             TH1D *h1 = h2 ? ProjectYShape(h2, pt_lo, pt_hi, Form("h_%s_area_%s_%s_%s", sample.c_str(), suffixes[i], pt_min.c_str(), pt_max.c_str())) : nullptr;
             std::string label = std::string(assign_labels[i]);
             if (h1)
